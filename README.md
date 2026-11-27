@@ -96,17 +96,18 @@ Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` t
 | Chuẩn hoá tên thuốc → hoạt chất (`normalize_entities`) | **Thật** | Trên `data/entity_aliases.csv` (248 dòng, gồm biệt dược VN và nhóm thủ thuật `local_anesthesia`); thuốc phối hợp (Coplavix, Lignospan…) tách thành mỗi hoạt chất một dòng |
 | Công cụ tra cứu DDI (`codebase/tools.py` — `check_drug_interactions`) | **Thật** (một phần ở CP2) | Tra tất định trên CSV khi đầu vào nêu rõ thuốc nền và thuốc định kê (bản CP2 chỉ nhận câu dạng "đang dùng … / dự định kê …"); mỗi rule có nguồn |
 | Rủi ro bệnh nền / dị ứng / thủ thuật | **Chưa bật ở CP2** | `data/clinical_risk_rules.csv` đã có rule có nguồn nhưng agent chưa gọi; output ghi rõ "các nhánh bệnh nền, dị ứng và thủ thuật chưa được kiểm" |
-| Lời gọi AI ở quyết định trung tâm (`codebase/ai.py`) | **Giả (CP2)** → **Thật (CP3)** | Hiện đang ở chế độ `MODEL_PROVIDER=fake` cho bản khung CP2 — `python run.py` in "gọi model 0 lần"; nối model thật trước CP3. Model: chưa nối ở CP2 (dự kiến test OpenRouter, chạy chính Gemini trước CP3) |
+| Lời gọi AI ở quyết định trung tâm (`codebase/ai.py`) | **Giả (CP2)** → **Thật (CP3)** | Hiện đang ở chế độ `MODEL_PROVIDER=fake` cho bản khung CP2 — `python run.py` in "gọi model 0 lần"; nối model thật trước CP3. Model: chưa nối ở CP2 |
 | Bot Zalo (`bot/zalo_bot.py`) | **Thật** (vỏ mỏng) | Gọi chung `answer()`; chưa kiểm tài khoản Zalo ngoài nhắn vào được — xem `docs/team-plan.md` §E |
 | Dữ liệu bệnh nhân | **Giả lập** | Chỉ ca giả lập / đã ẩn danh, không dùng dữ liệu sức khoẻ của người thật |
 
 ## Dùng AI vào việc gì
 
-Nhóm dùng coding agent/LLM hỗ trợ soạn tài liệu kỹ thuật, viết script gom và kiểm dữ liệu (`data/build/`, `evidence/crawl_qa.py`, `evidence/count_qa.py`) và dựng khung code. Thành viên nhóm — đặc biệt BS RHM trong nhóm (Nguyễn Bảo Trung) và người rà eval (Lại Trọng Đức) — kiểm duyệt toàn bộ nội dung lâm sàng, nguồn, đáp án câu thử và trực tiếp thực hiện phần phỏng vấn. Nhóm không dùng AI để bịa người phỏng vấn, trích dẫn hay sửa kết quả chạy. Chi tiết: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
+Chi tiết từng việc: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
 
 - **Nguyên:** dùng Claude Code (Claude Opus 5.5) để tìm và đọc nguồn cho `spec.md` §2–§3, viết `evidence/crawl_qa.py` / `count_qa.py` và luật thuốc phối hợp trong `data/build/`, soạn README; Nguyên kiểm tay 15/15 nhãn mẫu hỏi đáp và đọc lại từng nguồn trích.
 - **Trung:** dùng coding agent hỗ trợ soạn/đồng bộ tài liệu, biên bản và kiểm tra khung repo; trực tiếp thực hiện/xác nhận phỏng vấn BS RHM ngoài nhóm và duyệt lâm sàng 3 bảng dữ liệu.
-- **Đức, Lĩnh:** bổ sung chi tiết công cụ AI dùng cho eval/code vào [docs/ai-usage.md](docs/ai-usage.md) trước CP3.
+- **Đức, Lĩnh:** ____ *(mỗi người tự bổ sung 1 dòng: công cụ AI · làm gì · ai kiểm)*
+- Không dùng AI để tạo người được phỏng vấn, trích dẫn, câu trả lời khảo sát hay sửa kết quả các lượt đã chạy.
 
 ## File mẫu — điền ở bước nào
 
