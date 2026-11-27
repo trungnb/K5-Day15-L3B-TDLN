@@ -16,5 +16,6 @@ README của nhóm có mục "Dùng AI vào việc gì" (2–3 dòng, bắt bu�
 | Chấm cột `pass` bằng LLM (nếu có) | | | Kiểm tra thủ công __ câu thử, khớp __/__ | |
 | Slide, văn bản | Claude Code (Claude Opus 5.5) | Tìm và đọc nguồn, soạn nháp `spec.md` §2 (quy mô BS RHM) và §3 (giải pháp tương tự), soạn `README.md` | Nguyên đọc lại từng nguồn trích và số liệu; nguồn trang gốc §3 chưa mở được bằng công cụ, cần mở lại bằng trình duyệt | Nguyên |
 | Dữ liệu `data/build/` (luật thuốc phối hợp) | Claude Code (Claude Opus 5.5) | Viết `expand_combo_rows()` và luật `combo:` trong `validate_csv.py`, tách 4 dòng alias | Chạy validator trước/sau + 7 trường hợp kiểm; Trung duyệt thành phần thuốc phối hợp | Nguyên (Trung duyệt) |
+| Đặc tả đánh giá (`spec.md` §5, `eval/metric_spec.yaml`) & phiếu chấm chéo CP2 | Antigravity (Gemini 4 Carbon) | Đối chiếu 3 bảng CSV với luồng thiết kế để soạn nháp kịch bản chỗ khó (`spec.md` §5), 5 metric (`eval/metric_spec.yaml`) và bảng rà tiêu chí cho `eval/cp2-cham-cheo-duc.md` | Đức kiểm lại từng mã `DDI`/`CR`, chỉnh câu chữ dễ hiểu, tự duyệt kết luận từng câu trong 5 output chấm chéo (khớp 5/5 với BS Trung) và chạy `python run.py check` | Đức |
 
 **Không dùng AI để:** tạo người được phỏng vấn, trích dẫn, câu trả lời khảo sát; sửa kết quả các lượt đã chạy (`eval/run-*.csv`, `cost/simulate-*.csv`, `traces/`).

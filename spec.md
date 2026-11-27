@@ -1,4 +1,4 @@
-# AI SPEC — Trợ lý kiểm tra an toàn trước thủ thuật & kê đơn RHM · Nhóm TDLN · Phòng C401 (T6) · Zone [cập nhật sau Form 1]
+# AI SPEC — Trợ lý kiểm tra an toàn trước thủ thuật & kê đơn RHM · Nhóm TDLN · Phòng C401 (T6) · Zone 4 · Đội 2
 
 > Mốc nộp: §7 chốt chuẩn "đạt" tại **CP2 19:30 Thứ Sáu 27/11** · §0–§7 nộp **CP3 10:00 Thứ Bảy 28/11** · đủ §0–§10 **CP4 14:30 Thứ Bảy 28/11** · §10 changelog ghi tiếp đến **23:59 Thứ Bảy 28/11**.
 > Đầu mỗi mục ghi bước guide (`02-guide.md` trong repo đề) chỉ cách điền. Mỗi mục ngắn, có số và nguồn; chi tiết để ở file được trỏ tới. Xoá dòng hướng dẫn trong ngoặc vuông khi điền xong.
@@ -27,7 +27,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): Không (Tr
 
 | Hướng | Bao nhiêu người gặp | Bao nhiêu lần / tháng | Mỗi lần tốn gì | Impact / tháng | Làm kịp không | Chọn? |
 |---|---|---|---|---|---|---|
-| **B2-RHM (Mở rộng):** BS RHM kiểm tra an toàn bệnh nền/thuốc nền × thủ thuật & đơn nha khoa | UNKNOWN số BS gặp vấn đề. Quy mô tham chiếu: 10.000 nha sĩ tại Việt Nam (VOSA, 2024). | UNKNOWN tần suất đại diện. | UNKNOWN phút tra thuốc riêng. | UNKNOWN. | Kịp: danh mục ~20 thuốc RHM & nhóm thủ thuật gọn, dựng được bảng tất định chuẩn nguồn trong 10h; có đầu mối ≥3 BS RHM ngoài nhóm | **Chọn** |
+| **B2-RHM (Mở rộng):** BS RHM kiểm tra an toàn bệnh nền/thuốc nền × thủ thuật & đơn nha khoa | UNKNOWN số BS gặp vấn đề. Quy mô tham chiếu: 10.000 nha sĩ tại Việt Nam (VOSA, 2024). | [P2](evidence/interviews/P2.md) báo 2 lần, [P3](evidence/interviews/P3.md) khoảng 5 lần phải dừng để rà trong tháng qua. Tần suất đại diện: UNKNOWN. | Thời gian tự báo cáo cho ca gần nhất: P2 khoảng 90 phút, P3 khoảng 3 phút. Thời gian tra thuốc riêng: UNKNOWN. | UNKNOWN. | Kịp: danh mục ~20 thuốc RHM & nhóm thủ thuật gọn, dựng được bảng tất định chuẩn nguồn trong 10h; có đầu mối ≥3 BS RHM ngoài nhóm | **Chọn** |
 | **B2-BN (Gợi ý gốc):** Người nhà / bệnh nhân mạn tính kiểm tra tương tác & xếp lịch uống thuốc | Hàng triệu người bệnh mạn tính *(tự ước tính)* | ~2–4 lần/tháng khi đổi đơn *(tự ước tính)* | ~10–15 phút đọc hướng dẫn + rủi ro uống nhầm giờ/tương tác *(tự ước tính)* | Rất lớn nhưng phân tán *(tự ước tính)* | Khó: danh mục thuốc toàn bộ chuyên khoa quá rộng, không kịp đối chiếu nguồn từng dòng trong 10h | Loại |
 | **B3-Nhà thuốc:** Tư vấn khách hỏi mua thuốc qua chat nhà thuốc tối muộn | Hàng nghìn nhà thuốc *(tự ước tính)* | Hàng trăm lượt chat/nhà thuốc/tháng *(tự ước tính)* | ~3–5 phút dược sĩ trực sàng lọc ca lặp lại *(tự ước tính)* | Lớn *(tự ước tính)* | Khó: khó hẹn ≥3 dược sĩ nhà thuốc phỏng vấn & test trong 2 ngày; rủi ro gợi ý OTC cho trẻ nhỏ/bà bầu cao | Loại |
 
@@ -128,8 +128,8 @@ flowchart TD
 - Ngoài phạm vi: từ chối yêu cầu vượt thẩm quyền; phần cảnh báo có căn cứ vẫn được trình bày.
 
 ## §7. Đánh giá & chuẩn "đạt" *(guide 2.4, 4.1)*
-- Data card: data/DATA_CARD.md. Benchmark CP2: 17 câu (thuong 2 · kho 13 · tu_choi 2), 5 metric trong eval/metric_spec.yaml.
-- **Chuẩn đạt CP2:** ≥80% câu qua (ít nhất 14/17 với mẫu CP2) **và đồng thời đạt cả 5 ngưỡng:** cảnh báo HIGH bắt buộc 100%; đúng mã, mức và nguồn 100%; từ chối đúng 100%; hỏi lại đúng ≥80%; báo mục chưa có dữ liệu 100%. So ngưỡng theo tỷ lệ chưa làm tròn.
+- Data card: data/DATA_CARD.md. Benchmark chốt CP2: 27 câu (thuong 2 · kho 18 · tu_choi 7), 5 metric trong eval/metric_spec.yaml.
+- **Chuẩn đạt CP2:** ≥80% câu qua (ít nhất 22/27 với bộ 27 câu) **và đồng thời đạt cả 5 ngưỡng:** cảnh báo HIGH bắt buộc 100%; đúng mã, mức và nguồn 100%; từ chối đúng 100%; hỏi lại đúng ≥80%; báo mục chưa có dữ liệu 100%. So ngưỡng theo tỷ lệ chưa làm tròn.
 - Chấm từng câu theo pass_criterion và các metric áp dụng. Output lỗi hoặc trống trượt. Với metric không có mẫu áp dụng, ghi N/A và chưa xác nhận đạt toàn bộ. Mẫu CP2 cho từng metric nằm trong eval/README.md.
 - Kết quả: lượt 1 __/__ (__%) · lượt 2 __/__ (__%) — run ID: __ / __ → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
 
@@ -165,7 +165,7 @@ flowchart TD
 
 | Thời điểm | Đổi gì | Vì sao (trỏ về câu thử / lỗi / bằng chứng nào) |
 |---|---|---|
-|  |  |  |
+| Trước CP3 | Giới hạn CR-008 ở nhóm penicillin, làm rõ hai cách đạt B22 và cập nhật bảng impact §2. | Rà phạm vi CR-008, chốt tiêu chí B22 và bổ sung số tự báo cáo từ P2/P3. |
 
 **Sau CP4 (đến 23:59 Thứ Bảy 28/11)** (sửa theo góp ý — không sửa chuẩn "đạt", câu thử, số bằng chứng, kết quả các lượt đã chạy)
 

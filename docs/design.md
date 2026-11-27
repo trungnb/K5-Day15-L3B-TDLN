@@ -239,7 +239,7 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 8. Câu hỏi / nhắc Q5, Q2, Q3, Q4 (nếu có)
 9. "BS là người quyết định." — luôn có, code
 
-**Câu cố định** — ⚠️ Trung duyệt câu chữ:
+**Câu cố định** — Trung đã duyệt toàn bộ (27/11/2026):
 
 | Mã | Nội dung |
 |---|---|
@@ -321,7 +321,7 @@ Mã quy tắc trên lấy từ CSV v1.1 hiện tại; kết quả thật phụ t
 |---|---|---|
 | ~~Một alias nhiều dòng; sửa `validate_csv.py`; tách thuốc phối hợp~~ — đã làm ở PR #5 | Nguyên | — |
 | ~~Thủ thuật nào thuộc thêm nhóm `local_anesthesia`~~ — Trung đã chốt, xem bên dưới | Trung | — |
-| Câu chữ các câu cố định §7 — Trung đã duyệt Q0–Q4; **Q1 sửa lại sau đó** (xem bên dưới); các câu còn lại chưa xác nhận | Trung | Lĩnh code bước 5 |
+| ~~Câu chữ các câu cố định §7~~ — Trung đã duyệt toàn bộ (gồm Q1 mới, P1, ❔, 5 câu 🚫, ✅) ngày 27/11/2026 | Trung | — |
 | ~~Cập nhật `team-plan.md` §B~~ — đã làm ở PR #7 | Lĩnh | — |
 | Thêm câu thử cho 6 tình huống §6, câu thiếu cả 3 trường đầu (Q4), câu ✅, câu thuốc phối hợp, câu "dị ứng ibuprofen" | Đức | CP3 |
 | ~~Cân nhắc metric "output không kết luận an toàn"~~ — metric đã chốt ở PR #6 (5 metric, không có metric này); thiết kế vẫn giữ luật không nói "an toàn" | Đức | — |
@@ -332,7 +332,7 @@ Mã quy tắc trên lấy từ CSV v1.1 hiện tại; kết quả thật phụ t
 - **Q1** đổi thành câu hỏi rõ thuốc nào đang dùng, thuốc nào định kê, thủ thuật gì — để khớp kỳ vọng "hỏi lại vai trò / tên thuốc" của B02, B04–B07, B15.
 - Tin không có thực thể nào (tình huống 1, §6) trả **Q1** thay cho Q0 — khớp B02. Q0 chỉ còn dùng cho `/start`, `/help` của bot.
 - Câu **❔** thêm phần mời ghi rõ tên đầy đủ / hoạt chất khi là viết tắt hoặc tên chung — khớp B12 ("th áp"), B14 ("thuốc điều trị duy trì").
-- **Rủi ro đã biết:** B11 (hỏi thêm về chảy máu khó cầm) và B13 (nhắc đánh giá sớm vì ca cấp) là kỳ vọng lâm sàng ngoài bảng tra; thiết kế không cho model tự thêm kiến thức nên hai câu này có thể trượt, trừ khi ý đó được đưa vào cột `clinical_guidance` của rule tương ứng.
+- **Rủi ro đã biết:** Trung đã bổ sung phần xác minh giai đoạn thủ thuật và chảy máu khó cầm vào `clinical_guidance` của `CR-016` (27/11/2026) cho `B11`; còn lại `B13` (nhắc đánh giá sớm vì ca cấp) là kỳ vọng lâm sàng ngoài bảng tra nên có thể trượt do thiết kế không cho model tự thêm kiến thức.
 
 **Khác `team-plan.md` §B:**
 1. Thêm nhánh ✅ "Không phát hiện cảnh báo" (không gọi model 2).
