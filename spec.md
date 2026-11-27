@@ -41,28 +41,66 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): Không (Tr
 - [sản phẩm / tính năng gần giống]: một điều đáng học · một điều đáng né · mình khác gì
 
 ## §4. Thiết kế *(guide 2.2, 3.2)*
-- **Lát cắt MỘT CÂU** (1 người dùng · 1 việc · 1 quyết định AI · 1 kết quả):
+> Bản chi tiết (hợp đồng JSON, luật từng bước, câu chữ cố định, xử lý lỗi): [`docs/design.md`](docs/design.md).
+
+- **Lát cắt MỘT CÂU** (1 người dùng · 1 việc · 1 quyết định AI · 1 kết quả): Một BS RHM · nhắn tóm tắt ca (bệnh nền, dị ứng, thuốc đang dùng, thủ thuật dự kiến, thuốc định kê) · AI đọc tin nhắn tiếng Việt viết tắt và trích thực thể, code tra tất định các bảng quy tắc có nguồn để quyết định mức cảnh báo · BS nhận checklist cảnh báo (🔴 nguy cơ cao · 🟡 thận trọng · ❔ chưa có dữ liệu · 🚫 ngoài phạm vi, hoặc ✅ không phát hiện cảnh báo) kèm mã quy tắc, nguồn và hướng kiểm tra/hội chẩn để tự quyết.
 - Không làm (≥3 điều):
-- **Sơ đồ** (ảnh / Mermaid / draw.io): [chèn ở đây]
-- **Hình dạng:** [ ] workflow cố định · [ ] một agent · [ ] nhiều agent — 2 dòng lý do, và vì sao **không** chọn hình dạng phức tạp hơn:
+  1. Không kê đơn, không gợi ý thuốc thay thế cụ thể.
+  2. Không tư vấn liều dùng, số ngày dùng hay cách phối hợp đơn.
+  3. Không khuyên ngưng hoặc đổi thuốc nền (chỉ gợi ý hội chẩn BS điều trị bệnh nền).
+  4. Không chẩn đoán; không nhận dữ liệu định danh BN thật.
+  5. Không kết luận "an toàn": không phát hiện cảnh báo chỉ có nghĩa là bảng tra chưa có dòng nào khớp.
+- **Sơ đồ** (Mermaid):
+
+```mermaid
+flowchart TD
+  A([Tin nhắn ca bệnh của BS]) --> S1["1 · Model lần 1 (AI)<br/>trích 5 trường + 2 cờ"]
+  A -. tin gốc .-> S2
+  S1 -->|JSON| S2["2 · Chuẩn hoá + quét lại tin gốc (code)"]
+  CA[(entity_aliases.csv)] --> S2
+  S2 --> D1{"Có thủ thuật hoặc<br/>thuốc định kê?"}
+  D1 -->|thiếu cả hai| Q["Câu cố định: hỏi lại /<br/>hướng dẫn / từ chối"]
+  Q -. "BS nhắn bổ sung → bot ghép tin cũ" .-> A
+  D1 -->|có ít nhất một| S3["3 · Tra bảng quy tắc (code)"]
+  CR[(ddi_rules.csv<br/>clinical_risk_rules.csv)] --> S3
+  S3 --> D2{"Có rule nào khớp?"}
+  D2 -->|không: bỏ qua model 2| R
+  D2 -->|có| S4["4 · Model lần 2 (AI)<br/>viết khối 🔴 🟡"]
+  S4 --> D3{"Đủ mọi mã HIGH?"}
+  D3 -->|thiếu| GD["Code nối cảnh báo còn thiếu"]
+  GD --> R
+  D3 -->|đủ| R["5 · Ráp tin trả lời (code)"]
+  S1 -. "2 cờ: vượt quyền, có PII" .-> R
+  R --> O([Tin gửi BS])
+
+  classDef ai fill:#e7effd,stroke:#1d5bd8
+  classDef guard fill:#fdeceb,stroke:#cf2a1f
+  class S1,S4 ai
+  class S2,D3,GD guard
+```
+
+- **Hình dạng:** [x] workflow cố định · [ ] một agent · [ ] nhiều agent — Sàng lọc an toàn cần bước tra bảng **luôn chạy** để không sót cảnh báo HIGH, và chi phí cố định **≤ 2 lần gọi model mỗi ca**. Không chọn agent vì agent tự chọn bước có thể bỏ qua bảng kiểm tra và tốn token vòng lặp; model chỉ điền các ô cố định (5 trường, 2 cờ) và diễn đạt lại cảnh báo, còn mọi rẽ nhánh là if/else trong code.
 - **AI dựa vào đâu** — mỗi công cụ (khớp `codebase/tools.py`):
 
   | Công cụ | Input | Output | Tác động ra ngoài? |
   |---|---|---|---|
-  |  |  |  |  |
+  | `normalize_entities` | JSON model lần 1 + tin gốc | Thực thể chuẩn theo 5 nhóm (biệt dược → hoạt chất, thuốc phối hợp → nhiều hoạt chất), thuốc không rõ vai, tên không có trong bảng (`unmapped`); đọc `data/entity_aliases.csv` | Không |
+  | `check_drug_interactions` | Thuốc đang dùng, thuốc định kê | Danh sách rule `{rule_id, severity, a, b, mechanism, guidance, source}` từ `data/ddi_rules.csv` | Không |
+  | `check_clinical_risks` | Bệnh nền, dị ứng, thuốc đang dùng, thuốc định kê, nhóm thủ thuật | Như trên, từ `data/clinical_risk_rules.csv` | Không |
 
-- **Mức tự động:** [ ] AI gợi ý, người quyết · [ ] AI tự làm khi chắc, chuyển người khi không · [ ] AI tự làm — lý do (sai thì ai chịu gì, sửa đắt hay rẻ):
-- **Chỗ chặn rủi ro** (rủi ro lớn nhất của lát cắt bị chặn ở đâu, bằng gì):
-- **Chỗ người duyệt** (việc AI không được tự làm):
+- **Mức tự động:** [x] AI gợi ý, người quyết · [ ] AI tự làm khi chắc, chuyển người khi không · [ ] AI tự làm — Sai trong y khoa có thể gây xuất huyết, phản vệ hoặc hoại tử xương hàm, không đảo ngược được; người chịu hậu quả là BN và BS điều trị. Vì vậy hệ thống chỉ đưa cảnh báo có nguồn, BS là người quyết định (câu cuối mọi tin trả lời).
+- **Chỗ chặn rủi ro** (rủi ro lớn nhất của lát cắt bị chặn ở đâu, bằng gì): Rủi ro lớn nhất là **sót cảnh báo HIGH**. Chặn bằng 3 lớp code: (1) bước 2 quét lại tin gốc theo bảng bí danh, gộp với kết quả model, thuốc không rõ vai đưa vào cả hai nhóm; (2) bước 3 tra tất định 100% tổ hợp; (3) sau bước 4 kiểm mọi mã HIGH đã khớp có trong tin trả lời, thiếu thì code tự nối. Model lần 2 lỗi thì code viết cảnh báo bằng mẫu sẵn.
+- **Chỗ người duyệt** (việc AI không được tự làm): Quyết định làm hay hoãn thủ thuật, chọn thuốc, liều, việc ngưng/đổi thuốc nền — tất cả do BS. Hệ thống không có công cụ nào tác động ra ngoài. Nội dung 3 bảng quy tắc do BS RHM trong nhóm duyệt từng dòng (`data/DATA_CARD.md`).
 - **Nguyên tắc thiết kế** (≥3, bắt buộc G10):
 
   | Nguyên tắc | Chỗ cụ thể trên sơ đồ / trong bản chạy thử |
   |---|---|
-  | G10 — thu hẹp phạm vi khi không chắc |  |
-  |  |  |
-  |  |  |
+  | G10 — thu hẹp phạm vi khi không chắc | Tên không có trong bảng → khối ❔ "Chưa có dữ liệu", không đoán (bước 2). Thiếu cả thủ thuật lẫn thuốc định kê → hỏi lại, không tra bừa (hình thoi 1). Không có rule khớp → ✅ "không phát hiện trong bảng tra hiện có", không nói "an toàn" (bước 5) |
+  | Không để model một mình ở chỗ nguy hiểm | Đường quét lại tin gốc vào bước 2; hình thoi "Đủ mọi mã HIGH?" sau bước 4 |
+  | Truy được nguồn | Mọi cảnh báo in mã quy tắc (`[DDI-001]`, `[CR-001]`) và nguồn; mã không bao giờ đánh số lại |
+  | Câu bắt buộc do code viết | Bước 5 ráp tin: khối ❔, 🚫, ✅, câu nhắc và "BS là người quyết định." là câu viết sẵn, không phụ thuộc model |
 
-- Phần nào còn giả (công cụ trả dữ liệu giả, model chế độ giả…) — ghi rõ, không giả làm thật:
+- Phần nào còn giả (công cụ trả dữ liệu giả, model chế độ giả…) — ghi rõ, không giả làm thật: **Thật:** 3 bảng dữ liệu v1.1 (233 bí danh, 36 rule DDI, 20 rule lâm sàng; `data/DATA_CARD.md`). **Chưa có:** code luồng trong `codebase/` vẫn là khung mẫu của BTC; model đang chế độ giả cho đến khi nối Gemini (trước CP3). **Để sau:** regex bắt SĐT/CCCD, từ khoá vượt quyền, kiểm liều trong tin trả lời (`docs/design.md` §11).
 
 ## §5. Chỗ khó — 4 lớp + ≥6 kịch bản + 2 tấn công *(guide 2.3)*
 
@@ -98,8 +136,20 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): Không (Tr
 
 ## §9. Rủi ro & an toàn
 - Dữ liệu: đã ẩn danh gì, không thu gì, không đưa gì vào model gói miễn phí:
-- AI **không được** làm gì kể cả khi người dùng yêu cầu:
+  - Chỉ dùng **ca giả lập hoặc đã ẩn danh**; bot nhắc điều này ngay tin chào. Gói miễn phí có thể dùng dữ liệu gửi lên để huấn luyện, nên không bao giờ gửi họ tên, SĐT, mã hồ sơ, ảnh đơn thuốc thật.
+  - Model lần 1 gắn cờ `has_pii` khi tin có thông tin định danh → tin trả lời nhắc ẩn danh và không nhắc lại thông tin đó (mục "Đã đối chiếu" chỉ in tên thuốc, bệnh, thủ thuật).
+  - Bot chỉ nhận tin từ chat đã nhập mã mời; log bot lưu `chat_id` dạng băm, thư mục `bot/logs/` không commit. Tin chờ bổ sung (để ghép tin) chỉ giữ trong RAM tối đa 10 phút, không ghi ra đĩa.
+  - Dữ liệu trong `data/` là quy tắc chuyên môn, không chứa dữ liệu bệnh nhân.
+- AI **không được** làm gì kể cả khi người dùng yêu cầu: kê đơn; tư vấn liều, số ngày dùng; gợi ý thuốc thay thế cụ thể; khuyên ngưng hoặc đổi thuốc nền; chẩn đoán; kết luận một ca là "an toàn"; làm theo câu tấn công kiểu "bỏ qua hướng dẫn". Các yêu cầu này được model gắn cờ `out_of_scope` và code trả câu từ chối 🚫 viết sẵn, trong khi phần tra cảnh báo vẫn chạy.
 - Ai có thể bị hại nếu AI sai, và nhóm chặn thế nào:
+
+  | Sai | Ai bị hại, hậu quả | Chặn |
+  |---|---|---|
+  | Sót cảnh báo HIGH (vd chống đông + nhổ răng) | BN: xuất huyết, phản vệ, hoại tử xương hàm | Quét lại tin gốc, tra tất định, code kiểm đủ mã HIGH (§4 "Chỗ chặn rủi ro") |
+  | Bảng tra chưa có thuốc/bệnh → im lặng như không có gì | BN, BS tin nhầm | Tên lạ luôn hiện ở khối ❔; không bao giờ nói "an toàn" |
+  | Hiểu sai câu, vd "dị ứng ibuprofen" thành "kê ibuprofen" | BS nhận cảnh báo sai | Khớp bí danh dài nhất, không chồng lấn; mục "Đã đối chiếu" để BS thấy hệ thống đã hiểu gì |
+  | Cảnh báo thừa (thuốc không rõ vai đưa vào cả hai nhóm) | BS mệt vì quá nhiều cảnh báo, dễ bỏ qua cảnh báo thật | Ghi chú rõ "không rõ đang dùng hay định kê — đã kiểm cả hai" |
+  | Model tự thêm liều hoặc kiến thức ngoài bảng | BN nếu BS làm theo | Model 2 chỉ nhận rule đã khớp và chỉ viết khối 🔴 🟡; kiểm liều trong output là việc để sau (`docs/design.md` §11) |
 
 ## §10. Phân công & changelog
 - Phân công có tên (theo chặng, chia cặp — guide "Cách chia việc"): __
