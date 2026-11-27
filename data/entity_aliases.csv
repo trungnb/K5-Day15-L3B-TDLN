@@ -85,8 +85,11 @@ adrenaline,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:D
 adrenalin,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:DDInter652,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 thuoc co mach,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:DDInter652,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 lignospan,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:DDInter652; combo:lidocaine+epinephrine (thuốc tê có co mạch),DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
+lignospan,lidocaine,Lidocaine,drug,local_anesthetic,DDInterID:DDInter1066; combo:lidocaine+epinephrine,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 septanest,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:DDInter652; combo:articaine+epinephrine (thuốc tê có co mạch),DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
+septanest,articaine,Articaine (thuốc tê nha khoa),drug,local_anesthetic,DDInterID:DDInter123; combo:articaine+epinephrine,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 ubistesin,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:DDInter652; combo:articaine+epinephrine (thuốc tê có co mạch),DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
+ubistesin,articaine,Articaine (thuốc tê nha khoa),drug,local_anesthetic,DDInterID:DDInter123; combo:articaine+epinephrine,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 mepivacaine,mepivacaine,Mepivacaine 3% Plain (Scandonest — thuốc tê không co mạch),drug,local_anesthetic,DDInterID:DDInter1153,DDInter; vật liệu/thuốc tê RHM lưu hành tại VN (BS RHM duyệt 27/11/2026)
 mepivacain,mepivacaine,Mepivacaine 3% Plain (Scandonest — thuốc tê không co mạch),drug,local_anesthetic,DDInterID:DDInter1153,DDInter; vật liệu/thuốc tê RHM lưu hành tại VN (BS RHM duyệt 27/11/2026)
 scandonest,mepivacaine,Mepivacaine 3% Plain (Scandonest — thuốc tê không co mạch),drug,local_anesthetic,DDInterID:DDInter1153,DDInter; vật liệu/thuốc tê RHM lưu hành tại VN (BS RHM duyệt 27/11/2026)
@@ -109,6 +112,7 @@ plavix,clopidogrel,Clopidogrel (Plavix — kháng tiểu cầu P2Y12),drug,p2y12
 clopistad,clopidogrel,Clopidogrel (Plavix — kháng tiểu cầu P2Y12),drug,p2y12_antiplatelet,DDInterID:DDInter413,"DDInter; SDCEP QRG (2022), p. 5"
 clopilet,clopidogrel,Clopidogrel (Plavix — kháng tiểu cầu P2Y12),drug,p2y12_antiplatelet,DDInterID:DDInter413,"DDInter; SDCEP QRG (2022), p. 5"
 coplavix,clopidogrel,Clopidogrel (Plavix — kháng tiểu cầu P2Y12),drug,p2y12_antiplatelet,DDInterID:DDInter413; combo:clopidogrel+aspirin,"DDInter; SDCEP QRG (2022), p. 5"
+coplavix,aspirin,Aspirin (Acetylsalicylic acid),drug,antiplatelet,DDInterID:DDInter20; combo:clopidogrel+aspirin,"DDInter; SDCEP QRG (2022), p. 5"
 ticagrelor,ticagrelor,Ticagrelor (Brilinta — kháng tiểu cầu P2Y12),drug,p2y12_antiplatelet,DDInterID:DDInter1802,"DDInter; SDCEP QRG (2022), p. 5; QĐ 5948/QĐ-BYT (2021), tr. 52"
 brilinta,ticagrelor,Ticagrelor (Brilinta — kháng tiểu cầu P2Y12),drug,p2y12_antiplatelet,DDInterID:DDInter1802,"DDInter; SDCEP QRG (2022), p. 5; QĐ 5948/QĐ-BYT (2021), tr. 52"
 aspirin,aspirin,Aspirin (Acetylsalicylic acid),drug,antiplatelet,DDInterID:DDInter20,"DDInter (Acetylsalicylic acid); SDCEP QRG (2022), p. 5"
