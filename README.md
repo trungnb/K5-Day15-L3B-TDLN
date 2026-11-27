@@ -106,7 +106,8 @@ Chi tiết từng việc: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đ�
 
 - **Nguyên:** dùng Claude Code (Claude Opus 5.5) để tìm và đọc nguồn cho `spec.md` §2–§3, viết `evidence/crawl_qa.py` / `count_qa.py` và luật thuốc phối hợp trong `data/build/`, soạn README; Nguyên kiểm tay 15/15 nhãn mẫu hỏi đáp và đọc lại từng nguồn trích.
 - **Trung:** dùng coding agent hỗ trợ soạn/đồng bộ tài liệu, biên bản và kiểm tra khung repo; trực tiếp thực hiện/xác nhận phỏng vấn BS RHM ngoài nhóm và duyệt lâm sàng 3 bảng dữ liệu.
-- **Đức, Lĩnh:** ____ *(mỗi người tự bổ sung 1 dòng: công cụ AI · làm gì · ai kiểm)*
+- **Lĩnh:** dùng Claude Code (Claude Opus 5.5) để đọc repo, đề xuất và soạn thiết kế luồng xử lý (`docs/design.md`, `spec.md` §4 §9, sơ đồ, cập nhật `team-plan.md` §B) và đối chiếu thiết kế với dữ liệu, bộ câu thử của nhóm; Lĩnh duyệt từng quyết định thiết kế (bác một số đề xuất, vd thêm trường JSON cho thuốc không rõ vai) trước khi commit.
+- **Đức:** ____ *(tự bổ sung 1 dòng: công cụ AI · làm gì · ai kiểm)*
 - Không dùng AI để tạo người được phỏng vấn, trích dẫn, câu trả lời khảo sát hay sửa kết quả các lượt đã chạy.
 
 ## File mẫu — điền ở bước nào

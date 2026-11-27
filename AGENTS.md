@@ -24,7 +24,7 @@ Khung chỉ dùng thư viện chuẩn của Python. Thêm thư viện thì ghi v
 
 | File | Ai sửa | Hợp đồng |
 |---|---|---|
-| `codebase/agent.py` | nhóm | `answer(text) -> {"output": str}` — luồng chính, đúng hình dạng ở `spec.md` §4 |
+| `codebase/agent.py` | nhóm | `answer(text) -> {"output": str, "needs_more": bool}` — luồng chính, đúng hình dạng ở `spec.md` §4; chi tiết `docs/design.md` |
 | `codebase/ai.py` | nhóm | `call_model(system, user) -> {"text", "model", "tokens_in", "tokens_out"}`, giữ `@model_call`. Token lấy từ `usage` của API, không ước lượng |
 | `codebase/tools.py` | nhóm | mỗi công cụ một hàm có `@tool`, docstring: tên · input · output · có tác động ra ngoài không |
 | `codebase/tracing.py`, `eval/run_eval.py`, `cost/simulate.py`, `run.py` | **khung — không sửa** | ghi trace, chạy bộ câu thử, mô phỏng chi phí |
@@ -40,6 +40,6 @@ Khung chỉ dùng thư viện chuẩn của Python. Thêm thư viện thì ghi v
 
 ## Quy ước của nhóm
 
-- Ngôn ngữ trả lời người dùng: __
-- Phong cách code / đặt tên: __
-- Ai duyệt thay đổi do agent tạo trước khi commit: __
+- Ngôn ngữ trả lời người dùng: tiếng Việt, xưng "em" với BS; câu chữ cố định lấy nguyên văn từ `docs/design.md` §7.
+- Phong cách code / đặt tên: code theo hợp đồng và luật ở `docs/design.md` (nếu lệch với `spec.md` / `team-plan.md` thì theo `docs/design.md`); chỉ dùng thư viện chuẩn trong `codebase/`; tên hàm, biến bằng tiếng Anh, chú thích tiếng Việt; câu chữ cố định gom một chỗ, không rải trong code.
+- Ai duyệt thay đổi do agent tạo trước khi commit: người sở hữu file theo `docs/team-plan.md` §C (vd `codebase/` — Lĩnh, `data/` — Nguyên + Trung duyệt lâm sàng, `eval/` — Đức); sửa file của người khác thì mở PR và để người sở hữu duyệt.
