@@ -1,52 +1,44 @@
-# Mô phỏng chi phí khi dùng thật — điền ở guide bước 4.2.
-# Ôn lại: ngày 13, ngày 1, ngày 14 · lab ngày 13, lab ngày 14.
-# Mọi số phải có nguồn (data / phỏng vấn / khảo sát / quy mô khoá có nguồn) hoặc ghi rõ "(tự ước tính)".
-# Chạy: python run.py simulate --try   (10 phiên, kiểm khung — làm trước CP3)
-#       python run.py simulate         (đủ số phiên dưới đây — bản nộp CP4)
-# Thay mọi dòng "(ví dụ)" bằng số và nguồn của nhóm; simulate nhắc nếu còn sót.
+# Mô phỏng chi phí khi dùng thật — Track B · Nhóm TDLN (BS RHM)
+# Quy mô: số BS RHM tốt nghiệp hàng năm theo Bộ Y tế + lực lượng nha sĩ VOSA 2024.
+# Persona & tần suất: lấy trực tiếp từ 5 BS RHM ngoài nhóm đã phỏng vấn (P1–P5, evidence/summary.md).
+# Giá model: lấy từ Guide/further-reading/model-prices.md (dùng giá sau tăng cho chi phí vận hành).
 
-sessions: 50        # số phiên mô phỏng — bản nộp ≥50
-seed: 42            # giữ cố định để chạy lại ra cùng chuỗi phiên
+sessions: 50
+seed: 42
 
-users:              # số người dùng thật nếu đưa vào dùng — 3 kịch bản, ở quy mô thật của sản phẩm
-                    # track A: khoá học · track B–F: người dùng của sản phẩm / nhóm nhắm tới, nguồn công khai có link
+users:
   low: 300
-  base: 700
-  high: 1000
-  source: "(ví dụ) track A — thay bằng số của nhóm. Cơ sở: lớp L3 hơn 700 học viên (README hackathon); thấp, cao: (tự ước tính)"
+  base: 999
+  high: 3000
+  source: "Kịch bản cơ sở (999): số sinh viên ngành Răng-Hàm-Mặt tốt nghiệp trong năm gần nhất theo thống kê Bộ Y tế, dẫn trên VnExpress ngày 28/05/2025 (https://vnexpress.net/them-mot-truong-dai-hoc-duoc-dao-tao-bac-si-rang-ham-mat-4891698.html). Đối chiếu tổng lực lượng: ~10.000 nha sĩ VN (VOSA 2024, FDI). Thấp (300 ≈ 30% một khoá mới tốt nghiệp) và cao (3.000 ≈ 30% lực lượng nha sĩ): (tự ước tính)."
 
-personas:           # ≥3 kiểu người dùng; share cộng lại = 1
+personas:
   - name: dung_it
-    share: 0.5              # tỉ lệ người dùng kiểu này
-    uses_per_month: 4       # số phiên / người / tháng
-    turns_per_session: 1    # số lượt hỏi trong một phiên
-    source: "(ví dụ) phỏng vấn P1, P3 — thay bằng nguồn của nhóm"
+    share: 0.60
+    uses_per_month: 1
+    turns_per_session: 1
+    source: "3/5 BS phỏng vấn (P1: BS phẫu thuật RHM 6 năm KN, P4: BS nha khoa tổng quát 6 năm KN, P5: BS chỉnh nha 6 năm KN) đều báo 1 ca/tháng trong evidence/summary.md; 1 lượt/phiên: (tự ước tính)."
   - name: dung_vua
-    share: 0.3
-    uses_per_month: 10
-    turns_per_session: 3
-    source: "(ví dụ) khảo sát n = 24, câu 3"
+    share: 0.20
+    uses_per_month: 2
+    turns_per_session: 2
+    source: "1/5 BS phỏng vấn (P2: BS chuyên RTE 6 năm KN) báo 2 lần/tháng trong evidence/summary.md; 2 lượt/phiên (gồm trường hợp nhắn bổ sung): (tự ước tính)."
   - name: dung_nhieu
-    share: 0.2
-    uses_per_month: 20
-    turns_per_session: 5
-    source: "(ví dụ) data/preclass: đếm số lượt / người — cách đếm ở evidence/data-mining.md"
-# Mỗi lượt hỏi lấy ngẫu nhiên một đầu vào trong eval/benchmark.csv (type thuong và kho).
-# Persona hỏi kiểu riêng: thêm vào persona đó
-#     types: [thuong, kho, tu_choi]
-# hoặc
-#     inputs: ["câu hỏi kiểu 1", "câu hỏi kiểu 2"]
+    share: 0.20
+    uses_per_month: 5
+    turns_per_session: 2
+    source: "1/5 BS phỏng vấn (P3: BS RHM 1 năm KN — nhóm mới ra trường) báo khoảng 5 lần/tháng trong evidence/summary.md; 2 lượt/phiên (gồm trường hợp nhắn bổ sung): (tự ước tính)."
 
-prices:             # USD / 1 triệu token — chép từ further-reading/model-prices.md của repo đề. ≥2 mức model
+prices:
+  - model: gemini-3.8-flash
+    input: 1.50
+    output: 7.50
+    source: "Model chạy chính — Guide/further-reading/model-prices.md (Google Gemini API, https://ai.google.dev/gemini-api/docs/pricing, xem 25/11/2026): tầng Vừa, dùng giá sau tăng từ 01/01/2027 (giá đến 31/12/2026 là 0.75/3.75)."
   - model: gemini-3.1-flash-lite
     input: 0.25
     output: 1.50
-    source: "(ví dụ) https://ai.google.dev/gemini-api/docs/pricing · xem 25/11/2026"
-  - model: gemini-4-hydrogen
-    input: 1.50
-    output: 7.50
-    source: "(ví dụ) https://ai.google.dev/gemini-api/docs/pricing · xem 25/11/2026"
+    source: "Model đối chứng tầng Nhỏ (simulate yêu cầu >=2 mức giá) — Guide/further-reading/model-prices.md (https://ai.google.dev/gemini-api/docs/pricing, xem 25/11/2026)."
 
-usd_to_vnd:         # tuỳ chọn: điền thì bản tóm tắt in thêm tiền Việt
+usd_to_vnd:
   rate:
   source:
