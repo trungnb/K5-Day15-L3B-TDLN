@@ -37,7 +37,8 @@ ery,erythromycin,Erythromycin,drug,macrolide_cyp3a4,DDInterID:DDInter670,DDInter
 ibuprofen,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 brufen,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 gofen,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
-alaxan,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900; combo:ibuprofen+paracetamol,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
+alaxan,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900; combo:ibuprofen+acetaminophen,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
+alaxan,acetaminophen,Paracetamol (Acetaminophen),drug,analgesic,DDInterID:DDInter14; combo:ibuprofen+acetaminophen,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 nurofen,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 ibumed,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 naproxen,naproxen,Naproxen,drug,nsaid,DDInterID:DDInter1266,DDInter; biệt dược phổ biến tại VN (BS RHM duyệt 27/11/2026)
@@ -85,8 +86,11 @@ adrenaline,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:D
 adrenalin,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:DDInter652,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 thuoc co mach,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:DDInter652,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 lignospan,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:DDInter652; combo:lidocaine+epinephrine (thuốc tê có co mạch),DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
+lignospan,lidocaine,Lidocaine,drug,local_anesthetic,DDInterID:DDInter1066; combo:lidocaine+epinephrine,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 septanest,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:DDInter652; combo:articaine+epinephrine (thuốc tê có co mạch),DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
+septanest,articaine,Articaine (thuốc tê nha khoa),drug,local_anesthetic,DDInterID:DDInter123; combo:articaine+epinephrine,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 ubistesin,epinephrine,Epinephrine (Adrenaline),drug,vasoconstrictor,DDInterID:DDInter652; combo:articaine+epinephrine (thuốc tê có co mạch),DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
+ubistesin,articaine,Articaine (thuốc tê nha khoa),drug,local_anesthetic,DDInterID:DDInter123; combo:articaine+epinephrine,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 mepivacaine,mepivacaine,Mepivacaine 3% Plain (Scandonest — thuốc tê không co mạch),drug,local_anesthetic,DDInterID:DDInter1153,DDInter; vật liệu/thuốc tê RHM lưu hành tại VN (BS RHM duyệt 27/11/2026)
 mepivacain,mepivacaine,Mepivacaine 3% Plain (Scandonest — thuốc tê không co mạch),drug,local_anesthetic,DDInterID:DDInter1153,DDInter; vật liệu/thuốc tê RHM lưu hành tại VN (BS RHM duyệt 27/11/2026)
 scandonest,mepivacaine,Mepivacaine 3% Plain (Scandonest — thuốc tê không co mạch),drug,local_anesthetic,DDInterID:DDInter1153,DDInter; vật liệu/thuốc tê RHM lưu hành tại VN (BS RHM duyệt 27/11/2026)
@@ -109,6 +113,7 @@ plavix,clopidogrel,Clopidogrel (Plavix — kháng tiểu cầu P2Y12),drug,p2y12
 clopistad,clopidogrel,Clopidogrel (Plavix — kháng tiểu cầu P2Y12),drug,p2y12_antiplatelet,DDInterID:DDInter413,"DDInter; SDCEP QRG (2022), p. 5"
 clopilet,clopidogrel,Clopidogrel (Plavix — kháng tiểu cầu P2Y12),drug,p2y12_antiplatelet,DDInterID:DDInter413,"DDInter; SDCEP QRG (2022), p. 5"
 coplavix,clopidogrel,Clopidogrel (Plavix — kháng tiểu cầu P2Y12),drug,p2y12_antiplatelet,DDInterID:DDInter413; combo:clopidogrel+aspirin,"DDInter; SDCEP QRG (2022), p. 5"
+coplavix,aspirin,Aspirin (Acetylsalicylic acid),drug,antiplatelet,DDInterID:DDInter20; combo:clopidogrel+aspirin,"DDInter; SDCEP QRG (2022), p. 5"
 ticagrelor,ticagrelor,Ticagrelor (Brilinta — kháng tiểu cầu P2Y12),drug,p2y12_antiplatelet,DDInterID:DDInter1802,"DDInter; SDCEP QRG (2022), p. 5; QĐ 5948/QĐ-BYT (2021), tr. 52"
 brilinta,ticagrelor,Ticagrelor (Brilinta — kháng tiểu cầu P2Y12),drug,p2y12_antiplatelet,DDInterID:DDInter1802,"DDInter; SDCEP QRG (2022), p. 5; QĐ 5948/QĐ-BYT (2021), tr. 52"
 aspirin,aspirin,Aspirin (Acetylsalicylic acid),drug,antiplatelet,DDInterID:DDInter20,"DDInter (Acetylsalicylic acid); SDCEP QRG (2022), p. 5"
@@ -222,8 +227,8 @@ implant,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo v�
 cay implant,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
 phau thuat nha chu,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
 tao vat,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
-rach ap xe,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
-lay cao duoi nuou,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
+rach ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
+lay cao duoi nuou,subgingival_scaling,Lấy cao dưới nướu,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
 gay te,local_anesthesia_proc,Gây tê nha khoa (có thuốc co mạch),procedure,local_anesthesia,,"SDCEP QRG (2022), Table 1 p. 3; thực hành RHM (BS RHM duyệt 27/11/2026)"
 gay te vung,local_anesthesia_proc,Gây tê nha khoa (có thuốc co mạch),procedure,local_anesthesia,,"SDCEP QRG (2022), Table 1 p. 3; thực hành RHM (BS RHM duyệt 27/11/2026)"
 tiem te,local_anesthesia_proc,Gây tê nha khoa (có thuốc co mạch),procedure,local_anesthesia,,"SDCEP QRG (2022), Table 1 p. 3; thực hành RHM (BS RHM duyệt 27/11/2026)"

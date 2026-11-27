@@ -7,6 +7,7 @@ Chỉ dùng thư viện chuẩn Python. Chạy từ thư mục gốc repo:
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +43,7 @@ def load_ddinter() -> tuple[dict[str, str], dict[tuple[str, str], str]]:
 
 
 COMBO_NOTES: dict[str, str] = {
-    "alaxan": "combo:ibuprofen+paracetamol",
+    "alaxan": "combo:ibuprofen+acetaminophen",
     "coplavix": "combo:clopidogrel+aspirin",
     "rodogyl": "combo:spiramycin+metronidazole",
     "dorogyne": "combo:spiramycin+metronidazole",
@@ -53,6 +54,49 @@ COMBO_NOTES: dict[str, str] = {
     "septanest": "combo:articaine+epinephrine (thuốc tê có co mạch)",
     "ubistesin": "combo:articaine+epinephrine (thuốc tê có co mạch)",
 }
+
+COMBO_RE = re.compile(r"combo:([a-z0-9_]+(?:\+[a-z0-9_]+)+)")
+
+
+def combo_components(notes: str) -> list[str]:
+    """Đọc danh sách hoạt chất từ 'combo:a+b' trong cột notes (rỗng nếu không phải thuốc phối hợp)."""
+    m = COMBO_RE.search(notes or "")
+    return m.group(1).split("+") if m else []
+
+
+def expand_combo_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Thuốc phối hợp → mỗi hoạt chất một dòng, cùng alias (vd coplavix → clopidogrel + aspirin).
+
+    Dòng thêm lấy display_name / entity_type / drug_class / DDInterID của chính hoạt chất đó (dòng đầu
+    tiên có canonical_id này) và giữ source của dòng biệt dược gốc. Hoạt chất chưa có thực thể trong
+    bảng thì bỏ qua (vẫn còn trong notes; validate_csv.py báo ra). Chạy lại nhiều lần cho cùng kết quả.
+    """
+    meta: dict[str, dict[str, str]] = {}
+    for r in rows:
+        meta.setdefault(r["canonical_id"], r)
+    have = {(r["alias"], r["canonical_id"]) for r in rows}
+    out: list[dict[str, str]] = []
+    for r in rows:
+        out.append(r)
+        comps = combo_components(r["notes"])
+        combo_tag = COMBO_RE.search(r["notes"]).group(0) if comps else ""
+        for comp in comps:
+            if comp == r["canonical_id"] or (r["alias"], comp) in have or comp not in meta:
+                continue
+            m = meta[comp]
+            dd = re.search(r"DDInterID:\S+?(?=;|$)", m["notes"])
+            base_notes = dd.group(0) if dd else ""
+            out.append({
+                "alias": r["alias"],
+                "canonical_id": comp,
+                "display_name": m["display_name"],
+                "entity_type": m["entity_type"],
+                "drug_class": m["drug_class"],
+                "notes": "; ".join(x for x in (base_notes, combo_tag) if x),
+                "source": r["source"],
+            })
+            have.add((r["alias"], comp))
+    return out
 
 
 def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
@@ -585,7 +629,25 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             "invasive_bleeding",
             None,
             "SDCEP QRG (2022), Table 1 p. 3",
-            ["implant", "cay implant", "phau thuat nha chu", "tao vat", "rach ap xe", "lay cao duoi nuou"],
+            ["implant", "cay implant", "phau thuat nha chu", "tao vat"],
+        ),
+        (
+            "abscess_drainage",
+            "Rạch dẫn lưu áp xe trong miệng",
+            "procedure",
+            "invasive_bleeding",
+            None,
+            "SDCEP QRG (2022), Table 1 p. 3",
+            ["rach ap xe"],
+        ),
+        (
+            "subgingival_scaling",
+            "Lấy cao dưới nướu",
+            "procedure",
+            "invasive_bleeding",
+            None,
+            "SDCEP QRG (2022), Table 1 p. 3",
+            ["lay cao duoi nuou"],
         ),
         (
             "local_anesthesia_proc",
@@ -632,7 +694,7 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
                     "source": source,
                 }
             )
-    return rows
+    return expand_combo_rows(rows)
 
 
 def build_ddi_rows(ddinter_pairs: dict[tuple[str, str], str]) -> list[dict[str, Any]]:

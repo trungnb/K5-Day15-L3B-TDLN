@@ -70,6 +70,61 @@ def _check_safety_text(label: str, text: str, errors: list[str]) -> None:
         errors.append(f"{label}: chứa cụm 'tự ngưng' không kèm phủ định an toàn")
 
 
+COMBO_RE = re.compile(r"combo:([a-z0-9_]+(?:\+[a-z0-9_]+)+)")
+
+
+def _combo_components(notes: str) -> list[str]:
+    m = COMBO_RE.search(notes or "")
+    return m.group(1).split("+") if m else []
+
+
+def _check_alias_groups(
+    groups: dict[str, list[tuple[int, str, list[str]]]],
+    known_ids: set[str],
+    errors: list[str],
+    notes: list[str],
+) -> int:
+    """Một alias được có nhiều dòng CHỈ KHI là thuốc phối hợp đã khai 'combo:a+b' trong notes.
+
+    - Trùng y hệt (cùng alias, cùng canonical_id) → lỗi.
+    - Nhiều canonical_id mà không khai combo, hoặc khai combo khác nhau giữa các dòng → lỗi (trùng mơ hồ).
+    - Khai combo: mỗi dòng phải là một thành phần của combo; thành phần nào đã có thực thể trong bảng
+      thì phải có dòng cho alias đó (nếu không → lỗi, vì sẽ sót cảnh báo); thành phần chưa có thực thể
+      → chỉ ghi chú.
+    Trả về số alias phối hợp.
+    """
+    combo_count = 0
+    for alias, rows in groups.items():
+        ids = [cid for _, cid, _ in rows]
+        lines = ", ".join(str(i) for i, _, _ in rows)
+        dup = {cid for cid in ids if ids.count(cid) > 1}
+        if dup:
+            errors.append(f"entity_aliases.csv dòng {lines}: alias {alias!r} trùng y hệt với {sorted(dup)!r}")
+        combos = {tuple(c) for _, _, c in rows}
+        declared = next(iter(combos)) if len(combos) == 1 else None
+        if not declared:
+            if len(set(ids)) > 1:
+                errors.append(
+                    f"entity_aliases.csv dòng {lines}: alias {alias!r} bị trùng mơ hồ giữa {sorted(set(ids))!r}"
+                    + (" (các dòng khai combo khác nhau)" if len(combos) > 1 else " — nếu là thuốc phối hợp, ghi 'combo:a+b' vào notes mọi dòng")
+                )
+            continue
+        combo_count += 1
+        stray = sorted(set(ids) - set(declared))
+        if stray:
+            errors.append(f"entity_aliases.csv dòng {lines}: alias {alias!r} có {stray!r} không nằm trong combo:{'+'.join(declared)}")
+        missing = [c for c in declared if c in known_ids and c not in ids]
+        if missing:
+            errors.append(
+                f"entity_aliases.csv dòng {lines}: alias {alias!r} khai combo:{'+'.join(declared)} "
+                f"nhưng thiếu dòng cho {missing!r} (sẽ sót cảnh báo của hoạt chất này)"
+            )
+        unknown = [c for c in declared if c not in known_ids]
+        if unknown:
+            notes.append(f"alias {alias!r}: thành phần {unknown!r} chưa có thực thể trong bảng (chưa tra được)")
+    return combo_count
+
+
 def validate_all() -> tuple[list[str], list[str]]:
     errors: list[str] = []
     notes: list[str] = []
@@ -83,7 +138,8 @@ def validate_all() -> tuple[list[str], list[str]]:
 
     if alias_path.exists():
         alias_rows = _read_csv(alias_path, ALIAS_COLS, errors)
-        alias_map: dict[str, str] = {}
+        # alias (đã chuẩn hoá) -> [(số dòng, canonical_id, danh sách combo trong notes)]
+        alias_groups: dict[str, list[tuple[int, str, list[str]]]] = {}
         for idx, row in enumerate(alias_rows, start=2):
             label = f"entity_aliases.csv:{idx}"
             if not row["alias"] or not row["canonical_id"] or not row["source"]:
@@ -92,20 +148,16 @@ def validate_all() -> tuple[list[str], list[str]]:
                 errors.append(f"{label}: entity_type không hợp lệ {row['entity_type']!r}")
             if row["entity_type"] == "procedure" and row["drug_class"] not in VALID_PROCEDURE_CLASSES:
                 errors.append(f"{label}: thủ thuật thiếu/sai drug_class {row['drug_class']!r}")
-            norm_a = _norm_text(row["alias"])
-            if norm_a in alias_map and alias_map[norm_a] != row["canonical_id"]:
-                errors.append(
-                    f"{label}: alias {row['alias']!r} bị trùng mơ hồ giữa "
-                    f"{alias_map[norm_a]!r} và {row['canonical_id']!r}"
-                )
-            else:
-                alias_map[norm_a] = row["canonical_id"]
+            alias_groups.setdefault(_norm_text(row["alias"]), []).append(
+                (idx, row["canonical_id"], _combo_components(row["notes"]))
+            )
             if row["canonical_id"]:
                 known_ids.add(row["canonical_id"])
             if row["drug_class"]:
                 known_classes.add(f"class:{row['drug_class']}")
                 known_classes.add(row["drug_class"])
-        notes.append(f"entity_aliases.csv: {len(alias_rows)} dòng")
+        combo_count = _check_alias_groups(alias_groups, known_ids, errors, notes)
+        notes.append(f"entity_aliases.csv: {len(alias_rows)} dòng ({combo_count} biệt dược phối hợp)")
     else:
         notes.append("entity_aliases.csv: chưa có (bỏ qua kiểm khoá ngoại liên bảng)")
 
