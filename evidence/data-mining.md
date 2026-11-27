@@ -6,11 +6,11 @@
 
 ## 1. Cách đếm — viết TRƯỚC khi chạy
 
-- **Data dùng:** Mục Hỏi đáp Răng Hàm Mặt công khai trên trang bệnh viện / nền tảng y khoa công khai Việt Nam (ví dụ Vinmec, Medlatec, YouMed, HelloBacsi — Đức chốt 1–2 URL cụ thể và ngày xem tại `evidence/qa_sample.csv` trước khi chạy).
+- **Data dùng:** Mục Hỏi đáp Răng Hàm Mặt công khai trên trang bệnh viện / nền tảng y khoa công khai Việt Nam (ví dụ Vinmec, Medlatec, YouMed, HelloBacsi — chỉ lấy nội dung công khai không cần đăng nhập; Nguyên crawl 40–50 câu và ghi rõ 1–2 URL cụ thể + ngày xem tại `evidence/qa_sample.csv`, Đức chốt mẫu số `N` trước khi chạy đếm).
 - **Đếm gì:** Số câu hỏi công khai có nhắc đến **bệnh nền / thuốc đang uống / dị ứng thuốc** gắn với **thủ thuật RHM** (nhổ răng, tiểu phẫu, cắm implant, lấy cao răng/tiêm tê) hoặc **thuốc định dùng trong RHM** (kháng sinh, giảm đau NSAID, corticoid), phân nhãn theo loại yếu tố nguy cơ.
 - **Trên tập nào / lọc gì:** Lấy `N` câu hỏi công khai liên tiếp mới nhất trong chuyên mục RHM tại thời điểm thu thập (không lọc bỏ câu bình thường trước khi gán nhãn để tránh lệch mẫu).
 - **Mẫu số là gì (`N`):** Tổng số câu hỏi RHM công khai liên tiếp đã đọc và gắn nhãn (kể cả câu không liên quan đến bệnh nền/thuốc nền). Mục tiêu `N ≥ 40` (khuyến nghị 50 câu).
-- **Script / công thức:** `evidence/qa_sample.csv` + `evidence/count_qa.py` *(Đức tạo khi chạy)*.
+- **Script / công thức:** `evidence/qa_sample.csv` + `evidence/count_qa.py` *(Nguyên hỗ trợ crawl & dựng script gom mẫu; Đức rà nhãn, chốt mẫu số và chạy đếm đưa vào `evidence/data-mining.md` & `evidence/summary.md`)*.
 
 ## 2. Đọc trước, đếm sau
 
