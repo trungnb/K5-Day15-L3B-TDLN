@@ -316,11 +316,13 @@ Mã quy tắc trên lấy từ CSV v1.1 hiện tại; kết quả thật phụ t
 | Việc | Ai | Trước |
 |---|---|---|
 | ~~Một alias nhiều dòng; sửa `validate_csv.py`; tách thuốc phối hợp~~ — đã làm ở PR #5 | Nguyên | — |
-| Thủ thuật nào thuộc thêm nhóm `local_anesthesia` | Trung | CP3 |
-| Câu chữ các câu cố định §7 | Trung | Lĩnh code bước 5 |
+| Thủ thuật nào thuộc thêm nhóm `local_anesthesia` — Trung đã chốt, xem bên dưới | Trung | CP3 |
+| Câu chữ các câu cố định §7 — Trung đã duyệt Q0–Q4 giữ nguyên; các câu còn lại chưa xác nhận | Trung | Lĩnh code bước 5 |
 | Cập nhật `team-plan.md` §B: hợp đồng `answer()` thêm `needs_more`; model 1 bỏ cờ thiếu thông tin; phần ghép tin bot chuyển cho Lĩnh | Trung | CP2 |
 | Thêm câu thử cho 6 tình huống §6, câu thiếu cả 3 trường đầu (Q4), câu ✅, câu thuốc phối hợp, câu "dị ứng ibuprofen" | Đức | CP3 |
 | Cân nhắc metric "output không kết luận an toàn" | Đức | **CP2 19:30** (sau đó không sửa được) |
+
+**Trung chốt ngày 27/11/2026:** Q0–Q4 giữ nguyên văn bản của Lĩnh. Tự gán thêm nhóm `local_anesthesia` cho nhổ răng, cấy implant và phẫu thuật nha chu/tạo vạt. Với các thủ thuật còn lại, chỉ gán nhóm này khi tin nhắn ghi rõ có gây tê. Bảng alias đã có các nhóm bổ sung. CLI CP2 hiện chỉ tra DDI; bước tra rủi ro theo nhóm thủ thuật thuộc luồng triển khai của Lĩnh.
 
 **Khác `team-plan.md` §B:**
 1. Thêm nhánh ✅ "Không phát hiện cảnh báo" (không gọi model 2).

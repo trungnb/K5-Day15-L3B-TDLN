@@ -28,9 +28,10 @@ def build_html() -> Path:
     cr_cols, cr_rows = _load_csv(DATA_DIR / "clinical_risk_rules.csv")
     ddi_cols, ddi_rows = _load_csv(DATA_DIR / "ddi_rules.csv")
     alias_cols, alias_rows = _load_csv(DATA_DIR / "entity_aliases.csv")
-    # Thuốc phối hợp có nhiều dòng cùng alias → khoá duyệt phải là alias|canonical_id để không đè nhau.
     for r in alias_rows:
         r["_key"] = f"{r.get('alias', '')}|{r.get('canonical_id', '')}"
+        if r.get("entity_type") == "procedure":
+            r["_key"] += f"|{r.get('drug_class', '')}"
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -457,7 +458,10 @@ def build_html() -> Path:
       }}
 
       function rowId(tabKey, row, idx) {{
-        if (tabKey === "alias" && aliasCounts.get(row.alias) === 1) return `alias:${{row.alias}}`;
+        if (tabKey === "alias" && (aliasCounts.get(row.alias) === 1
+          || (row.entity_type === "procedure" && row.drug_class === "invasive_bleeding"))) {{
+          return `alias:${{row.alias}}`;
+        }}
         return `${{tabKey}}:${{row[DATA.tables[tabKey].keyCol] || idx}}`;
       }}
 
