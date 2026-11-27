@@ -683,17 +683,23 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
         for alias in aliases:
             combo = COMBO_NOTES.get(alias, "")
             row_notes = f"{notes}; {combo}" if (notes and combo) else (notes or combo)
-            rows.append(
-                {
-                    "alias": alias,
-                    "canonical_id": canonical_id,
-                    "display_name": display_name,
-                    "entity_type": entity_type,
-                    "drug_class": drug_class,
-                    "notes": row_notes,
-                    "source": source,
-                }
-            )
+            row = {
+                "alias": alias,
+                "canonical_id": canonical_id,
+                "display_name": display_name,
+                "entity_type": entity_type,
+                "drug_class": drug_class,
+                "notes": row_notes,
+                "source": source,
+            }
+            rows.append(row)
+            # “Tiểu phẫu” đứng riêng chưa xác định là nhổ răng.
+            if canonical_id in {"extraction", "implant_surgery"} and alias != "tieu phau":
+                rows.append({
+                    **row,
+                    "drug_class": "local_anesthesia",
+                    "source": "Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)",
+                })
     return expand_combo_rows(rows)
 
 

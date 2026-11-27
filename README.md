@@ -1,10 +1,8 @@
-# TDLN — Trợ lý kiểm tra an toàn trước thủ thuật & kê đơn cho bác sĩ Răng Hàm Mặt
+# TDLN — Trợ lý kiểm tra an toàn trước thủ thuật & kê đơn RHM
 
-**Thành viên, lớp, track:** xem [TEAMS.md](TEAMS.md) — nhóm TDLN · lớp L3B · Track B (Y tế).
+**Thành viên, lớp, track:** xem [TEAMS.md](TEAMS.md). **Track B (Y tế)** — mở rộng từ B2.
 
-*Lát cắt = phần nhỏ nhất làm xong được trong hackathon: một người dùng · một việc · một quyết định AI · một kết quả.*
-
-**Lát cắt của nhóm:** một bác sĩ RHM nhắn tóm tắt ca (bệnh nền, dị ứng, thuốc đang dùng, thủ thuật dự kiến, thuốc định kê) → hệ thống chuẩn hoá tên thuốc (kể cả biệt dược VN, viết tắt), tra tất định các bảng quy tắc có nguồn, hỏi lại khi thiếu và từ chối phần vượt thẩm quyền → bác sĩ nhận checklist cảnh báo kèm mã rule và nguồn để tự quyết. Chi tiết: [spec.md](spec.md) §4 · phương án và phân công: [docs/team-plan.md](docs/team-plan.md).
+*Lát cắt:* Một bác sĩ RHM · nhắn tóm tắt ca lâm sàng (bệnh nền, dị ứng, thuốc đang dùng, thủ thuật dự kiến, thuốc định kê) · AI chuẩn hoá thực thể và tra tất định các bảng quy tắc có nguồn để quyết định mức cảnh báo (nguy cơ cao · thận trọng · chưa có dữ liệu), hỏi lại khi thiếu và từ chối phần vượt thẩm quyền · bác sĩ nhận checklist cảnh báo kèm cơ chế, nguồn và hướng kiểm tra/hội chẩn để tự quyết. Chi tiết: [spec.md](spec.md) §4 · phương án và phân công: [docs/team-plan.md](docs/team-plan.md).
 
 > Công cụ hỗ trợ tra cứu, **không** thay quyết định lâm sàng: không tư vấn liều, không gợi ý thuốc thay thế, không khuyên tự ngưng thuốc nền. Chỉ dùng ca giả lập hoặc đã ẩn danh — không nhập họ tên, SĐT, mã hồ sơ bệnh nhân.
 
@@ -94,20 +92,19 @@ Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` t
 
 | Thành phần | Thật / Giả | Ghi chú |
 |---|---|---|
-| Lời gọi AI ở quyết định trung tâm | **Chưa có ở bản CP2** — phải **Thật** từ CP3 | Bản CP2 (`codebase/agent.py`) tách tên thuốc bằng quy tắc, chỉ nhận câu có dạng "đang dùng … / dự định kê …", và **chưa gọi model** (`python run.py` in "gọi model 0 lần"). Hai lượt gọi LLM (tách thực thể + soạn checklist) theo `spec.md` §4 nối trước CP3. Model: ____ |
-| Chuẩn hoá tên thuốc → hoạt chất | Thật | `normalize_entities` trên `data/entity_aliases.csv` (238 dòng, gồm biệt dược VN; thuốc phối hợp như Coplavix, Lignospan tách thành mỗi hoạt chất một dòng) |
-| Tra tương tác thuốc–thuốc (DDI) | Thật | `check_drug_interactions` trên `data/ddi_rules.csv` (36 rule, mỗi rule có nguồn DDInter / QĐ 5948/QĐ-BYT) |
-| Rủi ro bệnh nền / dị ứng / thủ thuật | **Chưa nối** | `data/clinical_risk_rules.csv` đã có 20 rule có nguồn nhưng agent chưa gọi; output ghi rõ "các nhánh bệnh nền, dị ứng và thủ thuật chưa được kiểm" |
-| Bot Zalo | Thật (vỏ mỏng) | Gọi chung `answer()`; chưa kiểm tài khoản Zalo ngoài nhắn vào được — xem `docs/team-plan.md` §E |
-| Dữ liệu bệnh nhân | Giả lập | Chỉ ca giả lập / đã ẩn danh, không dùng dữ liệu sức khoẻ của người thật |
+| Dữ liệu nền (`data/entity_aliases.csv`, `data/ddi_rules.csv`, `data/clinical_risk_rules.csv`) | **Thật** | Tổng hợp từ nguồn chính thống (QĐ 5948/QĐ-BYT, DDInter, SDCEP, AAOMS, Dược thư QG VN), chi tiết tại [data/DATA_CARD.md](data/DATA_CARD.md) |
+| Chuẩn hoá tên thuốc → hoạt chất (`normalize_entities`) | **Thật** | Trên `data/entity_aliases.csv`, gồm biệt dược VN; thuốc phối hợp (Coplavix, Lignospan…) tách thành mỗi hoạt chất một dòng |
+| Công cụ tra cứu DDI (`codebase/tools.py` — `check_drug_interactions`) | **Thật** (một phần ở CP2) | Tra tất định trên CSV khi đầu vào nêu rõ thuốc nền và thuốc định kê (bản CP2 chỉ nhận câu dạng "đang dùng … / dự định kê …"); mỗi rule có nguồn |
+| Rủi ro bệnh nền / dị ứng / thủ thuật | **Chưa bật ở CP2** | `data/clinical_risk_rules.csv` đã có rule có nguồn nhưng agent chưa gọi; output ghi rõ "các nhánh bệnh nền, dị ứng và thủ thuật chưa được kiểm" |
+| Lời gọi AI ở quyết định trung tâm (`codebase/ai.py`) | **Giả (CP2)** → **Thật (CP3)** | Hiện đang ở chế độ `MODEL_PROVIDER=fake` cho bản khung CP2 — `python run.py` in "gọi model 0 lần"; nối model thật (test OpenRouter, chạy chính Gemini) trước CP3. Model: ____ |
+| Bot Zalo (`bot/zalo_bot.py`) | **Thật** (vỏ mỏng) | Gọi chung `answer()`; chưa kiểm tài khoản Zalo ngoài nhắn vào được — xem `docs/team-plan.md` §E |
+| Dữ liệu bệnh nhân | **Giả lập** | Chỉ ca giả lập / đã ẩn danh, không dùng dữ liệu sức khoẻ của người thật |
 
 ## Dùng AI vào việc gì
 
-Chi tiết từng việc: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
+Nhóm dùng coding agent/LLM hỗ trợ soạn tài liệu kỹ thuật, viết script gom và kiểm dữ liệu (`data/build/`, `evidence/crawl_qa.py`, `evidence/count_qa.py`) và dựng khung code. Thành viên nhóm — đặc biệt BS RHM trong nhóm (Nguyễn Bảo Trung) và người rà eval (Lại Trọng Đức) — kiểm duyệt toàn bộ nội dung lâm sàng, nguồn, đáp án câu thử và trực tiếp thực hiện phần phỏng vấn. Nhóm không dùng AI để bịa người phỏng vấn, trích dẫn hay sửa kết quả chạy. Chi tiết: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
 
-- **Nguyên** dùng Claude Code (Claude Opus 5.5) để tìm và đọc nguồn cho `spec.md` §2–§3, viết script gom/đếm hỏi đáp công khai (`evidence/crawl_qa.py`, `count_qa.py`), sửa luật thuốc phối hợp trong `data/build/` và soạn README; Nguyên đọc lại từng nguồn trích, Đức rà nhãn mẫu hỏi đáp, Trung duyệt lâm sàng dữ liệu.
-- **Trung, Đức, Lĩnh:** ____ *(mỗi người bổ sung 1 dòng: công cụ AI · làm gì · ai kiểm)*
-- Không dùng AI để tạo người được phỏng vấn, trích dẫn, câu trả lời khảo sát hay sửa kết quả các lượt đã chạy.
+- Ví dụ cụ thể — Nguyên dùng Claude Code (Claude Opus 5.5) để tìm và đọc nguồn cho `spec.md` §2–§3, viết `evidence/crawl_qa.py` / `count_qa.py` và luật thuốc phối hợp trong `data/build/`, soạn README; Nguyên kiểm tay 15/15 nhãn mẫu hỏi đáp và đọc lại từng nguồn trích.
 
 ## File mẫu — điền ở bước nào
 
@@ -139,5 +136,5 @@ Chi tiết từng việc: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đ�
 | 4 | Bản chạy thử làm trọn lát cắt | `codebase/` · lệnh ở mục "Lệnh" |
 | 5 | Định nghĩa "tốt" + bộ câu thử | `data/DATA_CARD.md` · `eval/` |
 | 6 | Mô phỏng chi phí khi dùng thật | `cost/` |
-| 7 | Slide + demo + video dự phòng | `demo-slides.pdf` ở thư mục gốc repo (dàn ý: `slides/outline.md`, xuất trước CP4) · link video: ____ |
+| 7 | Slide + demo + video dự phòng | `demo-slides.pdf` ở thư mục gốc repo (dàn ý: `slides/outline.md`, xuất trước CP4) · link video: chưa nộp (CP3/CP4) |
 | + | *Bonus:* người dùng thử | `validation/log.md` |
