@@ -28,13 +28,16 @@ def build_html() -> Path:
     cr_cols, cr_rows = _load_csv(DATA_DIR / "clinical_risk_rules.csv")
     ddi_cols, ddi_rows = _load_csv(DATA_DIR / "ddi_rules.csv")
     alias_cols, alias_rows = _load_csv(DATA_DIR / "entity_aliases.csv")
+    # Thuốc phối hợp có nhiều dòng cùng alias → khoá duyệt phải là alias|canonical_id để không đè nhau.
+    for r in alias_rows:
+        r["_key"] = f"{r.get('alias', '')}|{r.get('canonical_id', '')}"
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "tables": {
             "cr": {"title": "Rủi ro lâm sàng (CR)", "cols": cr_cols, "rows": cr_rows, "keyCol": "rule_id"},
             "ddi": {"title": "Tương tác thuốc (DDI)", "cols": ddi_cols, "rows": ddi_rows, "keyCol": "rule_id"},
-            "alias": {"title": "Từ điển thực thể (Aliases)", "cols": alias_cols, "rows": alias_rows, "keyCol": "alias"},
+            "alias": {"title": "Từ điển thực thể (Aliases)", "cols": alias_cols, "rows": alias_rows, "keyCol": "_key"},
         },
     }
     json_safe = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
