@@ -451,8 +451,13 @@ def build_html() -> Path:
           .trim();
       }}
 
+      const aliasCounts = new Map();
+      for (const row of DATA.tables.alias.rows) {{
+        aliasCounts.set(row.alias, (aliasCounts.get(row.alias) || 0) + 1);
+      }}
+
       function rowId(tabKey, row, idx) {{
-        if (tabKey === "alias") return `alias:${{row.alias}}`;
+        if (tabKey === "alias" && aliasCounts.get(row.alias) === 1) return `alias:${{row.alias}}`;
         return `${{tabKey}}:${{row[DATA.tables[tabKey].keyCol] || idx}}`;
       }}
 

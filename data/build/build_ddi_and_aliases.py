@@ -43,7 +43,7 @@ def load_ddinter() -> tuple[dict[str, str], dict[tuple[str, str], str]]:
 
 
 COMBO_NOTES: dict[str, str] = {
-    "alaxan": "combo:ibuprofen+paracetamol",
+    "alaxan": "combo:ibuprofen+acetaminophen",
     "coplavix": "combo:clopidogrel+aspirin",
     "rodogyl": "combo:spiramycin+metronidazole",
     "dorogyne": "combo:spiramycin+metronidazole",
@@ -629,7 +629,25 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             "invasive_bleeding",
             None,
             "SDCEP QRG (2022), Table 1 p. 3",
-            ["implant", "cay implant", "phau thuat nha chu", "tao vat", "rach ap xe", "lay cao duoi nuou"],
+            ["implant", "cay implant", "phau thuat nha chu", "tao vat"],
+        ),
+        (
+            "abscess_drainage",
+            "Rạch dẫn lưu áp xe trong miệng",
+            "procedure",
+            "invasive_bleeding",
+            None,
+            "SDCEP QRG (2022), Table 1 p. 3",
+            ["rach ap xe"],
+        ),
+        (
+            "subgingival_scaling",
+            "Lấy cao dưới nướu",
+            "procedure",
+            "invasive_bleeding",
+            None,
+            "SDCEP QRG (2022), Table 1 p. 3",
+            ["lay cao duoi nuou"],
         ),
         (
             "local_anesthesia_proc",

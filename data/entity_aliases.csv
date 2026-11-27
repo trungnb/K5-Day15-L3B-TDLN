@@ -37,7 +37,8 @@ ery,erythromycin,Erythromycin,drug,macrolide_cyp3a4,DDInterID:DDInter670,DDInter
 ibuprofen,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 brufen,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 gofen,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
-alaxan,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900; combo:ibuprofen+paracetamol,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
+alaxan,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900; combo:ibuprofen+acetaminophen,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
+alaxan,acetaminophen,Paracetamol (Acetaminophen),drug,analgesic,DDInterID:DDInter14; combo:ibuprofen+acetaminophen,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 nurofen,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 ibumed,ibuprofen,Ibuprofen,drug,nsaid,DDInterID:DDInter900,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 naproxen,naproxen,Naproxen,drug,nsaid,DDInterID:DDInter1266,DDInter; biệt dược phổ biến tại VN (BS RHM duyệt 27/11/2026)
@@ -226,8 +227,8 @@ implant,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo v�
 cay implant,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
 phau thuat nha chu,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
 tao vat,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
-rach ap xe,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
-lay cao duoi nuou,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
+rach ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
+lay cao duoi nuou,subgingival_scaling,Lấy cao dưới nướu,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
 gay te,local_anesthesia_proc,Gây tê nha khoa (có thuốc co mạch),procedure,local_anesthesia,,"SDCEP QRG (2022), Table 1 p. 3; thực hành RHM (BS RHM duyệt 27/11/2026)"
 gay te vung,local_anesthesia_proc,Gây tê nha khoa (có thuốc co mạch),procedure,local_anesthesia,,"SDCEP QRG (2022), Table 1 p. 3; thực hành RHM (BS RHM duyệt 27/11/2026)"
 tiem te,local_anesthesia_proc,Gây tê nha khoa (có thuốc co mạch),procedure,local_anesthesia,,"SDCEP QRG (2022), Table 1 p. 3; thực hành RHM (BS RHM duyệt 27/11/2026)"
