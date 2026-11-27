@@ -25,7 +25,7 @@ Ba bảng nội bộ đã mô tả trong [Data Card](../data/DATA_CARD.md). Từ
 
 Chấm tay cả năm metric vì cần đối chiếu ngữ cảnh, nguồn hoặc điều kiện với từng câu. Ghi N/A cho metric không áp dụng cho câu. Output lỗi hoặc trống trượt.
 
-**Chấm chéo:** [5 output và phiếu chấm](cp2-cham-cheo.md) đã sẵn sàng. Đức đã nộp phiếu chấm độc lập tại [cp2-cham-cheo-duc.md](cp2-cham-cheo-duc.md) (4/5 câu đạt; B16 trượt do không nêu đích danh tên thuốc ngoài từ điển). Kết quả khớp giữa hai người vẫn UNVERIFIED, chờ phiếu chấm độc lập của Trung. Cần khớp ≥4/5; nếu thấp hơn, kiểm lại định nghĩa trước khi khóa CP2.
+**Chấm chéo:** Trung và Đức chấm độc lập [5 output mẫu](cp2-cham-cheo.md) tại bản `2da5c51`. Hai phiếu khớp **5/5**, đạt mốc **≥4/5**. Cả hai chấm B02, B03, B10 và B17 đạt. Cả hai chấm B16 trượt vì output không nêu đích danh `ThuocGiaLapZXV`. Tỷ lệ đạt của mẫu là **4/5**. Đối chiếu từ phiếu Trung lưu riêng và [phiếu Đức](cp2-cham-cheo-duc.md).
 
 **Chuẩn đạt CP2:** ≥80% câu qua (ít nhất 14/17 với mẫu CP2) và đồng thời đạt cả 5 ngưỡng trên. So ngưỡng theo tỷ lệ chưa làm tròn.
 
