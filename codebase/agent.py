@@ -269,7 +269,9 @@ def answer(text: str) -> dict:
     # Bước 5 — ráp tin.
     # Q5 (design §6): dị ứng thuốc tê mà thủ thuật chưa thuộc nhóm gây tê → hỏi có dự kiến gây tê không.
     # Đang hỏi về gây tê thì không được in ✅ "không phát hiện cảnh báo".
-    ask_anesthesia = has_procedure and any(e["canonical_id"] == "local_anesthetic" for e in n["allergies"])         and not any(p["drug_class"] == "local_anesthesia" for p in n["procedure_groups"])
+    ask_anesthesia = (has_procedure
+                      and any(e["canonical_id"] == "local_anesthetic" for e in n["allergies"])
+                      and not any(p["drug_class"] == "local_anesthesia" for p in n["procedure_groups"]))
     if ask_anesthesia:
         note("dị ứng thuốc tê, thủ thuật chưa có gây tê: hỏi Q5")
     blocks += [unmapped] + refusals
