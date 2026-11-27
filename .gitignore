@@ -37,3 +37,7 @@ data-btc
 data-btc/
 # Bộ đề + hướng dẫn BTC lưu cục bộ để tra cứu, không commit lên repo nộp bài
 Guide/
+slide-kickoff-zoom-hoc-vien-k5.html
+# File nháp & log bot nội bộ, không commit lên repo công khai
+HANDOFF.md
+bot/logs/

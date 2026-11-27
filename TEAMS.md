@@ -11,10 +11,10 @@
 
 | STT | Họ và tên | Mã học viên | Vai trò | Phần việc chính |
 |---|---|---|---|---|
-| 1 | Nguyễn Bảo Trung | 2A202604013 | Đội trưởng | Đang cập nhật sau khi chốt lát cắt |
-| 2 | Lại Trọng Đức | 2A202604019 | Thành viên | Đang cập nhật sau khi chốt lát cắt |
-| 3 | Nguyễn Lương Nguyên | 2A202604005 | Thành viên | Đang cập nhật sau khi chốt lát cắt |
-| 4 | Hoàng Xuân Lĩnh | 2A202604017 | Thành viên | Đang cập nhật sau khi chốt lát cắt |
+| 1 | Nguyễn Bảo Trung | 2A202604013 | Đội trưởng | Chuyên môn RHM: tuyển & phỏng vấn BS RHM, kiểm duyệt dữ liệu lâm sàng và đáp án câu thử |
+| 2 | Lại Trọng Đức | 2A202604019 | Thành viên | Đánh giá & số liệu: metric, bộ câu thử, chấm điểm, đào hỏi đáp công khai, mô phỏng chi phí |
+| 3 | Nguyễn Lương Nguyên | 2A202604005 | Thành viên | BA & tích hợp: canvas, spec, bảng impact, script dữ liệu DDI, bot Zalo, slide |
+| 4 | Hoàng Xuân Lĩnh | 2A202604017 | Thành viên | AI core: nối model, workflow agent.py, công cụ tools.py, chặn rủi ro, chạy eval |
 
 **Quy tắc điền**
 - **Lớp:** `L3A` hoặc `L3B`. **Track:** một chữ `A` (EdTech), `B` (Y tế), `C` (Du lịch), `D` (Thương mại điện tử), `E` (Tài chính) hoặc `F` (Làn khác). **Link repo:** link GitHub công khai của nhóm.

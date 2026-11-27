@@ -1,33 +1,41 @@
-# AI SPEC — [Tên lát cắt] · Nhóm [tên nhóm] · Phòng [XXX] · Zone [X]
+# AI SPEC — Trợ lý kiểm tra an toàn trước thủ thuật & kê đơn RHM · Nhóm TDLN · Phòng C401 (T6) · Zone [cập nhật sau Form 1]
 
 > Mốc nộp: §7 chốt chuẩn "đạt" tại **CP2 19:30 Thứ Sáu 27/11** · §0–§7 nộp **CP3 10:00 Thứ Bảy 28/11** · đủ §0–§10 **CP4 14:30 Thứ Bảy 28/11** · §10 changelog ghi tiếp đến **23:59 Thứ Bảy 28/11**.
 > Đầu mỗi mục ghi bước guide (`02-guide.md` trong repo đề) chỉ cách điền. Mỗi mục ngắn, có số và nguồn; chi tiết để ở file được trỏ tới. Xoá dòng hướng dẫn trong ngoặc vuông khi điền xong.
 
-Track: [ ] A · [ ] B · [ ] C · [ ] D · [ ] E — bài toán: [đề gợi ý trong file track, hoặc bài toán nhóm tự mở rộng] __
-Data BTC cấp đã dùng (nếu có — không commit nguyên file): __
+Track: [ ] A · [x] B · [ ] C · [ ] D · [ ] E — bài toán: Mở rộng từ B2 (Kiểm tra tương tác thuốc) sang kiểm tra an toàn bệnh nền + thuốc nền × thủ thuật dự kiến + thuốc định kê cho BS RHM
+Data BTC cấp đã dùng (nếu có — không commit nguyên file): Không (Track B tự tổng hợp dữ liệu từ nguồn công khai chính thống)
 
 ## §0. Hiện tại việc này diễn ra thế nào *(guide 1.1)*
-- Luồng hiện tại của việc này, trong khoá hoặc trên app thật (3–5 bước; ảnh chụp từ tài khoản của mình, đã che thông tin):
-- Công cụ / AI đang được dùng cho việc này (nếu có) + nguồn. Không kiểm được thì ghi "chưa kiểm":
+- Luồng hiện tại của việc này, trên thực hành lâm sàng ngoại trú (4 bước):
+  1. Bệnh nhân khai miệng hoặc đưa toa/vỏ thuốc cũ có bệnh nền mạn tính (tim mạch, chống đông, đái tháo đường, tăng huyết áp, bệnh lý xương…) thường ghi bằng tên biệt dược VN hoặc viết tắt.
+  2. BS RHM tự nhớ các quy tắc an toàn cơ bản hoặc mở nhiều nguồn rời rạc để tra tay (cổng tra cứu `tuongtacthuoc.nhic.vn`, Dược thư Quốc gia VN, Drugs.com, Medscape).
+  3. Với ca phức tạp hoặc không chắc ngưỡng an toàn (vd chỉnh chống đông trước nhổ răng, nguy cơ MRONJ), BS gọi hỏi đồng nghiệp nội khoa/tim mạch hoặc hẹn lại bệnh nhân đi khám chuyên khoa xin giấy xác nhận.
+  4. BS ghi nhận rủi ro, làm thủ thuật (hoặc trì hoãn) và tự kê đơn thuốc nha khoa.
+- Công cụ / AI đang được dùng cho việc này (nếu có) + nguồn:
+  - Các công cụ tra cứu thủ công phổ biến: cổng `https://tuongtacthuoc.nhic.vn/` (Bộ Y tế — chỉ mức chống chỉ định, đòi hỏi nhập đúng tên hoạt chất), Dược thư Quốc gia VN, Drugs.com Drug Interaction Checker, Medscape Drug Interaction Checker.
+  - Phần tích hợp cảnh báo tương tác tự động sẵn có trong các phần mềm quản lý phòng khám nha khoa phổ biến tại VN: **chưa kiểm**.
 
 ## §1. Người dùng & bằng chứng *(guide 1.1, 1.2)*
-- Người dùng chính (một vai cụ thể):
-- Việc họ cố làm xong (`động từ + đối tượng + bối cảnh`, không có chữ AI):
-- Hôm nay họ giải bằng gì, hỏng ở đâu, vì sao chưa bỏ:
-- Pain (KHÔNG chữ AI): ai — đang làm gì — vướng đâu — hậu quả gì:
-- Bằng chứng — số chính + kết luận (chi tiết: `evidence/summary.md`): __
+- Người dùng chính (một vai cụ thể): Bác sĩ Răng Hàm Mặt (BS RHM) điều trị ngoại trú tại phòng khám / bệnh viện khi khám ca có bệnh nền mạn tính, thuốc nền hoặc dị ứng thuốc.
+- Việc họ cố làm xong (`động từ + đối tượng + bối cảnh`, không có chữ AI): Rà soát đầy đủ rủi ro giữa bệnh nền, thuốc nền, dị ứng của bệnh nhân với thủ thuật dự kiến và đơn thuốc nha khoa trước khi thực hiện điều trị tại ghế răng.
+- Hôm nay họ giải bằng gì, hỏng ở đâu, vì sao chưa bỏ: Giải bằng trí nhớ cá nhân + tra chéo thủ công trên nhiều web/sách (hoặc hỏi đồng nghiệp); hỏng ở chỗ phải tự quy đổi biệt dược sang hoạt chất, mất thời gian giữa ca khám đông khách, tra tách rời giữa tương tác thuốc–thuốc và chống chỉ định thủ thuật; chưa bỏ vì chưa có công cụ gọn nhẹ nhận tin nhắn tiếng Việt viết tắt và tổng hợp được cả 4 nhánh rủi ro kèm nguồn chính thống. *(Ghi chú bối cảnh: kinh nghiệm thực tế của TV1 Nguyễn Bảo Trung là người trong nhóm chỉ dùng để hiểu luồng việc, không tính là bằng chứng.)*
+- Pain (KHÔNG chữ AI): BS RHM khi chuẩn bị làm thủ thuật xâm lấn hoặc kê đơn cho bệnh nhân có bệnh nền và nhiều thuốc nền (thường nêu bằng tên biệt dược VN, viết tắt) phải tra chéo rời rạc nhiều nguồn giữa ca khám áp lực thời gian, dễ mất nhiều phút tra tay hoặc bỏ sót tương tác thuốc–thuốc, thuốc–bệnh nền và rủi ro thủ thuật.
+- Bằng chứng — số chính + kết luận (chi tiết: `evidence/summary.md`): Đang thu thập cho CP3 — giả thuyết tại `evidence/hypothesis.md`, nguồn chính là phỏng vấn ≥3 BS RHM ngoài nhóm (`evidence/interviews/P1–P3.md`), nguồn phụ kiểm chéo là đào ≥40 câu hỏi đáp RHM công khai (`evidence/data-mining.md`).
 
 ## §2. Impact & quyết định chọn *(guide 1.3)*
 
 | Hướng | Bao nhiêu người gặp | Bao nhiêu lần / tháng | Mỗi lần tốn gì | Impact / tháng | Làm kịp không | Chọn? |
 |---|---|---|---|---|---|---|
-|  |  |  |  |  |  |  |
-|  |  |  |  |  |  |  |
-|  |  |  |  |  |  |  |
+| **B2-RHM (Mở rộng):** BS RHM kiểm tra an toàn bệnh nền/thuốc nền × thủ thuật & đơn nha khoa | ~10.000 BS RHM *(tự ước tính — chờ tìm nguồn công khai số BS RHM VN trước CP3)* | ~15–25 ca có bệnh nền phức tạp/BS/tháng *(tự ước tính — chờ cập nhật từ P1–P3)* | ~5–10 phút tra tay + rủi ro sót tương tác nặng *(tự ước tính — chờ cập nhật từ P1–P3)* | ~750.000–2.500.000 phút/tháng *(tự ước tính)* | Kịp: danh mục ~20 thuốc RHM & nhóm thủ thuật gọn, dựng được bảng tất định chuẩn nguồn trong 10h; có đầu mối ≥3 BS RHM ngoài nhóm | **Chọn** |
+| **B2-BN (Gợi ý gốc):** Người nhà / bệnh nhân mạn tính kiểm tra tương tác & xếp lịch uống thuốc | Hàng triệu người bệnh mạn tính *(tự ước tính)* | ~2–4 lần/tháng khi đổi đơn *(tự ước tính)* | ~10–15 phút đọc hướng dẫn + rủi ro uống nhầm giờ/tương tác *(tự ước tính)* | Rất lớn nhưng phân tán *(tự ước tính)* | Khó: danh mục thuốc toàn bộ chuyên khoa quá rộng, không kịp đối chiếu nguồn từng dòng trong 10h | Loại |
+| **B3-Nhà thuốc:** Tư vấn khách hỏi mua thuốc qua chat nhà thuốc tối muộn | Hàng nghìn nhà thuốc *(tự ước tính)* | Hàng trăm lượt chat/nhà thuốc/tháng *(tự ước tính)* | ~3–5 phút dược sĩ trực sàng lọc ca lặp lại *(tự ước tính)* | Lớn *(tự ước tính)* | Khó: khó hẹn ≥3 dược sĩ nhà thuốc phỏng vấn & test trong 2 ngày; rủi ro gợi ý OTC cho trẻ nhỏ/bà bầu cao | Loại |
 
-- **Impact / tháng** của hướng chọn = __ người × __ lần × __ phút = __ — nguồn từng thừa số: __ (không có nguồn thì ghi rõ *(tự ước tính)*)
+- **Impact / tháng** của hướng chọn = __ người × __ lần × __ phút = __ *(tự ước tính — chờ cập nhật từ phỏng vấn P1–P3 & nguồn công khai quy mô BS RHM VN trước CP3)*
 - Hướng ĐÃ LOẠI + vì sao (giữ lại, đừng xoá):
-- Số lần / tháng của từng kiểu người dùng (dùng cho persona ở §8):
+  - **Loại B2-BN:** Phạm vi thuốc nền/thuốc kê đơn toàn bệnh viện quá rộng, dễ rơi vào bẫy "AI tự sinh bảng tương tác" không kịp kiểm chứng từng dòng theo `DATA_CARD.md`.
+  - **Loại B3-Nhà thuốc:** Khó tiếp cận đủ ≥3 dược sĩ trực ngoài nhóm trong 2 ngày để lấy bằng chứng phỏng vấn + người dùng thử (bonus), trong khi bài toán gợi ý sản phẩm nhà thuốc có rủi ro pháp lý cao hơn.
+- Số lần / tháng của từng kiểu người dùng (dùng cho persona ở §8): Đang chờ tổng hợp từ phỏng vấn P1–P3 (`dung_it` · `dung_vua` · `dung_nhieu`).
 
 ## §3. Giải pháp tương tự *(guide 2.1)*
 - [sản phẩm / tính năng gần giống]: một điều đáng học · một điều đáng né · mình khác gì

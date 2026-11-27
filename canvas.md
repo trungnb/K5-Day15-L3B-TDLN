@@ -1,16 +1,15 @@
-# Canvas — [tên nhóm] · Track [A–F]
+# Canvas — TDLN · Track B
 
 > Điền ở guide bước 1.4. CP1 17:00 Thứ Sáu 27/11: nộp bản đầu, đủ 7 dòng (dòng 4 được ghi giả thuyết + nguồn sẽ kiểm).
 > CP2 19:30 Thứ Sáu 27/11: cập nhật (số bằng chứng đầu, lát cắt đã chốt) và điền dòng "Đã đổi gì so với CP1".
-> Track F: chép thêm thẻ đề của nhóm (khung trong file track F) xuống dưới bảng này.
 
 | # | Dòng | Nhóm điền |
 |---|---|---|
-| 1 | Track + lát cắt dự kiến | |
-| 2 | Người dùng chính (một vai cụ thể — không phải "học viên nói chung") | |
-| 3 | Pain một câu: ai — đang làm gì — vướng đâu — hậu quả | |
-| 4 | Bằng chứng đầu — CP1: giả thuyết + nguồn sẽ kiểm · CP2: số đầu tiên + 1 trích dẫn | |
-| 5 | **Lát cắt MỘT CÂU** (1 người dùng · 1 việc · 1 quyết định AI · 1 kết quả) | |
-| 6 | AI tự làm đến đâu + 1 dòng lý do: sai thì ai chịu gì | |
-| 7 | Phân công có tên | |
+| 1 | Track + lát cắt dự kiến | Track B (Y tế) · Trợ lý kiểm tra an toàn trước thủ thuật & kê đơn cho Bác sĩ Răng Hàm Mặt (mở rộng từ B2) |
+| 2 | Người dùng chính (một vai cụ thể — không phải "học viên nói chung") | Bác sĩ Răng Hàm Mặt (BS RHM) điều trị ngoại trú tại phòng khám / bệnh viện khi khám ca có bệnh nền mạn tính, thuốc nền hoặc dị ứng thuốc |
+| 3 | Pain một câu: ai — đang làm gì — vướng đâu — hậu quả | Bác sĩ RHM khi chuẩn bị làm thủ thuật xâm lấn hoặc kê đơn cho bệnh nhân có bệnh nền và nhiều thuốc nền (thường nêu bằng tên biệt dược VN, viết tắt) phải tra chéo rời rạc nhiều nguồn giữa ca khám áp lực thời gian, dễ mất nhiều phút tra tay hoặc bỏ sót tương tác thuốc–thuốc, thuốc–bệnh nền và rủi ro thủ thuật. |
+| 4 | Bằng chứng đầu — CP1: giả thuyết + nguồn sẽ kiểm · CP2: số đầu tiên + 1 trích dẫn | Giả thuyết (`evidence/hypothesis.md`): ≥2/3 BS RHM ngoài nhóm gặp ca phải dừng lại tra cứu/hội chẩn trong 1 tháng qua. Nguồn chính: phỏng vấn ≥3 BS RHM ngoài nhóm (`evidence/interviews/P1–P3.md`). Nguồn phụ kiểm chéo: đào ≥40 câu hỏi đáp RHM công khai trên mạng (`evidence/data-mining.md`). |
+| 5 | **Lát cắt MỘT CÂU** (1 người dùng · 1 việc · 1 quyết định AI · 1 kết quả) | Một bác sĩ RHM · nhắn tóm tắt ca lâm sàng (bệnh nền, dị ứng, thuốc đang dùng, thủ thuật dự kiến, thuốc định kê) · AI chuẩn hoá thực thể, tra tất định các bảng quy tắc có nguồn để quyết định mức cảnh báo (nguy cơ cao · thận trọng · chưa có dữ liệu), hỏi lại khi thiếu và từ chối phần vượt thẩm quyền · bác sĩ nhận checklist cảnh báo trước thủ thuật và trước kê đơn kèm cơ chế, nguồn và hướng kiểm tra/hội chẩn để tự quyết. |
+| 6 | AI tự làm đến đâu + 1 dòng lý do: sai thì ai chịu gì | AI gợi ý & cảnh báo có căn cứ, bác sĩ quyết định — sai trong y khoa có thể gây xuất huyết, phản vệ hoặc biến chứng không đảo ngược nên AI không tự kê đơn, không tư vấn liều, không khuyên ngưng thuốc nền. |
+| 7 | Phân công có tên | Nguyễn Bảo Trung (Đội trưởng · chuyên môn RHM, phỏng vấn & duyệt dữ liệu lâm sàng) · Lại Trọng Đức (Eval, đào hỏi đáp công khai & mô phỏng chi phí) · Nguyễn Lương Nguyên (BA, canvas/spec, script dữ liệu DDI, bot Zalo & slide) · Hoàng Xuân Lĩnh (AI core: model, `agent.py`, `tools.py` & guardrails) |
 | — | *(CP2)* Đã đổi gì so với CP1 | |
