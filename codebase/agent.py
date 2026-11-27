@@ -28,6 +28,7 @@ TEXT = {
     "Q2": "Chưa có thuốc định kê. Nếu định kê, nhắn thêm tên thuốc để kiểm tương tác.",
     "Q3": "Chưa có thủ thuật dự kiến. Nếu có, nhắn thêm để kiểm rủi ro thủ thuật.",
     "Q4": "Chưa khai bệnh nền, dị ứng, thuốc đang dùng. Nếu BN có, nhắn thêm để kiểm.",
+    "Q5": "BN có tiền sử dị ứng thuốc tê. Thủ thuật này có dự kiến gây tê không? Nếu có, nhắn thêm để em kiểm.",
     "P1": "⚠️ Tin nhắn có thông tin định danh BN. Vui lòng chỉ gửi ca đã ẩn danh.",
     "UNMAPPED": "❔ Chưa có dữ liệu cho: {names}. Hệ thống không đoán. Nếu là viết tắt hoặc tên chung, "
                 "BS ghi rõ tên đầy đủ / hoạt chất để em tra lại; nếu không, BS tra thêm Dược thư Quốc gia / "
@@ -266,10 +267,15 @@ def answer(text: str) -> dict:
         note("không có rule khớp: bỏ qua model 2")
 
     # Bước 5 — ráp tin.
+    # Q5 (design §6): dị ứng thuốc tê mà thủ thuật chưa thuộc nhóm gây tê → hỏi có dự kiến gây tê không.
+    # Đang hỏi về gây tê thì không được in ✅ "không phát hiện cảnh báo".
+    ask_anesthesia = has_procedure and any(e["canonical_id"] == "local_anesthetic" for e in n["allergies"])         and not any(p["drug_class"] == "local_anesthesia" for p in n["procedure_groups"])
+    if ask_anesthesia:
+        note("dị ứng thuốc tê, thủ thuật chưa có gây tê: hỏi Q5")
     blocks += [unmapped] + refusals
-    if not rules and not unmapped and not refusals:
+    if not rules and not unmapped and not refusals and not ask_anesthesia:
         blocks.append(TEXT["OK"])
-    reminders = []
+    reminders = [TEXT["Q5"]] if ask_anesthesia else []
     if has_procedure and not has_planned:
         reminders.append(TEXT["Q2"])
     if has_planned and not has_procedure:

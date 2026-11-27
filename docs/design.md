@@ -216,6 +216,8 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | **Thiếu cả ba** | Thêm câu nhắc Q4; mục "Đã đối chiếu" ghi "không khai" cho cả ba | `True` |
 
 - Không hỏi lại khi thiếu 3 trường này: hệ thống không phân biệt được BN thật sự không có với BS quên ghi, và BN khoẻ mạnh đi nhổ răng khôn là ca phổ biến. Vẫn tra được tương tác giữa các thuốc định kê với nhau (vd `DDI-006` ibuprofen + ketorolac).
+**Dị ứng thuốc tê (Q5, thêm 27/11 cho B22).** Áp dụng cho tình huống 4, 5, 6: BN có dị ứng thuốc tê (`local_anesthetic`) mà không thủ thuật nào thuộc nhóm `local_anesthesia` (vd lấy cao dưới nướu — Trung chốt chỉ nhổ răng, implant, phẫu thuật nha chu tự kéo theo gây tê) → nối câu Q5, `needs_more = True`, và **không** in ✅. BS trả lời "có gây tê" thì bot ghép tin, thủ thuật gây tê được thêm và `CR-010` khớp.
+
 - Q4 có mục đích chặn trường hợp BS quên ghi thuốc nền mà nhận ✅, rồi yên tâm nhầm. Thiếu một hoặc hai trong ba trường thì không nhắc, để tin trả lời không bị quá nhiều câu nhắc.
 
 - Cờ `out_of_scope` **không làm dừng luồng**: hỏi liều vẫn tra tiếp để BS không mất cảnh báo chảy máu; code chỉ thêm khối 🚫.
@@ -233,8 +235,8 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 4. 🟡 Thận trọng — model viết
 5. ❔ Chưa có dữ liệu — code
 6. 🚫 Ngoài phạm vi — code
-7. ✅ — chỉ khi khối 3–6 đều rỗng — code
-8. Câu nhắc Q2/Q3/Q4 (nếu có)
+7. ✅ — chỉ khi khối 3–6 đều rỗng và không hỏi Q5 — code
+8. Câu hỏi / nhắc Q5, Q2, Q3, Q4 (nếu có)
 9. "BS là người quyết định." — luôn có, code
 
 **Câu cố định** — ⚠️ Trung duyệt câu chữ:
@@ -246,6 +248,7 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | Q2 | "Chưa có thuốc định kê. Nếu định kê, nhắn thêm tên thuốc để kiểm tương tác." |
 | Q3 | "Chưa có thủ thuật dự kiến. Nếu có, nhắn thêm để kiểm rủi ro thủ thuật." |
 | Q4 | "Chưa khai bệnh nền, dị ứng, thuốc đang dùng. Nếu BN có, nhắn thêm để kiểm." |
+| Q5 | "BN có tiền sử dị ứng thuốc tê. Thủ thuật này có dự kiến gây tê không? Nếu có, nhắn thêm để em kiểm." *(thêm 27/11, chưa qua Trung duyệt)* |
 | P1 | "⚠️ Tin nhắn có thông tin định danh BN. Vui lòng chỉ gửi ca đã ẩn danh." |
 | ❔ | "❔ Chưa có dữ liệu cho: {danh sách}. Hệ thống không đoán. Nếu là viết tắt hoặc tên chung, BS ghi rõ tên đầy đủ / hoạt chất để em tra lại; nếu không, BS tra thêm Dược thư Quốc gia / tờ hướng dẫn sử dụng." |
 | 🚫 `lieu` | "🚫 Không tư vấn liều dùng / số ngày dùng." |
