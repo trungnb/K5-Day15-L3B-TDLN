@@ -1,35 +1,12 @@
-> Đây là khung repo nộp bài. Điền mọi chỗ `____`, giữ nguyên tên các mục. **Mục 0 xoá đi sau khi tạo repo xong.**
-> Giờ, mốc, luật, rubric: xem `README.md`, `02-guide.md`, `03-rubric.md` trong repo đề (bộ đề BTC phát).
+# TDLN — Trợ lý kiểm tra an toàn trước thủ thuật & kê đơn cho bác sĩ Răng Hàm Mặt
 
-# [Tên nhóm] — [Tên lát cắt]
-
-**Thành viên, lớp, track:** xem [TEAMS.md](TEAMS.md). **Điền TEAMS.md đúng format**: khi chấm và đánh giá, BTC quét file này để ghép điểm cho từng người.
+**Thành viên, lớp, track:** xem [TEAMS.md](TEAMS.md) — nhóm TDLN · lớp L3B · Track B (Y tế).
 
 *Lát cắt = phần nhỏ nhất làm xong được trong hackathon: một người dùng · một việc · một quyết định AI · một kết quả.*
 
----
+**Lát cắt của nhóm:** một bác sĩ RHM nhắn tóm tắt ca (bệnh nền, dị ứng, thuốc đang dùng, thủ thuật dự kiến, thuốc định kê) → hệ thống chuẩn hoá tên thuốc (kể cả biệt dược VN, viết tắt), tra tất định các bảng quy tắc có nguồn, hỏi lại khi thiếu và từ chối phần vượt thẩm quyền → bác sĩ nhận checklist cảnh báo kèm mã rule và nguồn để tự quyết. Chi tiết: [spec.md](spec.md) §4 · phương án và phân công: [docs/team-plan.md](docs/team-plan.md).
 
-## 0. Tạo repo nhóm từ khung này *(guide bước 1.0 — xoá mục này khi xong)*
-
-**Hai luật:** repo **mới, công khai (Public)** · tên `K5-Day15-<lớp>-<tên nhóm>`, vd `K5-Day15-L3A-StudyPulse` (tên nhóm viết liền, không dấu). Chép **nội dung bên trong** `starter-repo/` — `README.md`, `run.py` phải nằm ngay ở trang đầu repo.
-
-**(a) Không cần terminal — làm trên web GitHub**
-1. **New repository** → tên theo mẫu → **Public** → không tick thêm gì → tạo.
-2. Trên máy mở thư mục `starter-repo/`, **bật hiện file ẩn** (Mac Finder: `Cmd + Shift + .` · Windows: View → Show → Hidden items) để thấy `.gitignore`, `.env.example`.
-3. Trên repo vừa tạo: **Add file → Upload files** → **kéo thả** tất cả file và thư mục bên trong `starter-repo/` → **Commit changes**. Kéo thả mới giữ được thư mục con; lỗi vì nhiều file quá thì tải từng thư mục.
-4. Kiểm: có `.gitignore` chưa (hay thiếu nhất). Thiếu thì **Add file → Create new file**, tên `.gitignore`, dán nội dung từ máy.
-5. Từ giờ sửa file ngay trên web (biểu tượng bút chì → Commit). Phần code vẫn cần **một** người chạy được trên máy: trước mỗi lượt chạy tải **Code → Download ZIP** về thư mục mới (mang `.env` sang), chạy xong chỉ upload file kết quả và file vừa sửa; trong lúc đang chạy không ai sửa `eval/benchmark.csv` trên web.
-
-**(b) Dùng git**
-```bash
-git clone https://github.com/<tai-khoan>/K5-Day15-L3A-TenNhom.git
-cd K5-Day15-L3A-TenNhom
-cp -R ../duong-dan-toi/starter-repo/. .      # Windows PowerShell: Copy-Item -Recurse -Force ..\duong-dan-toi\starter-repo\* .
-git status                                   # không được có .env, data-btc/
-git add -A && git commit -m "Khung repo từ starter-repo" && git push
-```
-
-**Xong khi:** mở link repo bằng **cửa sổ ẩn danh** thấy được file (link nộp CP1) · đã mời thành viên (Settings → Collaborators) · đã điền `TEAMS.md` và `python run.py check` không báo gì ở phần "Kiểm TEAMS.md".
+> Công cụ hỗ trợ tra cứu, **không** thay quyết định lâm sàng: không tư vấn liều, không gợi ý thuốc thay thế, không khuyên tự ngưng thuốc nền. Chỉ dùng ca giả lập hoặc đã ẩn danh — không nhập họ tên, SĐT, mã hồ sơ bệnh nhân.
 
 ---
 
@@ -68,7 +45,7 @@ Gõ `dir` (Windows) hoặc `ls` (macOS / Linux): thấy `run.py` và `README.md`
 
 - Windows: gõ `python` mà mở Microsoft Store hoặc báo không có lệnh → dùng `py`. Chưa có Python: cài từ python.org, **tick "Add python.exe to PATH"**, mở lại PowerShell.
 - macOS: báo `command not found: python` là bình thường → dùng `python3`.
-- `python run.py` in ra "[câu trả lời giả — chưa nối model] …" là khung chạy đúng. Nối model thật: [docs/connect-model.md](docs/connect-model.md).
+- `python run.py` rồi gõ thử `BN đang dùng Coplavix. Dự định kê Ibuprofen.` → phải ra `[DDI-004] HIGH` và `[DDI-024] MODERATE` kèm nguồn. Nối model thật: [docs/connect-model.md](docs/connect-model.md).
 
 Trong README này lệnh viết là `python …`; máy nhóm cần `python3` hay `py` thì gõ thay.
 
@@ -85,6 +62,15 @@ Trong README này lệnh viết là `python …`; máy nhóm cần `python3` hay
 | `python run.py simulate --try` | Thử mô phỏng chi phí 10 phiên (làm trước CP3) → `cost/simulate-try.csv` |
 | `python run.py simulate` | Mô phỏng chi phí khi dùng thật theo `cost/personas.yaml` (≥50 phiên) → `cost/simulate-N.csv` + `cost/simulate-N-summary.md` |
 | `python run.py simulate --rate-from eval/run-2.csv` | Như trên, lấy tỉ lệ đạt từ đúng lượt chỉ định. Không ghi thì khung lấy lượt `run-N` mới nhất đã chấm, cùng model, và ghi rõ đã lấy lượt nào trong bản tóm tắt |
+
+Lệnh riêng của nhóm (cần môi trường ảo, vì bot Zalo dùng thư viện `python-zalo-bot` trong `requirements.txt`):
+
+| Lệnh | Làm gì |
+|---|---|
+| `python -m venv .venv` rồi `.venv\Scripts\python -m pip install -r requirements.txt` (macOS/Linux: `.venv/bin/python …`) | Tạo môi trường ảo cho bot |
+| `.venv\Scripts\python bot\zalo_bot.py` | Chạy bot Zalo — vỏ mỏng gọi `answer()` trong `codebase/agent.py`. Cần `ZALO_BOT_TOKEN` trong `.env`; cách tạo bot, cấp quyền dùng thử: [docs/zalo-bot.md](docs/zalo-bot.md) |
+| `python data/build/validate_csv.py` | Kiểm 3 file CSV trong `data/` (cột, khoá ngoại, trùng, thuốc phối hợp khai `combo:`, không có liều trong hướng dẫn) |
+| `python evidence/count_qa.py` | Đếm mẫu hỏi đáp RHM công khai `evidence/qa_sample.csv` → số cho `evidence/data-mining.md` |
 
 Gói miễn phí báo hết lượt: thêm `--wait 4` sau `eval` hoặc `simulate` (nghỉ 4 giây giữa hai lượt gọi). Sửa CSV bằng Excel: *File → Save As → CSV UTF-8*; Google Sheets: *Tệp → Tải xuống → CSV*.
 
@@ -108,14 +94,20 @@ Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` t
 
 | Thành phần | Thật / Giả | Ghi chú |
 |---|---|---|
-| Lời gọi AI ở quyết định trung tâm | **Thật** (bắt buộc từ CP3) | Model: ____ |
-|  |  |  |
+| Lời gọi AI ở quyết định trung tâm | **Chưa có ở bản CP2** — phải **Thật** từ CP3 | Bản CP2 (`codebase/agent.py`) tách tên thuốc bằng quy tắc, chỉ nhận câu có dạng "đang dùng … / dự định kê …", và **chưa gọi model** (`python run.py` in "gọi model 0 lần"). Hai lượt gọi LLM (tách thực thể + soạn checklist) theo `spec.md` §4 nối trước CP3. Model: ____ |
+| Chuẩn hoá tên thuốc → hoạt chất | Thật | `normalize_entities` trên `data/entity_aliases.csv` (238 dòng, gồm biệt dược VN; thuốc phối hợp như Coplavix, Lignospan tách thành mỗi hoạt chất một dòng) |
+| Tra tương tác thuốc–thuốc (DDI) | Thật | `check_drug_interactions` trên `data/ddi_rules.csv` (36 rule, mỗi rule có nguồn DDInter / QĐ 5948/QĐ-BYT) |
+| Rủi ro bệnh nền / dị ứng / thủ thuật | **Chưa nối** | `data/clinical_risk_rules.csv` đã có 20 rule có nguồn nhưng agent chưa gọi; output ghi rõ "các nhánh bệnh nền, dị ứng và thủ thuật chưa được kiểm" |
+| Bot Zalo | Thật (vỏ mỏng) | Gọi chung `answer()`; chưa kiểm tài khoản Zalo ngoài nhắn vào được — xem `docs/team-plan.md` §E |
+| Dữ liệu bệnh nhân | Giả lập | Chỉ ca giả lập / đã ẩn danh, không dùng dữ liệu sức khoẻ của người thật |
 
 ## Dùng AI vào việc gì
 
-2–3 dòng (bắt buộc): nhóm dùng công cụ AI nào để làm gì, người kiểm lại phần nào. Chi tiết: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
+Chi tiết từng việc: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
 
-____
+- **Nguyên** dùng Claude Code (Claude Opus 5.5) để tìm và đọc nguồn cho `spec.md` §2–§3, viết script gom/đếm hỏi đáp công khai (`evidence/crawl_qa.py`, `count_qa.py`), sửa luật thuốc phối hợp trong `data/build/` và soạn README; Nguyên đọc lại từng nguồn trích, Đức rà nhãn mẫu hỏi đáp, Trung duyệt lâm sàng dữ liệu.
+- **Trung, Đức, Lĩnh:** ____ *(mỗi người bổ sung 1 dòng: công cụ AI · làm gì · ai kiểm)*
+- Không dùng AI để tạo người được phỏng vấn, trích dẫn, câu trả lời khảo sát hay sửa kết quả các lượt đã chạy.
 
 ## File mẫu — điền ở bước nào
 
@@ -147,5 +139,5 @@ ____
 | 4 | Bản chạy thử làm trọn lát cắt | `codebase/` · lệnh ở mục "Lệnh" |
 | 5 | Định nghĩa "tốt" + bộ câu thử | `data/DATA_CARD.md` · `eval/` |
 | 6 | Mô phỏng chi phí khi dùng thật | `cost/` |
-| 7 | Slide + demo + video dự phòng | slide trong repo (PDF, PPTX, HTML…) hoặc link slide ở form CP4 · link video: ____ |
+| 7 | Slide + demo + video dự phòng | `demo-slides.pdf` ở thư mục gốc repo (dàn ý: `slides/outline.md`, xuất trước CP4) · link video: ____ |
 | + | *Bonus:* người dùng thử | `validation/log.md` |

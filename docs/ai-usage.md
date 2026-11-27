@@ -8,11 +8,12 @@ README của nhóm có mục "Dùng AI vào việc gì" (2–3 dòng, bắt bu�
 |---|---|---|---|---|
 | Code bản chạy thử | | | | |
 | Prompt / thiết kế lời gọi mô hình | | | | |
-| Đào data (viết script đếm, gợi ý nhãn) | Claude Code (Claude Opus 5.5) | Viết `evidence/crawl_qa.py` (gom 48 câu hỏi đáp RHM công khai trên AloBacsi) và `evidence/count_qa.py`; gán nhãn nháp 48 dòng `evidence/qa_sample.csv` (cột `nguoi_gan_nhan` = `AI-nhap`) | Nguyên kiểm tay __ dòng, khớp __ *(chưa kiểm)*; Đức rà lại toàn bộ nhãn trước khi chốt số | Nguyên (Đức rà nhãn) |
+| Đào data (viết script đếm, gợi ý nhãn) | Claude Code (Claude Opus 5.5) | Viết `evidence/crawl_qa.py` (gom 48 câu hỏi đáp RHM công khai trên AloBacsi) và `evidence/count_qa.py`; gán nhãn nháp 48 dòng `evidence/qa_sample.csv` (cột `nguoi_gan_nhan` = `AI-nhap`) | Nguyên kiểm tay 15 dòng, khớp 15; Đức rà lại toàn bộ nhãn trước khi chốt số | Nguyên (Đức rà nhãn) |
 | Rà câu hỏi phỏng vấn / khảo sát | | Chỉ rà câu dẫn dắt | | |
 | Viết câu thử (benchmark) | | | Mỗi câu thử có `source`; câu thử AI viết được ghi rõ | |
 | Sinh data `synthetic` (nếu có) | | | Seed __ · kiểm tay __ dòng | |
 | Chấm cột `pass` bằng LLM (nếu có) | | | Kiểm tra thủ công __ câu thử, khớp __/__ | |
-| Slide, văn bản | | | | |
+| Slide, văn bản | Claude Code (Claude Opus 5.5) | Tìm và đọc nguồn, soạn nháp `spec.md` §2 (quy mô BS RHM) và §3 (giải pháp tương tự), soạn `README.md` | Nguyên đọc lại từng nguồn trích và số liệu; nguồn trang gốc §3 chưa mở được bằng công cụ, cần mở lại bằng trình duyệt | Nguyên |
+| Dữ liệu `data/build/` (luật thuốc phối hợp) | Claude Code (Claude Opus 5.5) | Viết `expand_combo_rows()` và luật `combo:` trong `validate_csv.py`, tách 4 dòng alias | Chạy validator trước/sau + 7 trường hợp kiểm; Trung duyệt thành phần thuốc phối hợp | Nguyên (Trung duyệt) |
 
 **Không dùng AI để:** tạo người được phỏng vấn, trích dẫn, câu trả lời khảo sát; sửa kết quả các lượt đã chạy (`eval/run-*.csv`, `cost/simulate-*.csv`, `traces/`).
