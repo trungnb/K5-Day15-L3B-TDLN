@@ -43,3 +43,4 @@ HANDOFF.md
 bot/logs/
 bot/allowed_chats.json
 data/raw/
+data/build/review_csv.html
