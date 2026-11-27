@@ -103,7 +103,7 @@ flowchart TD
   | Truy được nguồn | Mọi cảnh báo in mã quy tắc (`[DDI-001]`, `[CR-001]`) và nguồn; mã không bao giờ đánh số lại |
   | Câu bắt buộc do code viết | Bước 5 ráp tin: khối ❔, 🚫, ✅, câu nhắc và "BS là người quyết định." là câu viết sẵn, không phụ thuộc model |
 
-- Phần nào còn giả (công cụ trả dữ liệu giả, model chế độ giả…) — ghi rõ, không giả làm thật: **Thật:** 3 bảng dữ liệu v1.1 (233 bí danh, 36 rule DDI, 20 rule lâm sàng; `data/DATA_CARD.md`). **Chưa có:** code luồng trong `codebase/` vẫn là khung mẫu của BTC; model đang chế độ giả cho đến khi nối Gemini (trước CP3). **Để sau:** regex bắt SĐT/CCCD, từ khoá vượt quyền, kiểm liều trong tin trả lời (`docs/design.md` §11).
+- Phần nào còn giả (công cụ trả dữ liệu giả, model chế độ giả…) — ghi rõ, không giả làm thật: **Thật:** 3 bảng dữ liệu v1.1 (248 dòng alias với 233 bí danh duy nhất, 36 rule DDI, 20 rule lâm sàng; `data/DATA_CARD.md`). **Chưa có:** code luồng trong `codebase/` vẫn là khung mẫu của BTC; model đang chế độ giả cho đến khi nối Gemini (trước CP3). **Để sau:** regex bắt SĐT/CCCD, từ khoá vượt quyền, kiểm liều trong tin trả lời (`docs/design.md` §11).
 
 ## §5. Chỗ khó — 4 lớp + ≥6 kịch bản + 2 tấn công *(guide 2.3)*
 
