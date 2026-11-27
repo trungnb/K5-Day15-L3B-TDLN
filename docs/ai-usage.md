@@ -6,6 +6,7 @@ README của nhóm có mục "Dùng AI vào việc gì" (2–3 dòng, bắt bu�
 
 | Việc | Công cụ AI | AI làm gì | Người kiểm/sửa gì | Ai phụ trách |
 |---|---|---|---|---|
+| Thiết kế luồng xử lý & tài liệu thiết kế | Claude Code (Claude Opus 5.5) | Đọc repo, đề xuất luồng 5 bước, soạn `docs/design.md` (schema JSON, luật từng bước, câu chữ cố định, xử lý lỗi), `spec.md` §4 §9, sơ đồ Mermaid, cập nhật `team-plan.md` §B; đối chiếu thiết kế với 3 file CSV và `eval/benchmark.csv` để tìm chỗ hở (thuốc phối hợp, "dị ứng ibuprofen", thiếu thông tin) | Lĩnh duyệt từng quyết định trước khi commit và bác một số đề xuất (vd không thêm trường JSON cho thuốc không rõ vai, chỉ hỏi lại); câu chữ cố định do Trung duyệt | Lĩnh |
 | Code bản chạy thử | | | | |
 | Prompt / thiết kế lời gọi mô hình | | | | |
 | Đào data (viết script đếm, gợi ý nhãn) | Claude Code (Claude Opus 5.5) | Viết `evidence/crawl_qa.py` (gom 48 câu hỏi đáp RHM công khai trên AloBacsi) và `evidence/count_qa.py`; gán nhãn nháp 48 dòng `evidence/qa_sample.csv` (cột `nguoi_gan_nhan` = `AI-nhap`) | Nguyên kiểm tay 15 dòng, khớp 15; Đức rà lại toàn bộ nhãn trước khi chốt số | Nguyên (Đức rà nhãn) |
