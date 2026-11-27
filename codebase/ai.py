@@ -143,5 +143,7 @@ def call_model(system: str, user: str, json_mode: bool = False) -> dict:
         raise NotImplementedError(
             "MODEL_PROVIDER=%s chưa hỗ trợ trong codebase/ai.py (dùng: gemini, openai, openrouter, anthropic, ollama)"
             % MODEL_PROVIDER)
-    return {"text": r["text"], "model": MODEL_NAME,
+    # OpenRouter đặt tên model kèm hãng ("google/gemini-3.8-flash"); trả tên không kèm hãng để
+    # `run.py simulate` khớp được với bảng giá trong cost/personas.yaml.
+    return {"text": r["text"], "model": MODEL_NAME.split("/")[-1],
             "tokens_in": int(r["tokens_in"] or 0), "tokens_out": int(r["tokens_out"] or 0)}
