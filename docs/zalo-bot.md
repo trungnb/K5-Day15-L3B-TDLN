@@ -33,35 +33,38 @@ python3 -m venv bot/.venv && bot/.venv/bin/pip install -r requirements.txt
 
 ## 3. Cấu hình `.env` ở thư mục gốc repo
 
-Nếu chưa có `.env`, chép từ mẫu: `cp .env.example .env`. Sau đó điền thêm 2 dòng cho Zalo Bot:
+Nếu chưa có `.env`, chép từ mẫu: `cp .env.example .env`. Sau đó điền các dòng cho Zalo Bot:
 
 ```env
 ZALO_BOT_TOKEN=<dán_token_của_bạn>
+ZALO_INVITE_CODE=RHM2026
 ZALO_ALLOWED_CHAT_IDS=
 ```
 
-*(Để trống `ZALO_ALLOWED_CHAT_IDS` ở lần chạy đầu để lấy `chat_id` của chính bạn.)*
+- **Khuyến nghị dùng `ZALO_INVITE_CODE`** (vd `RHM2026` hoặc mã riêng của nhóm): BS quét mã QR chia sẻ của bot, nhập mã mời 1 lần là bot tự lưu `chat_id` vào `bot/allowed_chats.json` (đã có trong `.gitignore`) và dùng được ngay, **không cần sửa `.env` hay khởi động lại bot**.
+- Nếu để trống `ZALO_INVITE_CODE`, bot quay về chế độ duyệt tay qua `ZALO_ALLOWED_CHAT_IDS` trong `.env`.
 
 ---
 
-## 4. Chạy thử & lấy `chat_id` của chính mình
+## 4. Chạy thử & kiểm tra luồng kích hoạt
 
 1. Khởi động bot từ thư mục gốc repo:
    ```bash
    bot/.venv/bin/python bot/zalo_bot.py
    ```
-2. Mở Zalo, tìm đúng bot vừa tạo và nhắn `/start`.
-3. Bot sẽ trả về: `Chat id của bạn là <id>. Gửi id này cho nhóm để được cấp quyền dùng thử.`
-4. Dán `<id>` vào `ZALO_ALLOWED_CHAT_IDS` trong `.env` (nhiều id cách nhau bằng dấu phẩy `,`).
-5. Nhấn `Ctrl+C` tắt bot và chạy lại `bot/.venv/bin/python bot/zalo_bot.py`, nhắn `/start` lần nữa để thấy hướng dẫn đầy đủ.
+2. Mở Zalo, quét QR chia sẻ hoặc tìm đúng bot vừa tạo, bấm Bắt đầu (`/start`) hoặc nhắn `"Xin chào"`.
+3. Bot sẽ chào bằng tên tài khoản Zalo:
+   `Chào BS <tên>, BS vui lòng nhập mã mời để bắt đầu sử dụng trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần).`
+4. Nhắn đúng mã mời đã đặt ở `ZALO_INVITE_CODE` (hoặc `/join <mã>`). Bot phản hồi xác nhận kích hoạt kèm hướng dẫn dùng 5 ý và tự lưu `chat_id` vào `bot/allowed_chats.json`.
+5. Từ tin nhắn tiếp theo trở đi, cứ gửi ca bệnh trực tiếp — không cần nhập lại mã mời (kể cả sau khi khởi động lại bot).
 
 ---
 
-## 5. Thêm bác sĩ RHM vào danh sách dùng thử
+## 5. Mời bác sĩ RHM vào dùng thử bằng mã QR
 
-1. Gửi link/tên bot cho BS thử nghiệm và nhờ BS nhắn `/start`.
-2. BS chụp/nhắn lại `chat_id` bot vừa trả về.
-3. Nhóm thêm `chat_id` đó vào `ZALO_ALLOWED_CHAT_IDS` trong `.env` rồi khởi động lại bot.
+1. Lấy **mã QR chia sẻ bot** trực tiếp từ Zalo Bot Creator và ghi kèm dòng hướng dẫn ngắn ngay dưới QR: *"Quét QR vào chat với bot, nhập mã mời: `<ZALO_INVITE_CODE>` (chỉ nhập 1 lần)"*.
+2. BS quét QR, vào khung chat riêng với bot, bấm bắt đầu hoặc nhắn bất kỳ để nhận lời chào, rồi gõ mã mời một lần duy nhất.
+3. Nhóm không cần hỏi lại `chat_id` hay khởi động lại bot khi có thêm BS mới.
 4. Nhắc BS **chỉ nhập ca giả lập hoặc đã ẩn danh** — không gửi tên, SĐT, mã hồ sơ hay ảnh đơn thuốc thật.
 
 ---
@@ -78,12 +81,13 @@ ZALO_ALLOWED_CHAT_IDS=
 
 ---
 
-## 7. Log hội thoại
+## 7. Log hội thoại & danh sách `chat_id` đã kích hoạt
 
 - Mỗi lượt chat được ghi vào `bot/logs/YYYYMMDD.jsonl` (đã thêm vào `.gitignore` — không đẩy lên GitHub).
-- Trong log chỉ lưu hash 10 ký tự đầu của `chat_id`, không lưu token.
+- Danh sách `chat_id` đã nhập đúng mã mời được lưu cục bộ tại `bot/allowed_chats.json` (đã thêm vào `.gitignore`), **chỉ lưu `chat_id`**, không lưu tên hiển thị hay thông tin cá nhân khác.
+- Trong log chỉ lưu hash 10 ký tự đầu của `chat_id`, không lưu token hay mã mời.
 - Khi tổng hợp vào `validation/log.md` cho phần Bonus, **chỉ chép đoạn đã viết lại và bỏ tên**, không gắn thông tin nhận diện người thử.
-- Sau khi hoàn tất tổng hợp dữ liệu thử nghiệm, xoá thư mục `bot/logs/`.
+- Sau khi hoàn tất tổng hợp dữ liệu thử nghiệm, xoá thư mục `bot/logs/` (và `bot/allowed_chats.json` nếu muốn thu hồi quyền dùng thử).
 
 ---
 
@@ -93,7 +97,8 @@ ZALO_ALLOWED_CHAT_IDS=
 |---|---|
 | Nhắn cho bot không thấy phản hồi | Kiểm tra cửa sổ terminal bot còn chạy không và `ZALO_BOT_TOKEN` trong `.env` có đúng không (không thừa dấu cách/ngoặc kép). |
 | `getUpdates` không nhận được tin | Nếu bot từng được cấu hình Webhook trước đó, hãy gọi API xoá webhook theo tài liệu Zalo trước khi dùng polling. |
-| Bot báo "chưa được cấp quyền" | Kiểm tra `chat_id` đã có trong `ZALO_ALLOWED_CHAT_IDS` chưa, và nhớ khởi động lại bot sau khi sửa `.env`. |
+| Bot báo mã mời chưa đúng / quá nhiều lần | Kiểm tra `ZALO_INVITE_CODE` trong `.env` (không phân biệt hoa/thường); nếu nhập sai ≥ 5 lần trong 10 phút, chờ ít phút rồi thử lại. |
+| Bot báo "Chat id của bạn là..." | `ZALO_INVITE_CODE` đang để trống nên bot dùng chế độ duyệt tay: thêm `chat_id` vào `ZALO_ALLOWED_CHAT_IDS` rồi khởi động lại, hoặc điền `ZALO_INVITE_CODE`. |
 | Bot trả lời chậm | Thường do độ trễ phản hồi của model AI; kiểm tra log terminal hoặc chạy thử 1 câu bằng `python3 run.py`. |
 | Tin nhắn dài bị chia thành nhiều tin | Hành vi bình thường: bot tự tách mỗi tin ≤ 1900 ký tự để không vượt ngưỡng của Zalo. |
 
@@ -110,5 +115,6 @@ ZALO_ALLOWED_CHAT_IDS=
 ## Mục `UNVERIFIED` (cần kiểm thực tế lúc tạo bot)
 
 - Tài khoản Zalo của người ngoài (không phải chủ tạo bot) có nhắn tin được vào bot ở trạng thái mới tạo hay cần bật chế độ/duyệt riêng: **UNVERIFIED** (cần kiểm bằng tài khoản Zalo thứ hai).
+- Việc gắn `?start=<mã>` trực tiếp vào link/QR Zalo Bot để bỏ qua bước gõ mã mời lần đầu (tự kích hoạt 1 chạm như Telegram): **UNVERIFIED** trên tài liệu `docs.zaloplatforms.com` (`bot/zalo_bot.py` đã hỗ trợ sẵn `/start <mã>` nếu Zalo có truyền xuống, nhưng mặc định quy trình dùng QR chia sẻ chuẩn + nhập mã mời 1 lần).
 - Giới hạn tần suất (rate limit) của API `getUpdates` / `sendMessage` trên Zalo Bot Creator: **UNVERIFIED**.
 - Giới hạn `2000` ký tự mỗi lần gửi `sendMessage`: lấy theo hằng số `MAX_MESSAGE_LEN = 2000` trong code `LAB/zalobot/bot.py` của bài lab trước, chưa kiểm lại trực tiếp trên tài liệu API bản mới nhất.

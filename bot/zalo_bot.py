@@ -11,15 +11,21 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
 import re
 import sys
+import tempfile
+import time
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
+BOT_DIR = Path(__file__).resolve().parent
+ROOT = BOT_DIR.parent
 CODEBASE_DIR = ROOT / "codebase"
+# Tránh bot/zalo_bot.py tự che khuất thư viện `zalo_bot` khi chạy trực tiếp `python bot/zalo_bot.py`.
+sys.path = [p for p in sys.path if Path(p or ".").resolve() != BOT_DIR]
 if str(CODEBASE_DIR) not in sys.path:
     sys.path.insert(0, str(CODEBASE_DIR))
 
@@ -38,9 +44,14 @@ from zalo_bot.ext import (  # noqa: E402
 
 CHUNK = 1900  # giữ dưới ngưỡng 2000 ký tự/tin nhắn của Zalo sendMessage
 LOG_DIR = ROOT / "bot" / "logs"
+ALLOWED_CHATS_FILE = ROOT / "bot" / "allowed_chats.json"
+
+MAX_INVITE_FAILS = 5
+INVITE_WINDOW_SEC = 600
 
 TOKEN = os.environ.get("ZALO_BOT_TOKEN", "").strip()
-ALLOWED_CHAT_IDS = {
+INVITE_CODE = (os.environ.get("ZALO_INVITE_CODE") or "").strip()
+ENV_ALLOWED_CHAT_IDS = {
     part.strip()
     for part in (os.environ.get("ZALO_ALLOWED_CHAT_IDS") or "").split(",")
     if part.strip()
@@ -48,9 +59,17 @@ ALLOWED_CHAT_IDS = {
 
 # tracing dùng biến toàn cục nên chỉ cho phép một ca chạy qua answer() tại một thời điểm.
 _agent_lock = asyncio.Lock()
+_allowlist_lock = asyncio.Lock()
+_prompted_chats: set[str] = set()
+_failed_attempts: dict[str, list[float]] = {}
 
-START_TEXT = (
-    "Xin chào! Đây là trợ lý tra cứu an toàn trước thủ thuật & kê đơn RHM (bản thử hackathon).\n\n"
+_DOCTOR_PREFIX_RE = re.compile(
+    r"^(?:(?:bs|dr)(?:\.|\s|$)|(?:bác|bac)\s*s[ĩi](?:\s|$))",
+    re.IGNORECASE,
+)
+
+USAGE_TEXT = (
+    "Đây là trợ lý tra cứu an toàn trước thủ thuật & kê đơn RHM (bản thử hackathon).\n\n"
     "Cách dùng: nhắn 1 tin gồm đủ 5 ý (nếu có): bệnh nền, dị ứng, thuốc đang dùng, "
     "thủ thuật dự kiến và thuốc định kê.\n\n"
     "Lưu ý bắt buộc:\n"
@@ -59,6 +78,49 @@ START_TEXT = (
     "Ví dụ:\n"
     "BN nam 65t, rung nhĩ uống Sintrom, ĐTĐ type 2 uống metformin. Dự kiến nhổ R48. Định kê Augmentin + Ibuprofen"
 )
+START_TEXT = f"Xin chào! {USAGE_TEXT}"
+
+
+def _load_saved_chat_ids(path: Path = ALLOWED_CHATS_FILE) -> set[str]:
+    if not path.exists():
+        return set()
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        print(f"[warn] không đọc được {path.name}: {redact(f'{type(exc).__name__}: {exc}')}")
+        return set()
+
+    items = raw.get("chat_ids") if isinstance(raw, dict) else raw
+    if not isinstance(items, list):
+        print(f"[warn] định dạng {path.name} không hợp lệ, bỏ qua danh sách đã lưu.")
+        return set()
+    return {
+        str(item).strip()
+        for item in items
+        if (isinstance(item, str) or (isinstance(item, int) and not isinstance(item, bool)))
+        and str(item).strip()
+    }
+
+
+def _save_chat_ids(chat_ids: set[str], path: Path = ALLOWED_CHATS_FILE) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps({"chat_ids": sorted(chat_ids)}, ensure_ascii=False, indent=2) + "\n"
+    fd, tmp_name = tempfile.mkstemp(prefix=".allowed_chats.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(payload)
+        os.chmod(tmp_name, 0o600)
+        os.replace(tmp_name, path)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+
+
+SAVED_CHAT_IDS = _load_saved_chat_ids()
+ALLOWED_CHAT_IDS = set(ENV_ALLOWED_CHAT_IDS) | set(SAVED_CHAT_IDS)
 
 
 def split_message(text: str, limit: int = CHUNK) -> list[str]:
@@ -136,6 +198,164 @@ def _extract_chat_id(update: Update) -> str | None:
     return str(msg.chat.id) if msg.chat.id is not None else None
 
 
+def _extract_display_name(update: Update) -> str:
+    candidates: list[Any] = []
+    eff_user = getattr(update, "effective_user", None)
+    if eff_user is not None:
+        candidates.append(eff_user)
+    msg = getattr(update, "message", None)
+    from_user = getattr(msg, "from_user", None) if msg is not None else None
+    if from_user is not None and from_user is not eff_user:
+        candidates.append(from_user)
+
+    for user in candidates:
+        for attr in ("display_name", "full_name", "first_name", "name"):
+            val = getattr(user, attr, None)
+            if isinstance(val, str):
+                cleaned = " ".join(val.split())[:60].strip()
+                if cleaned:
+                    return cleaned
+    return ""
+
+
+def _format_doctor_title(display_name: str) -> str:
+    cleaned = " ".join((display_name or "").split())[:60].strip()
+    if not cleaned:
+        return "BS"
+    if _DOCTOR_PREFIX_RE.match(cleaned):
+        return cleaned
+    return f"BS {cleaned}"
+
+
+def _invite_prompt_text(update: Update) -> str:
+    title = _format_doctor_title(_extract_display_name(update))
+    return (
+        f"Chào {title}, BS vui lòng nhập mã mời để bắt đầu sử dụng "
+        "trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
+    )
+
+
+def _parse_command(text: str) -> tuple[str, str]:
+    stripped = (text or "").strip()
+    if not stripped.startswith("/"):
+        return "", ""
+    parts = stripped.split(None, 1)
+    cmd = parts[0].split("@", 1)[0].lower()
+    arg = parts[1].strip() if len(parts) > 1 else ""
+    return cmd, arg
+
+
+def _verify_invite_code(candidate: str, expected: str | None = None) -> bool:
+    target = (INVITE_CODE if expected is None else expected).strip().upper()
+    guess = (candidate or "").strip().upper()
+    if not target or not guess:
+        return False
+    return hmac.compare_digest(guess.encode("utf-8"), target.encode("utf-8"))
+
+
+def _prune_attempts(chat_id: str, now: float) -> list[float]:
+    cutoff = now - INVITE_WINDOW_SEC
+    recent = [ts for ts in _failed_attempts.get(chat_id, []) if ts > cutoff]
+    if recent:
+        _failed_attempts[chat_id] = recent
+    else:
+        _failed_attempts.pop(chat_id, None)
+    return recent
+
+
+def _is_invite_throttled(chat_id: str, now: float | None = None) -> bool:
+    ts = time.monotonic() if now is None else now
+    return len(_prune_attempts(chat_id, ts)) >= MAX_INVITE_FAILS
+
+
+def _record_invite_failure(chat_id: str, now: float | None = None) -> None:
+    ts = time.monotonic() if now is None else now
+    recent = _prune_attempts(chat_id, ts)
+    recent.append(ts)
+    _failed_attempts[chat_id] = recent
+
+
+async def _grant_access(chat_id: str) -> None:
+    async with _allowlist_lock:
+        SAVED_CHAT_IDS.add(chat_id)
+        ALLOWED_CHAT_IDS.add(chat_id)
+        _failed_attempts.pop(chat_id, None)
+        _prompted_chats.discard(chat_id)
+        try:
+            _save_chat_ids(SAVED_CHAT_IDS, ALLOWED_CHATS_FILE)
+        except OSError as exc:
+            print(f"[warn] không lưu được allowed_chats.json: {redact(f'{type(exc).__name__}: {exc}')}")
+
+
+def _is_non_private_chat(update: Update) -> bool:
+    msg = getattr(update, "message", None)
+    chat = getattr(msg, "chat", None) if msg is not None else None
+    if chat is None:
+        return False
+    chat_type = getattr(chat, "type", None) or getattr(chat, "chat_type", None)
+    if chat_type is None:
+        return False
+    raw_type = getattr(chat_type, "value", chat_type)
+    return str(raw_type).strip().lower() != "private"
+
+
+async def _handle_unauthorized(
+    update: Update,
+    chat_id: str,
+    cmd: str,
+    arg: str,
+    raw_text: str,
+) -> None:
+    if not INVITE_CODE:
+        await _reply_chunks(
+            update,
+            f"Chat id của bạn là {chat_id}. Gửi id này cho nhóm để được cấp quyền dùng thử.",
+        )
+        return
+
+    if _is_non_private_chat(update):
+        await _reply_chunks(
+            update,
+            "Tính năng kích hoạt bằng mã mời chỉ hỗ trợ nhắn riêng 1-1 với bot. "
+            "BS vui lòng mở chat riêng với bot rồi nhập mã mời.",
+        )
+        return
+
+    if cmd == "/help" or (cmd in ("/start", "/join") and not arg):
+        _prompted_chats.add(chat_id)
+        await _reply_chunks(update, _invite_prompt_text(update))
+        return
+
+    candidate = arg if cmd in ("/start", "/join") else raw_text
+    if _is_invite_throttled(chat_id):
+        await _reply_chunks(
+            update,
+            "BS đã nhập sai mã mời quá nhiều lần. Vui lòng thử lại sau ít phút.",
+        )
+        return
+
+    if _verify_invite_code(candidate):
+        await _grant_access(chat_id)
+        title = _format_doctor_title(_extract_display_name(update))
+        await _reply_chunks(
+            update,
+            f"Đã kích hoạt thành công! Chào {title}.\n\n{USAGE_TEXT}",
+        )
+        return
+
+    _record_invite_failure(chat_id)
+    if cmd not in ("/start", "/join") and chat_id not in _prompted_chats:
+        _prompted_chats.add(chat_id)
+        await _reply_chunks(update, _invite_prompt_text(update))
+        return
+
+    _prompted_chats.add(chat_id)
+    await _reply_chunks(
+        update,
+        "Mã mời chưa đúng. BS vui lòng kiểm tra lại và gửi đúng mã mời được nhóm cung cấp.",
+    )
+
+
 async def _reply_chunks(update: Update, text: str) -> None:
     msg = update.message
     if msg is None:
@@ -155,10 +375,28 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if chat_id in ALLOWED_CHAT_IDS:
         await _reply_chunks(update, START_TEXT)
         return
-    await _reply_chunks(
-        update,
-        f"Chat id của bạn là {chat_id}. Gửi id này cho nhóm để được cấp quyền dùng thử.",
-    )
+    raw_text = (update.message.text or "").strip() if update.message else ""
+    cmd, arg = _parse_command(raw_text)
+    if not arg and getattr(context, "args", None):
+        arg = " ".join(str(a) for a in context.args).strip()
+    await _handle_unauthorized(update, chat_id, cmd or "/start", arg, raw_text)
+
+
+async def on_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = _extract_chat_id(update)
+    if chat_id is None:
+        return
+    if chat_id in ALLOWED_CHAT_IDS:
+        await _reply_chunks(
+            update,
+            "Tài khoản của BS đã được kích hoạt sẵn rồi. BS có thể gửi ca bệnh ngay ạ.",
+        )
+        return
+    raw_text = (update.message.text or "").strip() if update.message else ""
+    _, arg = _parse_command(raw_text)
+    if not arg and getattr(context, "args", None):
+        arg = " ".join(str(a) for a in context.args).strip()
+    await _handle_unauthorized(update, chat_id, "/join", arg, raw_text)
 
 
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -167,16 +405,16 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     text = update.message.text.strip()
-    cmd = text.split()[0].split("@")[0].lower() if text.startswith("/") else ""
+    cmd, _ = _parse_command(text)
     if cmd in ("/start", "/help"):
         await on_start(update, context)
         return
+    if cmd == "/join":
+        await on_join(update, context)
+        return
 
     if chat_id not in ALLOWED_CHAT_IDS:
-        await _reply_chunks(
-            update,
-            f"Chat id của bạn là {chat_id}. Gửi id này cho nhóm để được cấp quyền dùng thử.",
-        )
+        await _handle_unauthorized(update, chat_id, "", "", text)
         return
 
     try:
@@ -211,13 +449,16 @@ def main() -> None:
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", on_start))
     app.add_handler(CommandHandler("help", on_start))
+    app.add_handler(CommandHandler("join", on_join))
     app.add_handler(MessageHandler(filters.TEXT, on_text))
 
     provider = (os.environ.get("MODEL_PROVIDER") or "fake").strip()
     model_name = (os.environ.get("MODEL_NAME") or "—").strip()
+    invite_state = "on" if INVITE_CODE else "off"
     print(
-        f"Zalo Bot RHM đang chạy (polling) · allowlist={len(ALLOWED_CHAT_IDS)} chat_id · "
-        f"model={provider}/{model_name}"
+        f"Zalo Bot RHM đang chạy (polling) · allowlist={len(ALLOWED_CHAT_IDS)} "
+        f"(env={len(ENV_ALLOWED_CHAT_IDS)}, saved={len(SAVED_CHAT_IDS)}) · "
+        f"invite={invite_state} · model={provider}/{model_name}"
     )
     app.run_polling()
 

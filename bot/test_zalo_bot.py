@@ -1,0 +1,444 @@
+"""Unit tests cho cơ chế mã mời, lưu chat_id và lời chào BS của bot/zalo_bot.py."""
+from __future__ import annotations
+
+import asyncio
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import types
+import unittest
+from unittest.mock import patch
+
+
+def _ensure_zalo_bot_stub() -> None:
+    if "zalo_bot" in sys.modules:
+        return
+    try:
+        import zalo_bot  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    zalo_pkg = types.ModuleType("zalo_bot")
+
+    class Update:
+        pass
+
+    zalo_pkg.Update = Update
+
+    constants_mod = types.ModuleType("zalo_bot.constants")
+
+    class ChatAction:
+        TYPING = "typing"
+
+    constants_mod.ChatAction = ChatAction
+
+    ext_mod = types.ModuleType("zalo_bot.ext")
+
+    class _DummyApp:
+        def add_handler(self, *args, **kwargs):
+            return None
+
+        def run_polling(self, *args, **kwargs):
+            return None
+
+    class ApplicationBuilder:
+        def token(self, _token: str):
+            return self
+
+        def build(self):
+            return _DummyApp()
+
+    class CommandHandler:
+        def __init__(self, command, callback):
+            self.command = command
+            self.callback = callback
+
+    class ContextTypes:
+        DEFAULT_TYPE = object
+
+    class MessageHandler:
+        def __init__(self, filter_obj, callback):
+            self.filter_obj = filter_obj
+            self.callback = callback
+
+    class _Filters:
+        TEXT = "TEXT"
+
+    ext_mod.ApplicationBuilder = ApplicationBuilder
+    ext_mod.CommandHandler = CommandHandler
+    ext_mod.ContextTypes = ContextTypes
+    ext_mod.MessageHandler = MessageHandler
+    ext_mod.filters = _Filters()
+
+    sys.modules["zalo_bot"] = zalo_pkg
+    sys.modules["zalo_bot.constants"] = constants_mod
+    sys.modules["zalo_bot.ext"] = ext_mod
+
+
+def _has_real_zalo_bot_sdk() -> bool:
+    bot_dir = str(Path(__file__).resolve().parent)
+    saved = list(sys.path)
+    try:
+        sys.path = [p for p in sys.path if p and str(Path(p).resolve()) != bot_dir]
+        spec = importlib.util.find_spec("zalo_bot")
+        return spec is not None and spec.origin is not None and str(Path(spec.origin).resolve()) != str(
+            (Path(__file__).resolve().parent / "zalo_bot.py").resolve()
+        )
+    finally:
+        sys.path = saved
+
+
+def _load_bot_module():
+    _ensure_zalo_bot_stub()
+    bot_path = Path(__file__).resolve().parent / "zalo_bot.py"
+    spec = importlib.util.spec_from_file_location("zalo_bot_under_test", bot_path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+bot_mod = _load_bot_module()
+
+
+class _FakeUser:
+    def __init__(self, display_name: str | None = None, is_bot: bool = False):
+        self.display_name = display_name
+        self.is_bot = is_bot
+
+
+class _FakeChat:
+    def __init__(self, chat_id: str, chat_type: str | None = None):
+        self.id = chat_id
+        if chat_type is not None:
+            self.type = chat_type
+            self.chat_type = chat_type
+
+
+class _FakeMessage:
+    def __init__(
+        self,
+        chat_id: str,
+        text: str,
+        display_name: str | None = None,
+        is_bot: bool = False,
+        chat_type: str | None = None,
+    ):
+        self.chat = _FakeChat(chat_id, chat_type=chat_type)
+        self.text = text
+        self.from_user = _FakeUser(display_name=display_name, is_bot=is_bot)
+        self.replies: list[str] = []
+
+    async def reply_text(self, chunk: str) -> None:
+        self.replies.append(chunk)
+
+
+class _FakeUpdate:
+    def __init__(
+        self,
+        chat_id: str,
+        text: str,
+        display_name: str | None = None,
+        chat_type: str | None = None,
+    ):
+        self.message = _FakeMessage(chat_id, text, display_name=display_name, chat_type=chat_type)
+        self.effective_user = self.message.from_user
+
+
+class _FakeBot:
+    def __init__(self):
+        self.actions: list[tuple[str, str]] = []
+
+    async def send_chat_action(self, chat_id: str, action: str) -> None:
+        self.actions.append((chat_id, action))
+
+
+class _FakeContext:
+    def __init__(self, args: list[str] | None = None):
+        self.args = args or []
+        self.bot = _FakeBot()
+
+
+class ZaloBotInviteTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.tmp_path = Path(self._tmpdir.name)
+        self.allowed_file = self.tmp_path / "allowed_chats.json"
+        self.log_dir = self.tmp_path / "logs"
+
+        self._orig_allowed_file = getattr(bot_mod, "ALLOWED_CHATS_FILE", None)
+        self._orig_log_dir = bot_mod.LOG_DIR
+        self._orig_invite_code = getattr(bot_mod, "INVITE_CODE", "")
+        self._orig_env_allowed = getattr(bot_mod, "ENV_ALLOWED_CHAT_IDS", set())
+        self._orig_saved = getattr(bot_mod, "SAVED_CHAT_IDS", set())
+        self._orig_allowed = set(bot_mod.ALLOWED_CHAT_IDS)
+
+        bot_mod.ALLOWED_CHATS_FILE = self.allowed_file
+        bot_mod.LOG_DIR = self.log_dir
+        bot_mod.INVITE_CODE = "RHM2026"
+        bot_mod.ENV_ALLOWED_CHAT_IDS = set()
+        bot_mod.SAVED_CHAT_IDS = set()
+        bot_mod.ALLOWED_CHAT_IDS = set()
+        if hasattr(bot_mod, "_prompted_chats"):
+            bot_mod._prompted_chats.clear()
+        if hasattr(bot_mod, "_failed_attempts"):
+            bot_mod._failed_attempts.clear()
+
+        self.agent_calls: list[str] = []
+
+        def _stub_run_agent(text: str):
+            self.agent_calls.append(text)
+            return "fake output", {"models": ["fake"], "tokens_in": 1, "tokens_out": 2}
+
+        self._run_agent_patch = patch.object(bot_mod, "run_agent", side_effect=_stub_run_agent)
+        self._run_agent_patch.start()
+
+    def tearDown(self) -> None:
+        self._run_agent_patch.stop()
+        if self._orig_allowed_file is not None:
+            bot_mod.ALLOWED_CHATS_FILE = self._orig_allowed_file
+        bot_mod.LOG_DIR = self._orig_log_dir
+        if hasattr(bot_mod, "INVITE_CODE"):
+            bot_mod.INVITE_CODE = self._orig_invite_code
+        if hasattr(bot_mod, "ENV_ALLOWED_CHAT_IDS"):
+            bot_mod.ENV_ALLOWED_CHAT_IDS = self._orig_env_allowed
+        if hasattr(bot_mod, "SAVED_CHAT_IDS"):
+            bot_mod.SAVED_CHAT_IDS = self._orig_saved
+        bot_mod.ALLOWED_CHAT_IDS = self._orig_allowed
+        self._tmpdir.cleanup()
+
+    def test_doctor_title_formatting(self) -> None:
+        cases = [
+            ("Nguyễn Bảo Trung", "BS Nguyễn Bảo Trung"),
+            ("BS Minh", "BS Minh"),
+            ("Bs. Lan", "Bs. Lan"),
+            ("Bs.Lan", "Bs.Lan"),
+            ("Bác sĩ Hùng", "Bác sĩ Hùng"),
+            ("Dr. An", "Dr. An"),
+            ("Bson", "BS Bson"),
+            ("", "BS"),
+            (None, "BS"),
+        ]
+        for raw, expected in cases:
+            with self.subTest(raw=raw):
+                self.assertEqual(bot_mod._format_doctor_title(raw or ""), expected)
+
+    def test_first_start_unauthorized_prompts_and_does_not_fail_or_log(self) -> None:
+        upd = _FakeUpdate("chat_101", "/start", display_name="Nguyễn Bảo Trung")
+        ctx = _FakeContext()
+
+        asyncio.run(bot_mod.on_start(upd, ctx))
+
+        self.assertEqual(
+            upd.message.replies,
+            [
+                "Chào BS Nguyễn Bảo Trung, BS vui lòng nhập mã mời để bắt đầu sử dụng "
+                "trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
+            ],
+        )
+        self.assertEqual(self.agent_calls, [])
+        self.assertEqual(bot_mod._failed_attempts.get("chat_101", []), [])
+        self.assertFalse(self.log_dir.exists())
+
+    def test_first_plain_greeting_unauthorized_prompts_friendly(self) -> None:
+        upd = _FakeUpdate("chat_102", "Xin chào", display_name="BS Minh")
+        ctx = _FakeContext()
+
+        asyncio.run(bot_mod.on_text(upd, ctx))
+
+        self.assertEqual(
+            upd.message.replies,
+            [
+                "Chào BS Minh, BS vui lòng nhập mã mời để bắt đầu sử dụng "
+                "trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
+            ],
+        )
+        self.assertIn("chat_102", bot_mod._prompted_chats)
+        self.assertEqual(self.agent_calls, [])
+
+    def test_activation_via_bare_code_join_and_start_payload(self) -> None:
+        # 1) Bare code (case-insensitive + whitespace)
+        upd1 = _FakeUpdate("chat_201", "  rhm2026  ", display_name="Nguyễn Bảo Trung")
+        asyncio.run(bot_mod.on_text(upd1, _FakeContext()))
+        self.assertEqual(len(upd1.message.replies), 1)
+        self.assertTrue(
+            upd1.message.replies[0].startswith("Đã kích hoạt thành công! Chào BS Nguyễn Bảo Trung.\n\n")
+        )
+        self.assertIn(bot_mod.USAGE_TEXT, upd1.message.replies[0])
+        self.assertNotIn("Xin chào!", upd1.message.replies[0])
+
+        # Verify file persistence, schema, no display_name PII, and 0o600 permissions
+        self.assertTrue(self.allowed_file.exists())
+        data = json.loads(self.allowed_file.read_text(encoding="utf-8"))
+        self.assertEqual(data, {"chat_ids": ["chat_201"]})
+        self.assertNotIn("Nguyễn Bảo Trung", self.allowed_file.read_text(encoding="utf-8"))
+        mode = self.allowed_file.stat().st_mode & 0o777
+        self.assertEqual(mode, 0o600)
+
+        # Reload check
+        reloaded = bot_mod._load_saved_chat_ids(self.allowed_file)
+        self.assertEqual(reloaded, {"chat_201"})
+
+        # Subsequent clinical text reaches run_agent
+        upd1_next = _FakeUpdate("chat_201", "BN uống Sintrom nhổ R48", display_name="Nguyễn Bảo Trung")
+        asyncio.run(bot_mod.on_text(upd1_next, _FakeContext()))
+        self.assertEqual(self.agent_calls, ["BN uống Sintrom nhổ R48"])
+        self.assertEqual(upd1_next.message.replies, ["fake output"])
+
+        # 2) /join RHM2026
+        upd2 = _FakeUpdate("chat_202", "/join RHM2026", display_name="Lan")
+        asyncio.run(bot_mod.on_join(upd2, _FakeContext(args=["RHM2026"])))
+        self.assertTrue(upd2.message.replies[0].startswith("Đã kích hoạt thành công! Chào BS Lan."))
+        self.assertIn("chat_202", bot_mod.ALLOWED_CHAT_IDS)
+
+        # 3) /start RHM2026
+        upd3 = _FakeUpdate("chat_203", "/start RHM2026", display_name="Dr. An")
+        asyncio.run(bot_mod.on_start(upd3, _FakeContext(args=["RHM2026"])))
+        self.assertTrue(upd3.message.replies[0].startswith("Đã kích hoạt thành công! Chào Dr. An."))
+        self.assertIn("chat_203", bot_mod.ALLOWED_CHAT_IDS)
+
+    def test_already_authorized_calling_join(self) -> None:
+        bot_mod.ALLOWED_CHAT_IDS.add("chat_301")
+        upd = _FakeUpdate("chat_301", "/join RHM2026", display_name="Hùng")
+        asyncio.run(bot_mod.on_join(upd, _FakeContext(args=["RHM2026"])))
+        self.assertEqual(
+            upd.message.replies,
+            ["Tài khoản của BS đã được kích hoạt sẵn rồi. BS có thể gửi ca bệnh ngay ạ."],
+        )
+        self.assertEqual(self.agent_calls, [])
+
+    def test_wrong_code_and_bruteforce_throttle_and_recovery(self) -> None:
+        chat_id = "chat_401"
+        # First /start prompts cleanly (0 failures)
+        upd_start = _FakeUpdate(chat_id, "/start", display_name="Hùng")
+        asyncio.run(bot_mod.on_start(upd_start, _FakeContext()))
+
+        # 5 wrong attempts within window
+        for i in range(5):
+            upd_bad = _FakeUpdate(chat_id, f"WRONG{i}", display_name="Hùng")
+            asyncio.run(bot_mod.on_text(upd_bad, _FakeContext()))
+            self.assertEqual(
+                upd_bad.message.replies,
+                ["Mã mời chưa đúng. BS vui lòng kiểm tra lại và gửi đúng mã mời được nhóm cung cấp."],
+            )
+
+        # 6th attempt even with valid code is throttled
+        upd_throttled = _FakeUpdate(chat_id, "RHM2026", display_name="Hùng")
+        asyncio.run(bot_mod.on_text(upd_throttled, _FakeContext()))
+        self.assertEqual(
+            upd_throttled.message.replies,
+            ["BS đã nhập sai mã mời quá nhiều lần. Vui lòng thử lại sau ít phút."],
+        )
+        self.assertNotIn(chat_id, bot_mod.ALLOWED_CHAT_IDS)
+
+        # Advance time past INVITE_WINDOW_SEC (600s) -> valid code works again
+        future = bot_mod.time.monotonic() + bot_mod.INVITE_WINDOW_SEC + 5
+        with patch.object(bot_mod.time, "monotonic", return_value=future):
+            upd_ok = _FakeUpdate(chat_id, "RHM2026", display_name="Hùng")
+            asyncio.run(bot_mod.on_text(upd_ok, _FakeContext()))
+            self.assertTrue(upd_ok.message.replies[0].startswith("Đã kích hoạt thành công! Chào BS Hùng."))
+            self.assertIn(chat_id, bot_mod.ALLOWED_CHAT_IDS)
+
+    def test_fallback_when_invite_code_empty(self) -> None:
+        bot_mod.INVITE_CODE = ""
+        upd = _FakeUpdate("chat_501", "/start", display_name="Hùng")
+        asyncio.run(bot_mod.on_start(upd, _FakeContext()))
+        self.assertEqual(
+            upd.message.replies,
+            ["Chat id của bạn là chat_501. Gửi id này cho nhóm để được cấp quyền dùng thử."],
+        )
+
+    def test_atomic_save_and_corrupt_json_resilience(self) -> None:
+        # Missing file -> empty set
+        self.assertEqual(bot_mod._load_saved_chat_ids(self.tmp_path / "missing.json"), set())
+
+        # Corrupt JSON -> empty set (no crash)
+        corrupt = self.tmp_path / "corrupt.json"
+        corrupt.write_text("{not valid json", encoding="utf-8")
+        self.assertEqual(bot_mod._load_saved_chat_ids(corrupt), set())
+
+        # Non-UTF-8 bytes -> empty set (no crash)
+        non_utf8 = self.tmp_path / "non_utf8.json"
+        non_utf8.write_bytes(b"\xff\xfe\x00\x80")
+        self.assertEqual(bot_mod._load_saved_chat_ids(non_utf8), set())
+
+        # Booleans in JSON list are ignored; valid strings/ints kept
+        with_bools = self.tmp_path / "with_bools.json"
+        with_bools.write_text(
+            json.dumps({"chat_ids": [True, False, "chat_ok", 123, ""]}),
+            encoding="utf-8",
+        )
+        self.assertEqual(bot_mod._load_saved_chat_ids(with_bools), {"chat_ok", "123"})
+
+        # Atomic save leaves no .tmp files
+        bot_mod._save_chat_ids({"chat_a", "chat_b"}, self.allowed_file)
+        leftovers = list(self.tmp_path.glob("*.tmp"))
+        self.assertEqual(leftovers, [])
+        self.assertEqual(bot_mod._load_saved_chat_ids(self.allowed_file), {"chat_a", "chat_b"})
+
+    def test_group_chat_rejected_for_self_service_invite(self) -> None:
+        upd_group = _FakeUpdate("group_901", "RHM2026", display_name="Minh", chat_type="GROUP")
+        asyncio.run(bot_mod.on_text(upd_group, _FakeContext()))
+        self.assertNotIn("group_901", bot_mod.ALLOWED_CHAT_IDS)
+        self.assertFalse(self.allowed_file.exists())
+        self.assertEqual(
+            upd_group.message.replies,
+            [
+                "Tính năng kích hoạt bằng mã mời chỉ hỗ trợ nhắn riêng 1-1 với bot. "
+                "BS vui lòng mở chat riêng với bot rồi nhập mã mời."
+            ],
+        )
+
+        # Private chat with explicit chat_type="PRIVATE" succeeds
+        upd_priv = _FakeUpdate("priv_902", "RHM2026", display_name="Minh", chat_type="PRIVATE")
+        asyncio.run(bot_mod.on_text(upd_priv, _FakeContext()))
+        self.assertIn("priv_902", bot_mod.ALLOWED_CHAT_IDS)
+
+    def test_help_with_or_without_args_unauthorized_prompts_without_failure(self) -> None:
+        for text in ("/help", "/help hướng dẫn", "/help RHM2026"):
+            with self.subTest(text=text):
+                upd = _FakeUpdate("chat_601", text, display_name="Lan")
+                asyncio.run(bot_mod.on_text(upd, _FakeContext()))
+                self.assertEqual(
+                    upd.message.replies,
+                    [
+                        "Chào BS Lan, BS vui lòng nhập mã mời để bắt đầu sử dụng "
+                        "trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
+                    ],
+                )
+        self.assertNotIn("chat_601", bot_mod.ALLOWED_CHAT_IDS)
+        self.assertEqual(bot_mod._failed_attempts.get("chat_601", []), [])
+
+    def test_unicode_invite_code_and_disk_save_error_resilience(self) -> None:
+        bot_mod.INVITE_CODE = "RHM-ĐàNẵng"
+        with patch.object(bot_mod, "_save_chat_ids", side_effect=OSError("disk full")):
+            upd = _FakeUpdate("chat_701", "rhm-đànẵng", display_name="Tuấn")
+            asyncio.run(bot_mod.on_text(upd, _FakeContext()))
+            self.assertTrue(upd.message.replies[0].startswith("Đã kích hoạt thành công! Chào BS Tuấn."))
+            self.assertIn("chat_701", bot_mod.ALLOWED_CHAT_IDS)
+            self.assertIn("chat_701", bot_mod.SAVED_CHAT_IDS)
+
+    @unittest.skipUnless(_has_real_zalo_bot_sdk(), "requires python-zalo-bot installed")
+    def test_script_entrypoint_does_not_shadow_zalo_bot_sdk(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        env = dict(os.environ)
+        env["ZALO_BOT_TOKEN"] = ""
+        proc = subprocess.run(
+            [sys.executable, "bot/zalo_bot.py"],
+            cwd=str(repo_root),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertNotIn("ImportError", proc.stderr)
+        self.assertIn("Thiếu ZALO_BOT_TOKEN", proc.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()
