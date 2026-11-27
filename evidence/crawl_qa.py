@@ -11,18 +11,15 @@ LIÊN TIẾP, KHÔNG lọc theo nội dung; gộp 2 chuyên mục, bỏ câu tr�
 của AloBacsi chạy bằng JavaScript (?page=2 trả lại nội dung trang 1, kiểm ngày 27/11/2026) — nếu gộp rồi
 cắt N câu mới nhất chung thì sẽ hổng các câu cũ hơn của chuyên mục ra bài nhanh hơn.
 
-Chạy:  python evidence/crawl_qa.py            (ghi đè evidence/qa_sample.csv)
-       python evidence/crawl_qa.py --out <file.csv>
+Chạy: python evidence/crawl_qa.py --out <file.csv> (dùng tệp mới để giữ nguyên mẫu đã gán nhãn).
 
-Riêng tư: KHÔNG lưu tên người hỏi (trường author). trich_dan = tối đa 2 câu đầu của câu hỏi,
-đã che SĐT/email; người gán nhãn vẫn phải đọc lại và bỏ chi tiết định danh còn sót.
+Chỉ xuất URL, ngày đăng và chuyên mục; nội dung và tiêu đề bài không được ghi vào CSV.
 Chỉ dùng thư viện chuẩn.
 """
 import argparse
 import csv
 import datetime as dt
 import hashlib
-import html
 import json
 import re
 import tempfile
@@ -82,29 +79,13 @@ def parse(url):
     ngay = "%s-%s-%s" % (m.group(3), m.group(2), m.group(1)) if m else ""
     if not q:
         return None
-    return {"url": url, "ngay_dang": ngay,
-            "tieu_de": html.unescape(q.get("name", "")).strip(),
-            "cau_hoi": html.unescape(q.get("text", "")).strip()}
+    return {"url": url, "ngay_dang": ngay}
 
-
-def scrub(text):
-    text = re.sub(r"\s+", " ", text)
-    text = re.sub(r"\s*Ảnh bạn đọc gửi AloBacsi\s*", " ", text)
-    text = re.sub(r"\s*\([^()]{2,60}\)\s*$", "", text.strip())  # chữ ký "(Tên, Tỉnh)" cuối câu hỏi
-    text = re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "[email]", text)
-    text = re.sub(r"(?<!\d)(?:\+?84|0)(?:[\s.-]?\d){8,10}(?!\d)", "[sđt]", text)
-    return text.strip()
-
-
-def first_sentences(text, k=2, limit=300):
-    parts = re.split(r"(?<=[.!?…])\s+", scrub(text))
-    out = " ".join(parts[:k]).strip()
-    return out if len(out) <= limit else out[:limit].rsplit(" ", 1)[0] + " …"
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(Path(__file__).with_name("qa_sample.csv")))
+    ap.add_argument("--out", required=True, help="Tệp CSV nhận metadata thô")
     ap.add_argument("--force", action="store_true", help="ghi đè cả khi file đã có nhãn")
     a = ap.parse_args()
     out = Path(a.out)
@@ -131,12 +112,11 @@ def main():
         w = csv.DictWriter(f, fieldnames=COLS)
         w.writeheader()
         for i, x in enumerate(sample, 1):
-            q = x["cau_hoi"] or x["tieu_de"]
             w.writerow({"id": "Q%02d" % i, "nguon": "alobacsi", "url": x["url"],
                         "ngay_dang": x["ngay_dang"], "ngay_xem": today,
-                        "trich_dan": first_sentences(q), "lien_quan": "", "yeu_to": "",
+                        "trich_dan": "", "lien_quan": "", "yeu_to": "",
                         "thu_thuat_thuoc": "", "nguoi_gan_nhan": "",
-                        "ghi_chu": "chuyên mục: %s; tiêu đề: %s" % (x["chuyen_muc"], scrub(x["tieu_de"]))})
+                        "ghi_chu": "chuyên mục: %s" % x["chuyen_muc"]})
     print("Gộp, bỏ trùng: %d câu (%d có ngày đăng) → ghi %d câu vào %s" % (len(urls), len(items), len(sample), a.out))
     if sample:
         print("Khoảng ngày đăng của mẫu: %s → %s" % (sample[-1]["ngay_dang"], sample[0]["ngay_dang"]))

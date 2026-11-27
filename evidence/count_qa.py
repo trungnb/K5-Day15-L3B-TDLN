@@ -25,6 +25,7 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
+from urllib.parse import urlsplit
 
 COLS = ["id", "nguon", "url", "ngay_dang", "ngay_xem", "trich_dan", "lien_quan",
         "yeu_to", "thu_thuat_thuoc", "nguoi_gan_nhan", "ghi_chu"]
@@ -36,27 +37,39 @@ DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def split(v):
-    return [x.strip() for x in (v or "").split("|") if x.strip()]
+    return list(dict.fromkeys(x.strip() for x in (v or "").split("|") if x.strip()))
 
 
 def check(rows):
     errs = []
     seen = set()
+    seen_urls = set()
     for i, r in enumerate(rows, start=2):  # dòng 1 là tiêu đề
+        if None in r or None in r.values():
+            errs.append("dòng %d: sai số cột" % i)
+            continue
         rid = r["id"].strip()
         if not rid:
             errs.append("dòng %d: thiếu id" % i)
         elif rid in seen:
             errs.append("dòng %d: id %s bị trùng" % (i, rid))
         seen.add(rid)
-        if not r["url"].strip().startswith("http"):
-            errs.append("dòng %d (%s): thiếu url" % (i, rid))
+        try:
+            url = urlsplit(r["url"].strip())
+            key = (url.hostname, url.path.rstrip("/"))
+        except ValueError:
+            errs.append("dòng %d (%s): URL không hợp lệ" % (i, rid))
+        else:
+            if url.scheme not in ("http", "https") or not url.hostname:
+                errs.append("dòng %d (%s): URL không hợp lệ" % (i, rid))
+            elif key in seen_urls:
+                errs.append("dòng %d (%s): URL đã xuất hiện" % (i, rid))
+            else:
+                seen_urls.add(key)
         if not DATE.match(r["ngay_xem"].strip()):
             errs.append("dòng %d (%s): ngay_xem phải dạng YYYY-MM-DD" % (i, rid))
         if r["ngay_dang"].strip() and not DATE.match(r["ngay_dang"].strip()):
             errs.append("dòng %d (%s): ngay_dang phải dạng YYYY-MM-DD hoặc để trống" % (i, rid))
-        if not r["trich_dan"].strip():
-            errs.append("dòng %d (%s): thiếu trich_dan" % (i, rid))
         if r["lien_quan"].strip() not in LIEN_QUAN:
             errs.append("dòng %d (%s): lien_quan phải là co|khong" % (i, rid))
         for col, allowed in (("yeu_to", YEU_TO), ("thu_thuat_thuoc", THU_THUAT_THUOC)):
@@ -94,17 +107,24 @@ def main():
     if not n:
         return
 
-    lq = [r for r in rows if r["lien_quan"].strip() == "co"]
+    main_factors = YEU_TO - {"khong", "mang_thai_cho_bu"}
+    labeled = [r for r in rows if r["lien_quan"].strip() == "co"]
+    lq = [r for r in labeled if main_factors.intersection(split(r["yeu_to"]))]
     print("\n| Đếm gì | x / N | Ghi chú |")
     print("|---|---|---|")
     print("| Câu hỏi nhắc bệnh nền/thuốc nền/dị ứng gắn với thủ thuật hoặc thuốc RHM | %s | lien_quan=co |" % pct(len(lq), n))
     yt = Counter(v for r in lq for v in split(r["yeu_to"]))
-    for k in sorted(YEU_TO - {"khong"}):
+    for k in sorted(main_factors):
         print("| — yếu tố: %s | %s | trên N; 1 câu có thể nhiều yếu tố |" % (k, pct(yt[k], n)))
     tt = Counter(v for r in lq for v in split(r["thu_thuat_thuoc"]))
     for k in sorted(THU_THUAT_THUOC - {"khong"}):
         if tt[k]:
             print("| — gắn với: %s | %s | trên N |" % (k, pct(tt[k], n)))
+
+    maternity = sum("mang_thai_cho_bu" in split(r["yeu_to"]) for r in labeled)
+    print("| Mang thai/cho bú (thống kê riêng, có thể giao với nhóm chính) | %s | trên N |" % pct(maternity, n))
+    if any("AI-nhap" in r["nguoi_gan_nhan"] for r in rows):
+        print("\nKết quả nháp: mẫu còn nhãn AI chưa chốt.")
 
     nguon = Counter(r["nguon"].strip() for r in rows)
     ngay = sorted(r["ngay_dang"].strip() for r in rows if r["ngay_dang"].strip())
