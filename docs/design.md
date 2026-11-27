@@ -142,12 +142,11 @@ answer(text: str) -> {"output": str, "needs_more": bool}
 - `ddi_rules.csv`: `drug_a`, `drug_b` là `canonical_id` hoặc `class:<drug_class>`. `severity` ∈ `HIGH | MODERATE`.
 - `clinical_risk_rules.csv`: `factor_type` ∈ `condition | allergy | baseline_drug`; `target_type` ∈ `planned_drug | procedure_group`. `factor_id`, `target_id` là `canonical_id`, `class:<drug_class>`, hoặc tên nhóm thủ thuật.
 
-**Hai thay đổi định dạng — ⚠️ Nguyên xác nhận, sửa `validate_csv.py` cho khớp:**
+**Một alias có thể có nhiều dòng** (Nguyên làm ở PR #5):
 
-1. **Một alias được phép có nhiều dòng.** Mỗi dòng là một thành phần (thuốc phối hợp) hoặc một nhóm (thủ thuật thuộc nhiều nhóm). Khoá không trùng đổi từ `alias` thành `(alias, canonical_id, drug_class)`. Không thêm cột mới.
-   - Thuốc phối hợp: `coplavix` → 2 dòng `clopidogrel` và `aspirin`; `alaxan` → `ibuprofen` và `acetaminophen`. Hiện 10 biệt dược chỉ trỏ về 1 hoạt chất, thành phần còn lại nằm trong `notes`, nên sót cảnh báo (vd Coplavix + Ibuprofen sót `DDI-004`).
-   - Thủ thuật nhiều nhóm: vd `nho rang` → `invasive_bleeding` và `local_anesthesia`. **Thủ thuật nào kéo theo gây tê là việc của Trung** (§11); thiết kế chỉ cần cho phép.
-2. Code **không đọc cột `notes`** để suy ra thành phần. `notes` chỉ để người đọc.
+1. Thuốc phối hợp được tách thành nhiều dòng, mỗi dòng một hoạt chất đã có trong bảng, vd `coplavix` → `clopidogrel` và `aspirin`; `lignospan` → `epinephrine` và `lidocaine`. `validate_csv.py` chỉ cho một alias nhiều dòng khi các dòng cùng khai `combo:a+b` trong `notes`, và báo lỗi nếu combo thiếu dòng.
+2. Thủ thuật thuộc nhiều nhóm (vd nhổ răng = `invasive_bleeding` + `local_anesthesia`): validator đã hỗ trợ; **thủ thuật nào kéo theo gây tê là việc của Trung** (§11).
+3. **Hệ quả cho code:** đọc CSV thành `alias → list[dòng]`, **không** đọc vào `dict` theo alias (dòng sau đè dòng trước, lại sót aspirin). Code không đọc cột `notes` để suy ra thành phần; dữ liệu đã tách sẵn.
 
 ### 4.4 Công cụ (`tools.py`)
 
@@ -247,7 +246,7 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | Q3 | "Chưa có thủ thuật dự kiến. Nếu có, nhắn thêm để kiểm rủi ro thủ thuật." |
 | Q4 | "Chưa khai bệnh nền, dị ứng, thuốc đang dùng. Nếu BN có, nhắn thêm để kiểm." |
 | P1 | "⚠️ Tin nhắn có thông tin định danh BN. Vui lòng chỉ gửi ca đã ẩn danh." |
-| ❔ | "❔ Chưa có dữ liệu cho: {danh sách}. BS tự tra thêm; hệ thống không đoán." |
+| ❔ | "❔ Chưa có dữ liệu cho: {danh sách}. Hệ thống không đoán; BS tra thêm Dược thư Quốc gia / tờ hướng dẫn sử dụng." |
 | 🚫 `lieu` | "🚫 Không tư vấn liều dùng / số ngày dùng." |
 | 🚫 `thuoc_thay_the` | "🚫 Không gợi ý thuốc thay thế cụ thể." |
 | 🚫 `ngung_thuoc_nen` | "🚫 Không khuyên ngưng hoặc đổi thuốc nền — cân nhắc hội chẩn BS điều trị bệnh nền." |
@@ -316,7 +315,7 @@ Mã quy tắc trên lấy từ CSV v1.1 hiện tại; kết quả thật phụ t
 
 | Việc | Ai | Trước |
 |---|---|---|
-| Một alias nhiều dòng (§4.3); sửa `validate_csv.py`; tách 10 thuốc phối hợp thành nhiều dòng | Nguyên | Lĩnh code `tools.py` |
+| ~~Một alias nhiều dòng; sửa `validate_csv.py`; tách thuốc phối hợp~~ — đã làm ở PR #5 | Nguyên | — |
 | Thủ thuật nào thuộc thêm nhóm `local_anesthesia` | Trung | CP3 |
 | Câu chữ các câu cố định §7 | Trung | Lĩnh code bước 5 |
 | Cập nhật `team-plan.md` §B: hợp đồng `answer()` thêm `needs_more`; model 1 bỏ cờ thiếu thông tin; phần ghép tin bot chuyển cho Lĩnh | Trung | CP2 |

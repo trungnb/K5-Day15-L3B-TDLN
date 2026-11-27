@@ -57,7 +57,7 @@
   `alias,canonical_id,display_name,entity_type,drug_class,notes,source`
   - `entity_type` ∈ `drug | condition | allergy | procedure`
   - Với `procedure`, cột `drug_class` ghi nhóm thủ thuật ∈ `invasive_bleeding | local_anesthesia | non_invasive`
-  - **Đề xuất 27/11 — chờ Nguyên xác nhận:** cho phép một `alias` có nhiều dòng (mỗi dòng một hoạt chất của thuốc phối hợp, hoặc một nhóm của thủ thuật); khoá không trùng đổi thành `(alias, canonical_id, drug_class)`; không thêm cột. Chi tiết: `docs/design.md` §4.3.
+  - **Cập nhật 27/11 (PR #5):** một `alias` có thể có nhiều dòng — mỗi dòng một hoạt chất của thuốc phối hợp (cùng khai `combo:a+b` trong `notes`); không thêm cột. Code đọc alias thành danh sách, không đọc vào `dict`. Chi tiết: `docs/design.md` §4.3.
 - **`data/ddi_rules.csv`:**
   `rule_id,drug_a,drug_b,severity,mechanism,clinical_guidance,source`
   - `rule_id` dạng `DDI-001` · `severity` ∈ `HIGH | MODERATE`
