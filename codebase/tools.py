@@ -133,6 +133,10 @@ def normalize_entities(extracted, raw_text):
                     _add(out[by_type[entity["entity_type"]]], entity)
 
     # 2.3–2.5: quét tin gốc; thứ model sót thì thêm vào.
+    # Quét chữ không hiểu câu phủ định ("chưa ghi có gây tê", "không dị ứng…"), nên khi model đọc được tin
+    # thì chỉ bổ sung THUỐC (chỗ model sót nguy hiểm nhất); bệnh nền / dị ứng / thủ thuật tin theo model.
+    # Khi model lỗi (extracted rỗng) thì bổ sung mọi loại thực thể.
+    model_ok = bool(extracted)
     known_drug_ids = {e["canonical_id"] for k in ("baseline_drugs", "planned_drugs", "unknown_role_drugs")
                       for e in out[k]}
     for _, entities in find_aliases(normalize_text(raw_text)):
@@ -141,7 +145,7 @@ def normalize_entities(extracted, raw_text):
                 if entity["canonical_id"] not in known_drug_ids:
                     _add(out["unknown_role_drugs"], entity)
                     known_drug_ids.add(entity["canonical_id"])
-            else:
+            elif not model_ok:
                 _add(out[by_type[entity["entity_type"]]], entity)
 
     # Thuốc không rõ vai được kiểm ở cả hai phía để không sót tương tác.

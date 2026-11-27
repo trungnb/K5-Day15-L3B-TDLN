@@ -175,8 +175,9 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 3. Quét **tin gốc** tìm mọi alias (khớp theo ranh giới từ).
 4. **Ưu tiên khớp dài nhất, không chồng lấn:** `di ung ibuprofen` (dị ứng) che `ibuprofen` (thuốc), để dị ứng ibuprofen không bị coi là kê ibuprofen.
 5. Gộp: thực thể code tìm thấy mà model không có →
-   - bệnh nền, dị ứng, thủ thuật: thêm vào đúng nhóm theo `entity_type`;
-   - thuốc: không rõ vai → thêm vào **cả** `baseline_drugs` và `planned_drugs`, đồng thời ghi vào `unknown_role_drugs` để tin trả lời có ghi chú.
+   - thuốc: không rõ vai → thêm vào **cả** `baseline_drugs` và `planned_drugs`, đồng thời ghi vào `unknown_role_drugs` để tin trả lời có ghi chú;
+   - bệnh nền, dị ứng, thủ thuật: **chỉ thêm khi model lỗi** (JSON hỏng). Khi model đọc được tin thì tin theo model, vì quét chữ không hiểu câu phủ định — vd "chưa ghi có gây tê hay không" (B22) sẽ bị hiểu thành có gây tê, "nay ghé khám răng" thành một thủ thuật. *(Sửa 27/11 sau khi chạy thử 27 câu với model thật.)*
+   - Khi so khớp, bỏ từ đệm "một", "cái", "chiếc"… để "nhổ một răng" vẫn khớp `nho rang` (B01).
 6. Một alias nhiều dòng (§4.3) → lấy tất cả các dòng. Thủ thuật → đưa `drug_class` vào `procedure_groups`.
 
 **Bước 3 — Tra bảng (code).**
