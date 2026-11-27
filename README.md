@@ -2,7 +2,9 @@
 
 **Thành viên, lớp, track:** xem [TEAMS.md](TEAMS.md). **Track B (Y tế)** — mở rộng từ B2.
 
-*Lát cắt:* Một bác sĩ RHM · nhắn tóm tắt ca lâm sàng (bệnh nền, dị ứng, thuốc đang dùng, thủ thuật dự kiến, thuốc định kê) · AI chuẩn hoá thực thể và tra tất định các bảng quy tắc có nguồn để quyết định mức cảnh báo (nguy cơ cao · thận trọng · chưa có dữ liệu), hỏi lại khi thiếu và từ chối phần vượt thẩm quyền · bác sĩ nhận checklist cảnh báo kèm cơ chế, nguồn và hướng kiểm tra/hội chẩn để tự quyết.
+*Lát cắt:* Một bác sĩ RHM · nhắn tóm tắt ca lâm sàng (bệnh nền, dị ứng, thuốc đang dùng, thủ thuật dự kiến, thuốc định kê) · AI chuẩn hoá thực thể và tra tất định các bảng quy tắc có nguồn để quyết định mức cảnh báo (nguy cơ cao · thận trọng · chưa có dữ liệu), hỏi lại khi thiếu và từ chối phần vượt thẩm quyền · bác sĩ nhận checklist cảnh báo kèm cơ chế, nguồn và hướng kiểm tra/hội chẩn để tự quyết. Chi tiết: [spec.md](spec.md) §4 · phương án và phân công: [docs/team-plan.md](docs/team-plan.md).
+
+> Công cụ hỗ trợ tra cứu, **không** thay quyết định lâm sàng: không tư vấn liều, không gợi ý thuốc thay thế, không khuyên tự ngưng thuốc nền. Chỉ dùng ca giả lập hoặc đã ẩn danh — không nhập họ tên, SĐT, mã hồ sơ bệnh nhân.
 
 ---
 
@@ -41,7 +43,7 @@ Gõ `dir` (Windows) hoặc `ls` (macOS / Linux): thấy `run.py` và `README.md`
 
 - Windows: gõ `python` mà mở Microsoft Store hoặc báo không có lệnh → dùng `py`. Chưa có Python: cài từ python.org, **tick "Add python.exe to PATH"**, mở lại PowerShell.
 - macOS: báo `command not found: python` là bình thường → dùng `python3`.
-- `python run.py` in ra "[câu trả lời giả — chưa nối model] …" là khung chạy đúng. Nối model thật: [docs/connect-model.md](docs/connect-model.md).
+- `python run.py` rồi gõ thử `BN đang dùng Coplavix. Dự định kê Ibuprofen.` → phải ra `[DDI-004] HIGH` và `[DDI-024] MODERATE` kèm nguồn. Nối model thật: [docs/connect-model.md](docs/connect-model.md).
 
 Trong README này lệnh viết là `python …`; máy nhóm cần `python3` hay `py` thì gõ thay.
 
@@ -58,6 +60,15 @@ Trong README này lệnh viết là `python …`; máy nhóm cần `python3` hay
 | `python run.py simulate --try` | Thử mô phỏng chi phí 10 phiên (làm trước CP3) → `cost/simulate-try.csv` |
 | `python run.py simulate` | Mô phỏng chi phí khi dùng thật theo `cost/personas.yaml` (≥50 phiên) → `cost/simulate-N.csv` + `cost/simulate-N-summary.md` |
 | `python run.py simulate --rate-from eval/run-2.csv` | Như trên, lấy tỉ lệ đạt từ đúng lượt chỉ định. Không ghi thì khung lấy lượt `run-N` mới nhất đã chấm, cùng model, và ghi rõ đã lấy lượt nào trong bản tóm tắt |
+
+Lệnh riêng của nhóm (cần môi trường ảo, vì bot Zalo dùng thư viện `python-zalo-bot` trong `requirements.txt`):
+
+| Lệnh | Làm gì |
+|---|---|
+| `python -m venv .venv` rồi `.venv\Scripts\python -m pip install -r requirements.txt` (macOS/Linux: `.venv/bin/python …`) | Tạo môi trường ảo cho bot |
+| `.venv\Scripts\python bot\zalo_bot.py` | Chạy bot Zalo — vỏ mỏng gọi `answer()` trong `codebase/agent.py`. Cần `ZALO_BOT_TOKEN` trong `.env`; cách tạo bot, cấp quyền dùng thử: [docs/zalo-bot.md](docs/zalo-bot.md) |
+| `python data/build/validate_csv.py` | Kiểm 3 file CSV trong `data/` (cột, khoá ngoại, trùng, thuốc phối hợp khai `combo:`, không có liều trong hướng dẫn) |
+| `python evidence/count_qa.py` | Đếm mẫu hỏi đáp RHM công khai `evidence/qa_sample.csv` → số cho `evidence/data-mining.md` |
 
 Gói miễn phí báo hết lượt: thêm `--wait 4` sau `eval` hoặc `simulate` (nghỉ 4 giây giữa hai lượt gọi). Sửa CSV bằng Excel: *File → Save As → CSV UTF-8*; Google Sheets: *Tệp → Tải xuống → CSV*.
 
@@ -82,12 +93,20 @@ Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` t
 | Thành phần | Thật / Giả | Ghi chú |
 |---|---|---|
 | Dữ liệu nền (`data/entity_aliases.csv`, `data/ddi_rules.csv`, `data/clinical_risk_rules.csv`) | **Thật** | Tổng hợp từ nguồn chính thống (QĐ 5948/QĐ-BYT, DDInter, SDCEP, AAOMS, Dược thư QG VN), chi tiết tại [data/DATA_CARD.md](data/DATA_CARD.md) |
-| Công cụ tra cứu DDI (`codebase/tools.py` — `check_drug_interactions`) | **Thật** (một phần ở CP2) | Tra tất định trên CSV khi đầu vào nêu rõ thuốc nền và thuốc định kê; các nhánh bệnh nền, dị ứng và thủ thuật chưa bật ở bản CP2 |
-| Lời gọi AI ở quyết định trung tâm (`codebase/ai.py`) | **Giả (CP2)** → **Thật (CP3)** | Hiện đang ở chế độ `MODEL_PROVIDER=fake` cho bản khung CP2; nối model thật (test OpenRouter, chạy chính Gemini) trước CP3 |
+| Chuẩn hoá tên thuốc → hoạt chất (`normalize_entities`) | **Thật** | Trên `data/entity_aliases.csv` (248 dòng, gồm biệt dược VN và nhóm thủ thuật `local_anesthesia`); thuốc phối hợp (Coplavix, Lignospan…) tách thành mỗi hoạt chất một dòng |
+| Công cụ tra cứu DDI (`codebase/tools.py` — `check_drug_interactions`) | **Thật** (một phần ở CP2) | Tra tất định trên CSV khi đầu vào nêu rõ thuốc nền và thuốc định kê (bản CP2 chỉ nhận câu dạng "đang dùng … / dự định kê …"); mỗi rule có nguồn |
+| Rủi ro bệnh nền / dị ứng / thủ thuật | **Chưa bật ở CP2** | `data/clinical_risk_rules.csv` đã có rule có nguồn nhưng agent chưa gọi; output ghi rõ "các nhánh bệnh nền, dị ứng và thủ thuật chưa được kiểm" |
+| Lời gọi AI ở quyết định trung tâm (`codebase/ai.py`) | **Giả (CP2)** → **Thật (CP3)** | Hiện đang ở chế độ `MODEL_PROVIDER=fake` cho bản khung CP2 — `python run.py` in "gọi model 0 lần"; nối model thật trước CP3. Model: chưa nối ở CP2 (dự kiến test OpenRouter, chạy chính Gemini trước CP3) |
+| Bot Zalo (`bot/zalo_bot.py`) | **Thật** (vỏ mỏng) | Gọi chung `answer()`; chưa kiểm tài khoản Zalo ngoài nhắn vào được — xem `docs/team-plan.md` §E |
+| Dữ liệu bệnh nhân | **Giả lập** | Chỉ ca giả lập / đã ẩn danh, không dùng dữ liệu sức khoẻ của người thật |
 
 ## Dùng AI vào việc gì
 
 Nhóm dùng coding agent/LLM hỗ trợ soạn tài liệu kỹ thuật, viết script gom và kiểm dữ liệu (`data/build/`, `evidence/crawl_qa.py`, `evidence/count_qa.py`) và dựng khung code. Thành viên nhóm — đặc biệt BS RHM trong nhóm (Nguyễn Bảo Trung) và người rà eval (Lại Trọng Đức) — kiểm duyệt toàn bộ nội dung lâm sàng, nguồn, đáp án câu thử và trực tiếp thực hiện phần phỏng vấn. Nhóm không dùng AI để bịa người phỏng vấn, trích dẫn hay sửa kết quả chạy. Chi tiết: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
+
+- **Nguyên:** dùng Claude Code (Claude Opus 5.5) để tìm và đọc nguồn cho `spec.md` §2–§3, viết `evidence/crawl_qa.py` / `count_qa.py` và luật thuốc phối hợp trong `data/build/`, soạn README; Nguyên kiểm tay 15/15 nhãn mẫu hỏi đáp và đọc lại từng nguồn trích.
+- **Trung:** dùng coding agent hỗ trợ soạn/đồng bộ tài liệu, biên bản và kiểm tra khung repo; trực tiếp thực hiện/xác nhận phỏng vấn BS RHM ngoài nhóm và duyệt lâm sàng 3 bảng dữ liệu.
+- **Đức, Lĩnh:** bổ sung chi tiết công cụ AI dùng cho eval/code vào [docs/ai-usage.md](docs/ai-usage.md) trước CP3.
 
 ## File mẫu — điền ở bước nào
 
@@ -119,5 +138,5 @@ Nhóm dùng coding agent/LLM hỗ trợ soạn tài liệu kỹ thuật, viết 
 | 4 | Bản chạy thử làm trọn lát cắt | `codebase/` · lệnh ở mục "Lệnh" |
 | 5 | Định nghĩa "tốt" + bộ câu thử | `data/DATA_CARD.md` · `eval/` |
 | 6 | Mô phỏng chi phí khi dùng thật | `cost/` |
-| 7 | Slide + demo + video dự phòng | slide trong repo (PDF, PPTX, HTML…) hoặc link slide ở form CP4 · link video: chưa nộp (CP3/CP4) |
+| 7 | Slide + demo + video dự phòng | `demo-slides.pdf` ở thư mục gốc repo (dàn ý: `slides/outline.md`, xuất trước CP4) · link video: chưa nộp (CP3/CP4) |
 | + | *Bonus:* người dùng thử | `validation/log.md` |
