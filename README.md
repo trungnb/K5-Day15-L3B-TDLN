@@ -94,9 +94,10 @@ Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` t
 |---|---|---|
 | Dữ liệu nền (`data/entity_aliases.csv`, `data/ddi_rules.csv`, `data/clinical_risk_rules.csv`) | **Thật** | Tổng hợp từ nguồn chính thống (QĐ 5948/QĐ-BYT, DDInter, SDCEP, AAOMS, Dược thư QG VN), chi tiết tại [data/DATA_CARD.md](data/DATA_CARD.md) |
 | Chuẩn hoá tên thuốc → hoạt chất (`normalize_entities`) | **Thật** | Trên `data/entity_aliases.csv` (248 dòng, gồm biệt dược VN và nhóm thủ thuật `local_anesthesia`); thuốc phối hợp (Coplavix, Lignospan…) tách thành mỗi hoạt chất một dòng |
-| Công cụ tra cứu DDI (`codebase/tools.py` — `check_drug_interactions`) | **Thật** (một phần ở CP2) | Tra tất định trên CSV khi đầu vào nêu rõ thuốc nền và thuốc định kê (bản CP2 chỉ nhận câu dạng "đang dùng … / dự định kê …"); mỗi rule có nguồn |
-| Rủi ro bệnh nền / dị ứng / thủ thuật | **Chưa bật ở CP2** | `data/clinical_risk_rules.csv` đã có rule có nguồn nhưng agent chưa gọi; output ghi rõ "các nhánh bệnh nền, dị ứng và thủ thuật chưa được kiểm" |
-| Lời gọi AI ở quyết định trung tâm (`codebase/ai.py`) | **Giả (CP2)** → **Thật (CP3)** | Hiện đang ở chế độ `MODEL_PROVIDER=fake` cho bản khung CP2 — `python run.py` in "gọi model 0 lần"; nối model thật trước CP3. Model: chưa nối ở CP2 |
+| Công cụ tra cứu DDI (`codebase/tools.py` — `check_drug_interactions`) | **Thật** | Tra tất định trên `data/ddi_rules.csv` mọi cặp có ít nhất một thuốc định kê, khớp theo hoạt chất hoặc nhóm thuốc; mỗi rule có nguồn |
+| Rủi ro bệnh nền / dị ứng / thủ thuật (`check_clinical_risks`) | **Thật** | Tra tất định trên `data/clinical_risk_rules.csv`: bệnh nền, dị ứng, thuốc nền × thuốc định kê / nhóm thủ thuật |
+| Chặn rủi ro (guardrail) | **Thật** | Code kiểm đủ mọi mã HIGH; chặn dòng model viết có mã bịa, liều hoặc chữ "an toàn"; từ chối 🚫 và nhắc ẩn danh bằng câu cố định; tin trả lời do code ráp. **Chưa làm:** regex bắt SĐT/CCCD, danh sách từ khoá vượt quyền (`docs/design.md` §11) |
+| Lời gọi AI ở quyết định trung tâm (`codebase/ai.py`) | **Thật** (từ CP3) | Tối đa 2 lần gọi mỗi ca: model 1 trích thực thể + cờ vượt quyền / định danh (JSON), model 2 diễn đạt lại các rule đã khớp. Model: `gemini-3.8-flash` (Google AI Studio, `MODEL_THINKING=low`). Không có `.env` thì chạy chế độ giả |
 | Bot Zalo (`bot/zalo_bot.py`) | **Thật** (vỏ mỏng) | Gọi chung `answer()`; chưa kiểm tài khoản Zalo ngoài nhắn vào được — xem `docs/team-plan.md` §E |
 | Dữ liệu bệnh nhân | **Giả lập** | Chỉ ca giả lập / đã ẩn danh, không dùng dữ liệu sức khoẻ của người thật |
 
