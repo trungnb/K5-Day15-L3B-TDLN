@@ -168,6 +168,7 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 ## 5. Luật từng bước
 
 **Bước 1 — Model lần 1.** Prompt yêu cầu: chỉ trích những gì BS viết, giữ nguyên chữ, trả đúng JSON §4.2, không giải thích. Không đưa bảng CSV vào prompt.
+- **Xếp vai thuốc:** chỉ đưa thuốc vào `planned_drugs` khi tin nói rõ là định kê ("kê", "định kê", "cho uống", "định cho"). Mọi thuốc khác, kể cả khi không rõ vai, đưa vào `baseline_drugs`. Vì vậy tin chỉ liệt kê tên thuốc mà không nói thuốc nào định kê (vd "Cordarone, Klacid, Dexa — check tương tác") sẽ không có thuốc định kê, rơi vào tình huống 3 ở §6 → hỏi lại Q1. Không thêm trường JSON cho thuốc không rõ vai.
 
 **Bước 2 — Chuẩn hoá và quét lại (code).**
 1. Chuẩn hoá chuỗi: viết thường, bỏ dấu tiếng Việt, gộp khoảng trắng (giống cách `alias` đã được viết).
