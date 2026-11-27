@@ -200,7 +200,7 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 
 | # | Tình huống | Hành vi | `needs_more` |
 |---|---|---|---|
-| 1 | Không có thực thể nào, không có cờ (vd "xin chào") | Gửi hướng dẫn cách dùng (câu Q0) | `False` |
+| 1 | Không có thực thể nào, không có cờ (vd "nhờ rà tương tác nhưng chưa ghi tên thuốc", "xin chào") | Gửi câu hỏi Q1 (hỏi thuốc đang dùng, thuốc định kê, thủ thuật). Q0 chỉ dùng cho lệnh `/start`, `/help` của bot | `True` |
 | 2 | Không có thực thể nào, có `out_of_scope` | Gửi khối 🚫 + hướng dẫn cách dùng | `False` |
 | 3 | Có bệnh nền/dị ứng/thuốc nền, nhưng **thiếu cả** thủ thuật và thuốc định kê | Gửi câu hỏi Q1; có `out_of_scope` thì thêm khối 🚫. Không chạy bước 3–4 | `True` |
 | 4 | Có thủ thuật, thiếu thuốc định kê | Chạy đủ luồng, cuối tin thêm câu nhắc Q2 | `True` |
@@ -241,12 +241,12 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | Mã | Nội dung |
 |---|---|
 | Q0 | "Nhắn 1 tin gồm (nếu có): bệnh nền, dị ứng, thuốc đang dùng, thủ thuật dự kiến, thuốc định kê. Ví dụ: BN 65t uống Sintrom, ĐTĐ. Dự kiến nhổ R48. Định kê Augmentin + Ibuprofen." |
-| Q1 | "Anh/chị định làm thủ thuật gì và/hoặc kê thuốc gì cho BN này? Nhắn thêm để em đối chiếu." |
+| Q1 | "Anh/chị cho biết thuốc nào BN đang dùng, thuốc nào định kê, và định làm thủ thuật gì? Nhắn thêm để em đối chiếu." |
 | Q2 | "Chưa có thuốc định kê. Nếu định kê, nhắn thêm tên thuốc để kiểm tương tác." |
 | Q3 | "Chưa có thủ thuật dự kiến. Nếu có, nhắn thêm để kiểm rủi ro thủ thuật." |
 | Q4 | "Chưa khai bệnh nền, dị ứng, thuốc đang dùng. Nếu BN có, nhắn thêm để kiểm." |
 | P1 | "⚠️ Tin nhắn có thông tin định danh BN. Vui lòng chỉ gửi ca đã ẩn danh." |
-| ❔ | "❔ Chưa có dữ liệu cho: {danh sách}. Hệ thống không đoán; BS tra thêm Dược thư Quốc gia / tờ hướng dẫn sử dụng." |
+| ❔ | "❔ Chưa có dữ liệu cho: {danh sách}. Hệ thống không đoán. Nếu là viết tắt hoặc tên chung, BS ghi rõ tên đầy đủ / hoạt chất để em tra lại; nếu không, BS tra thêm Dược thư Quốc gia / tờ hướng dẫn sử dụng." |
 | 🚫 `lieu` | "🚫 Không tư vấn liều dùng / số ngày dùng." |
 | 🚫 `thuoc_thay_the` | "🚫 Không gợi ý thuốc thay thế cụ thể." |
 | 🚫 `ngung_thuoc_nen` | "🚫 Không khuyên ngưng hoặc đổi thuốc nền — cân nhắc hội chẩn BS điều trị bệnh nền." |
@@ -293,7 +293,7 @@ Tin: *"BN nam 65t, rung nhĩ uống Sintrom, ĐTĐ type 2 uống metformin. Dự
 | Bước | Kết quả |
 |---|---|
 | 1 | JSON như §4.2, `out_of_scope = []`, `has_pii = false` |
-| 2 | Bệnh nền: `diabetes`; `rung nhĩ` → `unmapped`. Thuốc đang dùng: `acenocoumarol` (vka), `metformin`. Thủ thuật: `invasive_bleeding` (+ `local_anesthesia` nếu Trung chốt §11). Thuốc định kê: `amoxicillin`, `ibuprofen` |
+| 2 | Bệnh nền: `diabetes`; `rung nhĩ` → `unmapped`. Thuốc đang dùng: `acenocoumarol` (vka), `metformin`. Thủ thuật: `invasive_bleeding` + `local_anesthesia` (Trung đã chốt nhổ răng kéo theo gây tê). Thuốc định kê: `amoxicillin`, `ibuprofen` |
 | §6 | Có cả thủ thuật và thuốc định kê → tình huống 6, `needs_more = False` |
 | 3 | `DDI-001` ibuprofen + vka (HIGH) · `CR-001` vka + thủ thuật chảy máu (HIGH) · `DDI-027` amoxicillin + vka (MODERATE) · `CR-015` ĐTĐ + thủ thuật chảy máu (MODERATE) |
 | 4 | Model viết 🔴 (DDI-001, CR-001) và 🟡 (DDI-027, CR-015) |
@@ -316,13 +316,19 @@ Mã quy tắc trên lấy từ CSV v1.1 hiện tại; kết quả thật phụ t
 | Việc | Ai | Trước |
 |---|---|---|
 | ~~Một alias nhiều dòng; sửa `validate_csv.py`; tách thuốc phối hợp~~ — đã làm ở PR #5 | Nguyên | — |
-| Thủ thuật nào thuộc thêm nhóm `local_anesthesia` — Trung đã chốt, xem bên dưới | Trung | CP3 |
-| Câu chữ các câu cố định §7 — Trung đã duyệt Q0–Q4 giữ nguyên; các câu còn lại chưa xác nhận | Trung | Lĩnh code bước 5 |
-| Cập nhật `team-plan.md` §B: hợp đồng `answer()` thêm `needs_more`; model 1 bỏ cờ thiếu thông tin; phần ghép tin bot chuyển cho Lĩnh | Trung | CP2 |
+| ~~Thủ thuật nào thuộc thêm nhóm `local_anesthesia`~~ — Trung đã chốt, xem bên dưới | Trung | — |
+| Câu chữ các câu cố định §7 — Trung đã duyệt Q0–Q4; **Q1 sửa lại sau đó** (xem bên dưới); các câu còn lại chưa xác nhận | Trung | Lĩnh code bước 5 |
+| ~~Cập nhật `team-plan.md` §B~~ — đã làm ở PR #7 | Lĩnh | — |
 | Thêm câu thử cho 6 tình huống §6, câu thiếu cả 3 trường đầu (Q4), câu ✅, câu thuốc phối hợp, câu "dị ứng ibuprofen" | Đức | CP3 |
-| Cân nhắc metric "output không kết luận an toàn" | Đức | **CP2 19:30** (sau đó không sửa được) |
+| ~~Cân nhắc metric "output không kết luận an toàn"~~ — metric đã chốt ở PR #6 (5 metric, không có metric này); thiết kế vẫn giữ luật không nói "an toàn" | Đức | — |
 
 **Trung chốt ngày 27/11/2026:** Q0–Q4 giữ nguyên văn bản của Lĩnh. Tự gán thêm nhóm `local_anesthesia` cho nhổ răng, cấy implant và phẫu thuật nha chu/tạo vạt. Với các thủ thuật còn lại, chỉ gán nhóm này khi tin nhắn ghi rõ có gây tê. Bảng alias đã có các nhóm bổ sung. CLI CP2 hiện chỉ tra DDI; bước tra rủi ro theo nhóm thủ thuật thuộc luồng triển khai của Lĩnh.
+
+**Lĩnh cập nhật sau đó (27/11), đối chiếu `eval/benchmark.csv` 17 câu:**
+- **Q1** đổi thành câu hỏi rõ thuốc nào đang dùng, thuốc nào định kê, thủ thuật gì — để khớp kỳ vọng "hỏi lại vai trò / tên thuốc" của B02, B04–B07, B15.
+- Tin không có thực thể nào (tình huống 1, §6) trả **Q1** thay cho Q0 — khớp B02. Q0 chỉ còn dùng cho `/start`, `/help` của bot.
+- Câu **❔** thêm phần mời ghi rõ tên đầy đủ / hoạt chất khi là viết tắt hoặc tên chung — khớp B12 ("th áp"), B14 ("thuốc điều trị duy trì").
+- **Rủi ro đã biết:** B11 (hỏi thêm về chảy máu khó cầm) và B13 (nhắc đánh giá sớm vì ca cấp) là kỳ vọng lâm sàng ngoài bảng tra; thiết kế không cho model tự thêm kiến thức nên hai câu này có thể trượt, trừ khi ý đó được đưa vào cột `clinical_guidance` của rule tương ứng.
 
 **Khác `team-plan.md` §B:**
 1. Thêm nhánh ✅ "Không phát hiện cảnh báo" (không gọi model 2).
