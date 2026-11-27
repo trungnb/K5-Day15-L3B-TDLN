@@ -6,34 +6,27 @@
 
 ## 1. Cách đếm — viết TRƯỚC khi chạy
 
-- **Data dùng:** Mục Hỏi đáp Răng Hàm Mặt công khai trên trang bệnh viện / nền tảng y khoa công khai Việt Nam (ví dụ Vinmec, Medlatec, YouMed, HelloBacsi — chỉ lấy nội dung công khai không cần đăng nhập; Nguyên crawl 40–50 câu và ghi rõ 1–2 URL cụ thể + ngày xem tại `evidence/qa_sample.csv`, Đức chốt mẫu số `N` trước khi chạy đếm).
-- **Đếm gì:** Số câu hỏi công khai có nhắc đến **bệnh nền / thuốc đang uống / dị ứng thuốc** gắn với **thủ thuật RHM** (nhổ răng, tiểu phẫu, cắm implant, lấy cao răng/tiêm tê) hoặc **thuốc định dùng trong RHM** (kháng sinh, giảm đau NSAID, corticoid), phân nhãn theo loại yếu tố nguy cơ.
-- **Trên tập nào / lọc gì:** Lấy `N` câu hỏi công khai liên tiếp mới nhất trong chuyên mục RHM tại thời điểm thu thập (không lọc bỏ câu bình thường trước khi gán nhãn để tránh lệch mẫu).
-- **Mẫu số là gì (`N`):** Tổng số câu hỏi RHM công khai liên tiếp đã đọc và gắn nhãn (kể cả câu không liên quan đến bệnh nền/thuốc nền). Mục tiêu `N ≥ 40` (khuyến nghị 50 câu).
-- **Script / công thức:** `evidence/qa_sample.csv` + `evidence/count_qa.py` *(Nguyên hỗ trợ crawl & dựng script gom mẫu; Đức rà nhãn, chốt mẫu số và chạy đếm đưa vào `evidence/data-mining.md` & `evidence/summary.md`)*.
+- **Nguồn:** Trang đầu của hai mục AloBacsi [Nha khoa](https://alobacsi.com/kham-benh-online/nha-khoa) và [Răng Hàm Mặt](https://alobacsi.com/kham-benh-online/rang-ham-mat), xem ngày 27/11/2026.
+- **Lấy mẫu:** Lấy các bài hiển thị trên trang đầu của từng mục, gộp theo URL và bỏ trùng. Script chỉ giữ bài đọc được dữ liệu câu hỏi và ngày đăng. Bộ cố định có 48 URL duy nhất, đăng từ 27/05/2025 đến 26/11/2026. Đây là mẫu theo hai trang danh mục; không suy rộng thành các bài mới nhất trên toàn trang.
+- **Mẫu số:** N = 48 gồm cả dòng âm tính. CSV giữ mã, URL, ngày và nhãn nháp để Đức rà; mở link gốc khi cần kiểm. Chỉ đưa các trích dẫn đã chọn và bỏ định danh vào phần ví dụ.
+- **Tử số chính:** Câu có bệnh nền, thuốc nền hoặc dị ứng gắn với thủ thuật hoặc thuốc RHM. Mang thai/cho bú báo riêng. Mỗi nhãn chỉ đếm một lần trên một câu.
+- **Chạy lại:** python3 evidence/count_qa.py. Đức rà toàn bộ nhãn trước khi điền kết quả và ghi số kiểm tay vào docs/ai-usage.md.
 
 ## 2. Đọc trước, đếm sau
 
-Đã đọc __ dòng đầu. Các *kiểu* câu hỏi thấy được (trước khi định nghĩa thứ cần đếm):
-- __
-- __
+Rà tay toàn bộ nhãn: UNVERIFIED, chờ Đức ghi nhận.
 
 ## 3. Kết quả
 
 | Đếm gì | x / N | % | Ghi chú |
 |---|---|---|---|
-| | | | |
-| | | | |
+| Bệnh nền, thuốc nền hoặc dị ứng gắn với thủ thuật/thuốc RHM | UNVERIFIED / 48 | UNVERIFIED | Chờ Đức rà nhãn |
 
 Ghi dạng `x/N (y%)`. *"Nhiều bạn…"* không phải số.
 
 ## 4. ≥5 ví dụ cụ thể (mã dòng / link + ngày xem, bỏ tên)
 
-1.
-2.
-3.
-4.
-5.
+Chờ Đức chọn 5 ví dụ sau khi rà nhãn. Phân biệt ví dụ dương tính, âm tính và giáp ranh.
 
 ## 5. Giới hạn của data
 

@@ -8,7 +8,7 @@ README của nhóm có mục "Dùng AI vào việc gì" (2–3 dòng, bắt bu�
 |---|---|---|---|---|
 | Code bản chạy thử | | | | |
 | Prompt / thiết kế lời gọi mô hình | | | | |
-| Đào data (viết script đếm, gợi ý nhãn) | | | Kiểm tay __ dòng, khớp __ | |
+| Đào data (viết script đếm, gợi ý nhãn) | Claude Code (Claude Opus 5.5) | Viết `evidence/crawl_qa.py` (gom 48 câu hỏi đáp RHM công khai trên AloBacsi) và `evidence/count_qa.py`; gán nhãn nháp 48 dòng `evidence/qa_sample.csv` (cột `nguoi_gan_nhan` = `AI-nhap`) | Nguyên kiểm tay __ dòng, khớp __ *(chưa kiểm)*; Đức rà lại toàn bộ nhãn trước khi chốt số | Nguyên (Đức rà nhãn) |
 | Rà câu hỏi phỏng vấn / khảo sát | | Chỉ rà câu dẫn dắt | | |
 | Viết câu thử (benchmark) | | | Mỗi câu thử có `source`; câu thử AI viết được ghi rõ | |
 | Sinh data `synthetic` (nếu có) | | | Seed __ · kiểm tay __ dòng | |
