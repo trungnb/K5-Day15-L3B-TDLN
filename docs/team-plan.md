@@ -37,17 +37,19 @@
 3. Không khuyên tự ngưng hoặc đổi thuốc nền (chỉ gợi ý hội chẩn BS nội khoa/tim mạch hoặc dược sĩ lâm sàng).
 4. Không chẩn đoán bệnh, không đọc/xử lý dữ liệu định danh của bệnh nhân thật (họ tên, SĐT, mã hồ sơ, ảnh đơn thật).
 
-### Hình dạng giải pháp: **Workflow cố định 4 bước**
+### Hình dạng giải pháp: **Workflow cố định 5 bước**
+> **Cập nhật 27/11 (Lĩnh):** bản thiết kế chi tiết để code theo là [`docs/design.md`](design.md) — gồm schema JSON, luật từng bước, câu chữ cố định, xử lý lỗi. Mục dưới đây là tóm tắt; nếu lệch nhau thì theo `docs/design.md`.
+
 - **Vì sao không chọn Agent loop hay Multi-agent:** Sàng lọc an toàn y khoa đòi hỏi **100% recall** cho cảnh báo mức `HIGH` và chi phí cố định **≤ 2 lượt gọi LLM mỗi ca**. Agent tự quyết định thứ tự gọi tool có rủi ro bỏ sót bảng kiểm tra và tốn nhiều token vòng lặp hơn.
 
-1. **Bước 1 — LLM#1 `extract_and_guard` (trả JSON):** Tách 5 mảng `conditions`, `allergies`, `baseline_drugs`, `planned_procedures`, `planned_drugs` + 3 cờ: `out_of_scope` (hỏi liều, đòi thuốc thay thế, hỏi ngưng thuốc nền, chẩn đoán), `needs_clarification` (kèm đúng 1 câu hỏi làm rõ), `has_pii`.
-2. **Bước 2 — `normalize_entities(entities, raw_text)` (`@tool`, tất định):** Map alias → `canonical_id`, quét thêm toàn bộ `raw_text` (bỏ dấu, không phân biệt hoa/thường) rồi hợp nhất 2 nguồn; tên không khớp đưa vào `unmapped` (tuyệt đối không đoán). Thuốc không rõ vai (nền hay định kê) → đưa vào cả hai phía để không sót tương tác.
-3. **Bước 3 — `check_drug_interactions(baseline, planned)` và `check_clinical_risks(conditions, allergies, baseline, planned, procedures)` (`@tool`, tất định):** Quét 100% tổ hợp, khớp theo `canonical_id` hoặc `class:<drug_class>`. Với DDI chỉ xét các cặp có **ít nhất 1 thuốc định kê**.
-4. **Bước 4 — LLM#2 soạn checklist & Guard kiểm cuối:**
-   - Soạn phản hồi **< 1800 ký tự**, chia rõ 4 khối: `🔴 Nguy cơ cao` / `🟡 Thận trọng` / `❔ Chưa có dữ liệu` / `🚫 Ngoài phạm vi`, cuối tin luôn có câu **"BS là người quyết định"**.
-   - **Guard Python:** kiểm tra mọi `rule_id` mức `HIGH` đã khớp đều phải có mặt trong output; thiếu mã nào tự động nối thêm khối cảnh báo của mã đó.
-   - Nếu `needs_clarification` và không còn thực thể hợp lệ nào để tra → hỏi lại đúng 1 câu ngắn (**G10**).
-   - Nếu `has_pii` → nhắc nhở ẩn danh và **không lặp lại** thông tin định danh đó trong output.
+1. **Bước 1 — LLM#1 `extract_and_guard` (trả JSON):** Tách 5 mảng `conditions`, `allergies`, `baseline_drugs`, `planned_procedures`, `planned_drugs` (giữ nguyên chữ BS viết) + **2 cờ**: `out_of_scope` (hỏi liều, đòi thuốc thay thế, hỏi ngưng thuốc nền, chẩn đoán, lạc đề/tấn công), `has_pii`. *(Bỏ cờ `needs_clarification`: thiếu thông tin do code xác định sau bước 2.)*
+2. **Bước 2 — `normalize_entities(entities, raw_text)` (`@tool`, tất định):** Map alias → `canonical_id`, quét thêm toàn bộ `raw_text` (bỏ dấu, không phân biệt hoa/thường, **ưu tiên khớp dài nhất, không chồng lấn**) rồi hợp nhất 2 nguồn; một alias có thể ra nhiều thực thể (thuốc phối hợp, thủ thuật nhiều nhóm); tên không khớp đưa vào `unmapped` (tuyệt đối không đoán). Thuốc không rõ vai (nền hay định kê) → đưa vào cả hai phía để không sót tương tác, có ghi chú trong tin trả lời.
+   - **Kiểm thiếu thông tin (code):** thiếu cả thủ thuật lẫn thuốc định kê → trả câu hỏi lại cố định rồi dừng; thiếu một trong hai → vẫn tra tiếp và nhắc bổ sung (`docs/design.md` §6).
+3. **Bước 3 — `check_drug_interactions(baseline, planned)` và `check_clinical_risks(conditions, allergies, baseline, planned, procedures)` (`@tool`, tất định):** Quét 100% tổ hợp, khớp theo `canonical_id` hoặc `class:<drug_class>`. Với DDI chỉ xét các cặp có **ít nhất 1 thuốc định kê**. Gộp kết quả theo `rule_id`. Không có rule nào khớp → bỏ qua bước 4.
+4. **Bước 4 — LLM#2 viết khối `🔴 Nguy cơ cao` / `🟡 Thận trọng` & Guard kiểm cuối:**
+   - LLM#2 chỉ diễn đạt lại các rule đã khớp, mỗi dòng mở đầu bằng mã rule. LLM#2 lỗi → code viết bằng mẫu sẵn.
+   - **Guard Python:** kiểm tra mọi `rule_id` mức `HIGH` đã khớp đều phải có mặt trong output; thiếu mã nào tự động nối thêm dòng cảnh báo của mã đó.
+5. **Bước 5 — Ráp tin trả lời (code), < 1800 ký tự:** Đã đối chiếu → 🔴 → 🟡 → `❔ Chưa có dữ liệu` → `🚫 Ngoài phạm vi` → `✅ Không phát hiện cảnh báo trong bảng tra hiện có` (chỉ khi không có khối nào ở trên; **không bao giờ nói "an toàn"**) → câu nhắc bổ sung → **"BS là người quyết định."**. Nếu `has_pii` → nhắc ẩn danh ở đầu tin và **không lặp lại** thông tin định danh.
 
 ### Hợp đồng đóng băng *(chốt lúc 11:00 — không đổi tên cột hay chữ ký hàm khi chưa báo cả nhóm)*
 
@@ -55,6 +57,7 @@
   `alias,canonical_id,display_name,entity_type,drug_class,notes,source`
   - `entity_type` ∈ `drug | condition | allergy | procedure`
   - Với `procedure`, cột `drug_class` ghi nhóm thủ thuật ∈ `invasive_bleeding | local_anesthesia | non_invasive`
+  - **Cập nhật 27/11 (PR #5):** một `alias` có thể có nhiều dòng — mỗi dòng một hoạt chất của thuốc phối hợp (cùng khai `combo:a+b` trong `notes`); không thêm cột. Code đọc alias thành danh sách, không đọc vào `dict`. Chi tiết: `docs/design.md` §4.3.
 - **`data/ddi_rules.csv`:**
   `rule_id,drug_a,drug_b,severity,mechanism,clinical_guidance,source`
   - `rule_id` dạng `DDI-001` · `severity` ∈ `HIGH | MODERATE`
@@ -62,7 +65,7 @@
   `rule_id,factor_type,factor_id,target_type,target_id,severity,mechanism,clinical_guidance,source`
   - `rule_id` dạng `CR-001` · `factor_type` ∈ `condition | allergy | baseline_drug` · `target_type` ∈ `planned_drug | procedure_group`
 - **Output chuẩn của mỗi tool tra cứu:** `list[dict]` với khóa `{rule_id, severity, a, b, mechanism, guidance, source}`.
-- **Điểm nối duy nhất:** `answer(text: str) -> {"output": str}` trong `codebase/agent.py` (dùng chung cho `run.py`, `eval`, `simulate` và `bot/zalo_bot.py`).
+- **Điểm nối duy nhất:** `answer(text: str) -> {"output": str, "needs_more": bool}` trong `codebase/agent.py` (dùng chung cho `run.py`, `eval`, `simulate` và `bot/zalo_bot.py`). `needs_more = True` khi tin trả lời mời BS nhắn bổ sung; bot dùng khoá này để ghép tin bổ sung với tin cũ (trong 10 phút, `/moi` bắt đầu ca mới — `docs/design.md` §9, Lĩnh làm sau khi bot ổn định). Khung BTC chỉ đọc `output`.
 - **Định dạng cột `expected` trong `eval/benchmark.csv`:**
   `HIGH: DDI-012, CR-004; MODERATE: ...; hành vi: cảnh báo|hỏi lại|từ chối|chưa có dữ liệu`
 
