@@ -94,9 +94,10 @@ Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` t
 |---|---|---|
 | Dữ liệu nền (`data/entity_aliases.csv`, `data/ddi_rules.csv`, `data/clinical_risk_rules.csv`) | **Thật** | Tổng hợp từ nguồn chính thống (QĐ 5948/QĐ-BYT, DDInter, SDCEP, AAOMS, Dược thư QG VN), chi tiết tại [data/DATA_CARD.md](data/DATA_CARD.md) |
 | Chuẩn hoá tên thuốc → hoạt chất (`normalize_entities`) | **Thật** | Trên `data/entity_aliases.csv` (248 dòng, gồm biệt dược VN và nhóm thủ thuật `local_anesthesia`); thuốc phối hợp (Coplavix, Lignospan…) tách thành mỗi hoạt chất một dòng |
-| Công cụ tra cứu DDI (`codebase/tools.py` — `check_drug_interactions`) | **Thật** (một phần ở CP2) | Tra tất định trên CSV khi đầu vào nêu rõ thuốc nền và thuốc định kê (bản CP2 chỉ nhận câu dạng "đang dùng … / dự định kê …"); mỗi rule có nguồn |
-| Rủi ro bệnh nền / dị ứng / thủ thuật | **Chưa bật ở CP2** | `data/clinical_risk_rules.csv` đã có rule có nguồn nhưng agent chưa gọi; output ghi rõ "các nhánh bệnh nền, dị ứng và thủ thuật chưa được kiểm" |
-| Lời gọi AI ở quyết định trung tâm (`codebase/ai.py`) | **Giả (CP2)** → **Thật (CP3)** | Hiện đang ở chế độ `MODEL_PROVIDER=fake` cho bản khung CP2 — `python run.py` in "gọi model 0 lần"; nối model thật trước CP3. Model: chưa nối ở CP2 |
+| Công cụ tra cứu DDI (`codebase/tools.py` — `check_drug_interactions`) | **Thật** | Tra tất định trên `data/ddi_rules.csv` mọi cặp có ít nhất một thuốc định kê, khớp theo hoạt chất hoặc nhóm thuốc; mỗi rule có nguồn |
+| Rủi ro bệnh nền / dị ứng / thủ thuật (`check_clinical_risks`) | **Thật** | Tra tất định trên `data/clinical_risk_rules.csv`: bệnh nền, dị ứng, thuốc nền × thuốc định kê / nhóm thủ thuật |
+| Chặn rủi ro (guardrail) | **Thật** | Code kiểm đủ mọi mã HIGH; chặn dòng model viết có mã bịa, liều hoặc chữ "an toàn"; từ chối 🚫 và nhắc ẩn danh bằng câu cố định; tin trả lời do code ráp. **Chưa làm:** regex bắt SĐT/CCCD, danh sách từ khoá vượt quyền (`docs/design.md` §11) |
+| Lời gọi AI ở quyết định trung tâm (`codebase/ai.py`) | **Thật** (từ CP3) | Tối đa 2 lần gọi mỗi ca: model 1 trích thực thể + cờ vượt quyền / định danh (JSON), model 2 diễn đạt lại các rule đã khớp. Model: `gemini-3.8-flash` (Google AI Studio, `MODEL_THINKING=low`). Không có `.env` thì chạy chế độ giả |
 | Bot Zalo (`bot/zalo_bot.py`) | **Thật** (vỏ mỏng) | Gọi chung `answer()`; chưa kiểm tài khoản Zalo ngoài nhắn vào được — xem `docs/team-plan.md` §E |
 | Dữ liệu bệnh nhân | **Giả lập** | Chỉ ca giả lập / đã ẩn danh, không dùng dữ liệu sức khoẻ của người thật |
 
@@ -107,7 +108,7 @@ Chi tiết từng việc: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đ�
 - **Nguyên:** dùng Claude Code (Claude Opus 5.5) để tìm và đọc nguồn cho `spec.md` §2–§3, viết `evidence/crawl_qa.py` / `count_qa.py` và luật thuốc phối hợp trong `data/build/`, soạn README; Nguyên kiểm tay 15/15 nhãn mẫu hỏi đáp và đọc lại từng nguồn trích.
 - **Trung:** dùng coding agent hỗ trợ soạn/đồng bộ tài liệu, biên bản và kiểm tra khung repo; trực tiếp thực hiện/xác nhận phỏng vấn BS RHM ngoài nhóm và duyệt lâm sàng 3 bảng dữ liệu.
 - **Lĩnh:** dùng Claude Code (Claude Opus 5.5) để đọc repo, đề xuất và soạn thiết kế luồng xử lý (`docs/design.md`, `spec.md` §4 §9, sơ đồ, cập nhật `team-plan.md` §B) và đối chiếu thiết kế với dữ liệu, bộ câu thử của nhóm; Lĩnh duyệt từng quyết định thiết kế (bác một số đề xuất, vd thêm trường JSON cho thuốc không rõ vai) trước khi commit.
-- **Đức:** dùng Antigravity (Gemini 4 Carbon) để đối chiếu dữ liệu trong repo, soạn nháp kịch bản chỗ khó (`spec.md` §5), 5 metric (`eval/metric_spec.yaml`) và rà tiêu chí cho phiếu chấm chéo CP2; Đức kiểm lại từng mã quy tắc theo CSV, chỉnh câu văn và tự duyệt kết luận chấm từng câu trước khi commit.
+- **Đức:** dùng Antigravity (Gemini 4 Carbon) để đối chiếu dữ liệu trong repo, soạn nháp kịch bản chỗ khó (`spec.md` §5), 5 metric (`eval/metric_spec.yaml`) và rà tiêu chí cho phiếu chấm chéo CP2; hỗ trợ kéo nội dung 48 câu AloBacsi để Đức đọc kiểm tay toàn bộ `48/48` nhãn (`qa_sample.csv`), tự kiểm từng mã quy tắc theo CSV, chỉnh câu văn và duyệt kết luận chấm từng câu trước khi commit.
 - Không dùng AI để tạo người được phỏng vấn, trích dẫn, câu trả lời khảo sát hay sửa kết quả các lượt đã chạy.
 
 ## File mẫu — điền ở bước nào
