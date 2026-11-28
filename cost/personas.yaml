@@ -38,6 +38,10 @@ prices:
     input: 0.25
     output: 1.50
     source: "Model đối chứng tầng Nhỏ (simulate yêu cầu >=2 mức giá) — Guide/further-reading/model-prices.md (https://ai.google.dev/gemini-api/docs/pricing, xem 25/11/2026)."
+  - model: gemini-4-argon
+    input: 4.00
+    output: 20.00
+    source: "Model đối chứng tầng Lớn (mức mạnh) — Guide/further-reading/model-prices.md (https://ai.google.dev/gemini-api/docs/pricing): dùng giá từ 01/12/2026 (giá đến 30/11/2026 là 2.00/10.00). Chỉ dùng để tính giá trên token đo bằng gemini-3.8-flash."
 
 usd_to_vnd:
   rate:
