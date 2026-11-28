@@ -57,6 +57,7 @@ ZALO_ALLOWED_CHAT_IDS=
    `Chào BS <tên>, BS vui lòng nhập mã mời để bắt đầu sử dụng trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần).`
 4. Nhắn đúng mã mời đã đặt ở `ZALO_INVITE_CODE` (hoặc `/join <mã>`). Bot phản hồi xác nhận kích hoạt kèm hướng dẫn dùng 5 ý và tự lưu `chat_id` vào `bot/allowed_chats.json`.
 5. Từ tin nhắn tiếp theo trở đi, cứ gửi ca bệnh trực tiếp — không cần nhập lại mã mời (kể cả sau khi khởi động lại bot).
+6. Khi bot hỏi lại (thiếu thuốc định kê, thủ thuật…), BS nhắn bổ sung trong 10 phút: bot ghép vào ca đang hỏi (design §9) và ghi chú đã ghép. Chuyển sang BN khác thì nhắn `/moi`. Ca đang chờ chỉ giữ trong RAM, tắt bot là mất.
 
 ---
 
@@ -96,6 +97,7 @@ Ghi output theo từng lượt và kiểm bot có báo đã gửi tin hay đưa 
 - Mỗi lượt chat được ghi vào `bot/logs/YYYYMMDD.jsonl` (đã thêm vào `.gitignore` — không đẩy lên GitHub).
 - Danh sách `chat_id` đã nhập đúng mã mời được lưu cục bộ tại `bot/allowed_chats.json` (đã thêm vào `.gitignore`), **chỉ lưu `chat_id`**, không lưu tên hiển thị hay thông tin cá nhân khác.
 - Trong log chỉ lưu hash 10 ký tự đầu của `chat_id`, không lưu token hay mã mời.
+- Bot thay SĐT và dãy 9–12 chữ số (CMND/CCCD/mã hồ sơ) bằng `[số định danh đã ẩn]` **trước khi** gọi model và ghi log, rồi tự hiện cảnh báo ⚠️ định danh. Họ tên BN không lọc được bằng code, vẫn dựa vào cờ `has_pii` của model.
 - Khi tổng hợp vào `validation/log.md` cho phần Bonus, **chỉ chép đoạn đã viết lại và bỏ tên**, không gắn thông tin nhận diện người thử.
 - Sau khi hoàn tất tổng hợp dữ liệu thử nghiệm, xoá thư mục `bot/logs/` (và `bot/allowed_chats.json` nếu muốn thu hồi quyền dùng thử).
 

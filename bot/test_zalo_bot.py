@@ -193,7 +193,7 @@ class ZaloBotInviteTests(unittest.TestCase):
 
         def _stub_run_agent(text: str):
             self.agent_calls.append(text)
-            return "fake output", {"models": ["fake"], "tokens_in": 1, "tokens_out": 2}
+            return "fake output", {"models": ["fake"], "tokens_in": 1, "tokens_out": 2}, False
 
         self._run_agent_patch = patch.object(bot_mod, "run_agent", side_effect=_stub_run_agent)
         self._run_agent_patch.start()
@@ -438,6 +438,87 @@ class ZaloBotInviteTests(unittest.TestCase):
         )
         self.assertNotIn("ImportError", proc.stderr)
         self.assertIn("Thiếu ZALO_BOT_TOKEN", proc.stderr)
+
+
+class ZaloBotCaseFlowTests(unittest.TestCase):
+    """Ghép tin bổ sung (design §9), lệnh /moi và ẩn số định danh trước khi gọi model / ghi log."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._orig_log_dir = bot_mod.LOG_DIR
+        self._orig_allowed = set(bot_mod.ALLOWED_CHAT_IDS)
+        bot_mod.LOG_DIR = Path(self._tmpdir.name) / "logs"
+        bot_mod.ALLOWED_CHAT_IDS = {"chat_a", "chat_b"}
+        bot_mod._pending.clear()
+        self.agent_calls: list[str] = []
+        self.needs_more = True
+
+        def _stub_run_agent(text: str):
+            self.agent_calls.append(text)
+            return "fake output", {"models": ["fake"], "tokens_in": 1, "tokens_out": 2}, self.needs_more
+
+        self._patch = patch.object(bot_mod, "run_agent", side_effect=_stub_run_agent)
+        self._patch.start()
+
+    def tearDown(self) -> None:
+        self._patch.stop()
+        bot_mod.LOG_DIR = self._orig_log_dir
+        bot_mod.ALLOWED_CHAT_IDS = self._orig_allowed
+        bot_mod._pending.clear()
+        self._tmpdir.cleanup()
+
+    def _send(self, chat_id: str, text: str) -> list[str]:
+        upd = _FakeUpdate(chat_id, text)
+        asyncio.run(bot_mod.on_text(upd, _FakeContext()))
+        return upd.message.replies
+
+    def test_follow_up_is_merged_with_pending_case(self) -> None:
+        self._send("chat_a", "BN đang uống warfarin. Dự kiến nhổ răng khôn.")
+        self.needs_more = False
+        replies = self._send("chat_a", "Định kê ibuprofen")
+        self.assertEqual(
+            self.agent_calls[-1],
+            "BN đang uống warfarin. Dự kiến nhổ răng khôn.\nBổ sung: Định kê ibuprofen",
+        )
+        self.assertIn("/moi", replies[-1])
+        # Ca đã đủ (needs_more=False) → tin sau không mang dữ kiện cũ.
+        self._send("chat_a", "BN uống aspirin, nhổ R38")
+        self.assertEqual(self.agent_calls[-1], "BN uống aspirin, nhổ R38")
+
+    def test_pending_is_per_chat_and_expires(self) -> None:
+        self._send("chat_a", "BN đang uống warfarin.")
+        self._send("chat_b", "Định kê ibuprofen")
+        self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
+        text, ts = bot_mod._pending["chat_a"]
+        bot_mod._pending["chat_a"] = (text, ts - bot_mod.PENDING_TTL_SEC - 1)
+        self._send("chat_a", "Định kê ibuprofen")
+        self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
+
+    def test_moi_command_clears_pending_without_calling_agent(self) -> None:
+        self._send("chat_a", "BN đang uống warfarin.")
+        calls = len(self.agent_calls)
+        replies = self._send("chat_a", "/moi")
+        self.assertEqual(len(self.agent_calls), calls)
+        self.assertEqual(replies, ["Đã bắt đầu ca mới."])
+        self.assertNotIn("chat_a", bot_mod._pending)
+        self._send("chat_a", "Định kê ibuprofen")
+        self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
+
+    def test_phone_and_id_numbers_are_masked_before_agent_and_log(self) -> None:
+        self.needs_more = False
+        replies = self._send("chat_a", "BN SĐT 0912 345 678, CCCD 001203004567, uống aspirin. Nhổ R38")
+        sent = self.agent_calls[-1]
+        self.assertNotIn("0912", sent)
+        self.assertNotIn("001203004567", sent)
+        self.assertIn("nhổ r38", sent.lower())
+        self.assertTrue(replies[0].startswith("⚠️"))
+        log_text = "".join(p.read_text(encoding="utf-8") for p in bot_mod.LOG_DIR.glob("*.jsonl"))
+        self.assertNotIn("0912", log_text)
+        self.assertNotIn("001203004567", log_text)
+
+    def test_clinical_numbers_are_not_masked(self) -> None:
+        text = "BN INR 2.5, HbA1c 7.2%, aspirin 81mg. Nhổ R48"
+        self.assertEqual(bot_mod.mask_identifiers(text), (text, False))
 
 
 if __name__ == "__main__":
