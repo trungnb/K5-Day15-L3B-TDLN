@@ -83,7 +83,11 @@ PROCEDURE_DRUG_CLASSES = frozenset({"local_anesthetic", "vasoconstrictor"})
 ANTITHROMBOTIC_CLASSES = frozenset({"vka", "doac", "lmwh", "antiplatelet", "p2y12_antiplatelet"})
 UNSPECIFIED_DRUG_CLASSES = {"anticoagulant_unspecified": ANTITHROMBOTIC_CLASSES,
                             "antiplatelet_unspecified": ANTITHROMBOTIC_CLASSES,
-                            "nsaid_unspecified": frozenset({"nsaid", "nsaid_cox2"})}
+                            "nsaid_unspecified": frozenset({"nsaid", "nsaid_cox2"}),
+                            "cephalosporin_unspecified": frozenset({"cephalosporin"})}   # log VM 16:09
+# Tên nhóm cần BS hỏi BN tên thuốc (bot giữ ca). Các tên nhóm khác là thuốc BS định kê: rule theo nhóm chạy, kèm ❔
+# CLASS_ONLY (rule riêng từng thuốc cần tên).
+ASK_NAME_CLASSES = frozenset({"anticoagulant_unspecified", "antiplatelet_unspecified"})
 STATUS_MARK = re.compile(r"\b(?:on dinh|kiem soat|dieu tri)\b")
 _STATUS_WORDS = re.compile(r"\b(?:on dinh|kiem soat|dieu tri|tot|kem|dang|da|chua|khong)\b")
 
