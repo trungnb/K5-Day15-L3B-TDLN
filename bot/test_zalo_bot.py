@@ -658,11 +658,12 @@ class ZaloBotCommunicationTests(unittest.TestCase):
             store.clear()
         self.calls: list[tuple[str, bool]] = []
         self.output = "fake output"
+        self.detail_output = "full output"
         self.needs_more = False
 
         def _stub_run_agent(text: str, detail: bool = False):
             self.calls.append((text, detail))
-            out = "full output" if detail else self.output
+            out = self.detail_output if detail else self.output
             return out, {"models": ["fake"], "tokens_in": 1, "tokens_out": 2}, self.needs_more
 
         self._patch = patch.object(bot_mod, "run_agent", side_effect=_stub_run_agent)
@@ -765,6 +766,23 @@ class ZaloBotCommunicationTests(unittest.TestCase):
         self.assertEqual(detail, ["full output"])
         self.assertIn("chat_a", bot_mod._last_case)
         self.assertEqual(self._log_records()[-1]["kind"], "detail")
+
+    def test_detail_sends_only_moderate_block(self) -> None:
+        # Tự thử 28/11/2026: "chi tiết" in lại cả bản tin (🔴, 📋…) nên BS phải đọc lại từ đầu.
+        self.output = "Em rà xong rồi ạ — có 1 nguy cơ cao, 1 cần thận trọng.\n🟡 Cần thận trọng:\n- [DDI-029] a. Nguồn: b."
+        self.detail_output = "\n".join([
+            "Em rà xong rồi ạ — có 1 nguy cơ cao, 1 cần thận trọng.",
+            "🔴 Nguy cơ cao:", "- [DDI-001] Ibuprofen + Warfarin → Tránh. Nguồn: DDInter.",
+            "🟡 Cần thận trọng:", "- [DDI-029] Paracetamol + Warfarin → Dùng ngắn ngày nhất có thể. Nguồn: DDInter.",
+            "📋 Em đã đối chiếu: Thuốc đang dùng: Warfarin",
+            bot_mod.AGENT_TEXT["FOOTER"]])
+        self._send("BN uống warfarin, kê Alaxan")
+        detail = "\n".join(self._send("chi tiết"))
+        self.assertTrue(detail.startswith("🟡 Cần thận trọng:"), detail)
+        self.assertIn("[DDI-029] Paracetamol + Warfarin → Dùng ngắn ngày nhất có thể", detail)
+        self.assertIn(bot_mod.AGENT_TEXT["FOOTER"], detail)
+        for gone in ("DDI-001", "Em rà xong", "📋"):
+            self.assertNotIn(gone, detail)
 
     def test_no_moderate_no_detail_hint(self) -> None:
         self.output = "🔴 Nguy cơ cao:\n- [DDI-001] a. Nguồn: b."
