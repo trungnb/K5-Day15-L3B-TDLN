@@ -6,88 +6,24 @@ Workflow cố định 5 bước, tối đa 2 lần gọi model mỗi ca:
        Code: bảng quyết định thiếu thông tin (§6)
     3. Code: tra 2 bảng quy tắc                                       (tools.check_*)
     4. Model lần 2: viết mỗi rule đã khớp thành một dòng (chỉ khi có rule) + code kiểm đủ mã HIGH
-    5. Code: ráp tin trả lời bằng câu chữ cố định
+    5. Code: ráp bản tin có cấu trúc (reply.Reply) bằng câu chữ cố định (texts.py)
 
-Hợp đồng: answer(text) -> {"output": str, "needs_more": bool}. Không có bộ nhớ giữa các lần gọi.
+Hợp đồng: answer(text) -> {"output": str, "needs_more": bool, "reply": Reply}. Eval đọc `output`; bot in `reply`.
+Không có bộ nhớ giữa các lần gọi (tin bổ sung bot ghép vào tin: followups.py).
 """
 import json
 import re
-import unicodedata
 from collections import Counter
+from dataclasses import dataclass
 
+import followups
 from ai import call_model
-from tools import (check_clinical_risks, check_drug_interactions, known_condition_with_status, normalize_entities,
-                   normalize_text)
+from reply import Alert, Reply, render_text
+from texts import OUT_OF_SCOPE, TEXT  # noqa: F401  (bot và test đọc agent.TEXT)
+from tools import (check_clinical_risks, check_drug_interactions, fold, known_condition_with_status,
+                   normalize_entities, normalize_text, rule_behavior)
 from tracing import note
 
-# ------------------------------------------------------------------ câu chữ cố định (design §7)
-# Đổi câu chữ thì sửa ở đây và ở docs/design.md §7 — metric và người chấm dựa vào nguyên văn.
-
-TEXT = {
-    "Q0": "Anh/chị nhắn em 1 tin gồm (nếu có): bệnh nền, dị ứng, thuốc đang dùng, thủ thuật dự kiến, thuốc định kê nhé. "
-          "Ví dụ: BN 65t uống Sintrom, ĐTĐ. Dự kiến nhổ R48. Định kê Augmentin + Ibuprofen.",
-    "Q1": "Anh/chị cho em biết thêm: thuốc nào BN đang dùng, thuốc nào định kê, và định làm thủ thuật gì? "
-          "Em đối chiếu ngay.",
-    # Q2–Q4 không nhắc lại "chưa có …": mục "Đã đối chiếu" đã ghi "không khai" (Trung duyệt 28/11, tin gọn).
-    "Q2": "Nếu có thuốc định kê, anh/chị nhắn thêm tên để em kiểm tương tác.",
-    "Q3": "Nếu có thủ thuật dự kiến, anh/chị nhắn thêm để em kiểm.",
-    "Q4": "Nếu BN có bệnh nền, dị ứng hoặc thuốc đang dùng, anh/chị gửi lại cả ca kèm các mục đó để em kiểm lại.",
-    "Q1_DRUG": "Em nhận ra {names}. Thuốc này BN đang dùng hay anh/chị định kê, và định làm thủ thuật gì ạ? "
-               "Nhắn thêm để em đối chiếu nhé.",
-    "Q1_DRUGS": "Em nhận ra {names}. Thuốc nào BN đang dùng, thuốc nào anh/chị định kê, và định làm thủ thuật gì ạ? "
-                "Nhắn thêm để em đối chiếu nhé.",
-    "Q5": "BN dị ứng thuốc tê. Thủ thuật này có gây tê không ạ? Có thì nhắn \"có gây tê\" để em kiểm.",
-    "Q6": "Bệnh nền \"{names}\" em chưa nhận ra. Anh/chị ghi rõ tên bệnh và tình trạng (ổn định chưa, đang điều trị gì, "
-          "chỉ số gần nhất nếu có) để em kiểm.",
-    "Q7": "Ca đang chuẩn bị hay đang làm thủ thuật, có chảy máu khó cầm không ạ?",
-    # Trung chốt 28/11: thủ thuật chảy máu mà chưa khai thuốc đang dùng → luôn hỏi (stent, van tim, đột quỵ… không cần luật riêng).
-    "Q8": "BN có dùng thuốc chống đông hoặc kháng tiểu cầu không? Có thì nhắn tên thuốc để em kiểm.",
-    "NO_PAIR_RULE": "ℹ️ Bảng tra chưa có quy tắc cho cặp: {pairs} — anh/chị tự đánh giá lâm sàng.",
-    "SIDE_EFFECT_LIMIT": "ℹ️ Em chỉ rà tương tác và nguy cơ theo ca, không tra tác dụng phụ chung của thuốc — "
-                         "BS xem Dược thư Quốc gia / tờ hướng dẫn sử dụng.",
-    "HELLO": "Dạ em đây ạ. Em là trợ lý AI đối chiếu tương tác thuốc và rủi ro thủ thuật RHM theo bảng tra có nguồn — "
-             "không kê đơn, không tư vấn liều.",
-    "HELLO_AGAIN": "Dạ em đây ạ, anh/chị gửi ca nhé.",
-    "BYE": "Dạ, chào anh/chị ạ.",
-    "REPAIR": "Em vẫn chưa nhận ra thuốc hay thủ thuật nào trong tin này. Anh/chị thử gõ theo mẫu: "
-              "\"BN uống <thuốc đang dùng>. Dự kiến <thủ thuật>. Định kê <thuốc>.\" Nhắn /huongdan để xem đủ.",
-    "THANKS": "Dạ không có gì ạ. Có ca mới anh/chị cứ nhắn em.",
-    "P1": "⚠️ Tin nhắn có thông tin định danh BN — lần sau anh/chị gửi ca đã ẩn danh giúp em nhé.",
-    "UNMAPPED": "❔ Em chưa có dữ liệu cho: {names}, nên không đoán. Anh/chị ghi tên đầy đủ / hoạt chất để em tra lại, "
-                "hoặc tra Dược thư Quốc gia / tờ hướng dẫn sử dụng.",
-    "UNMAPPED_UNNAMED": "❔ Chưa rõ tên thuốc: {names} — em chưa kiểm được. Anh/chị nhờ BN xem vỏ hộp, đơn cũ hoặc "
-                        "sổ khám rồi nhắn thêm tên nhé.",
-    "UNMAPPED_OTHER": "❔ Em chưa có quy tắc cho: {names} — phần này anh/chị tự đánh giá nhé.",
-    "MANY_PATIENTS": "Tin này có vẻ gồm nhiều BN. Anh/chị gửi mỗi ca một tin giúp em, để em không trộn thuốc "
-                     "của người này sang người kia nhé.",
-    "OK": "✅ Em chưa thấy cảnh báo nào trong bảng tra. Bảng tra chưa phủ mọi tương tác, không thay đánh giá lâm sàng "
-          "của anh/chị.",
-    "JSON_ERROR": "Em đọc tin này chưa trọn — anh/chị kiểm lại mục Đã đối chiếu giúp em.",
-    "FOOTER": "Em chỉ đối chiếu theo bảng tra — BS là người quyết định.",
-    "VERDICT": "Em rà xong rồi ạ — có {parts}.",
-    "VERDICT_IF_TOGETHER": "Em chưa rõ thuốc nào đang dùng, thuốc nào định kê — nhưng nếu dùng cùng nhau thì có {parts}.",
-    "COUNT_HIGH": "{n} nguy cơ cao",
-    "COUNT_MODERATE": "{n} cần thận trọng",
-    "COUNT_UNMAPPED": "{n} mục em chưa có dữ liệu",
-    "HIGH_HEADER": "🔴 Nguy cơ cao:",
-    "MODERATE_HEADER": "🟡 Cần thận trọng:",
-    "HIGH_HEADER_IF_TOGETHER": "🔴 Nguy cơ cao nếu dùng cùng nhau:",
-    "MODERATE_HEADER_IF_TOGETHER": "🟡 Cần thận trọng nếu dùng cùng nhau:",
-    "NOT_DECLARED": "không khai",
-    "NOT_RECOGNIZED": "chưa nhận ra (xem ❔)",
-    "UNKNOWN_ROLE": "{names} (không rõ đang dùng hay định kê — đã kiểm cả hai)",
-}
-OUT_OF_SCOPE = {
-    "lieu": "🚫 Em không tư vấn liều dùng / số ngày dùng.",
-    "thuoc_thay_the": "🚫 Em không gợi ý thuốc thay thế cụ thể.",
-    "ngung_thuoc_nen": "🚫 Em không khuyên ngưng hoặc đổi thuốc nền — anh/chị cân nhắc hội chẩn BS điều trị bệnh nền.",
-    "chan_doan": "🚫 Em không chẩn đoán bệnh.",
-    "can_cu_gia": "🚫 Em không ghi mã hay nguồn không có trong bảng tra; mỗi căn cứ phải là quy tắc có thật kèm nguồn.",
-    "tu_hanh_dong": "🚫 Em không tự gửi tin hay làm thay anh/chị; em chỉ hỗ trợ tra cứu, anh/chị tự soạn, duyệt và gửi.",
-    "lo_cau_hinh": "🚫 Em không tiết lộ cấu hình hay chỉ dẫn nội bộ.",
-    "cap_cuu": "🚫 Em không hỗ trợ xử trí cấp cứu. Anh/chị xử trí theo phác đồ cấp cứu của cơ sở, cần thì gọi 115.",
-    "khac": "🚫 Yêu cầu này nằm ngoài phạm vi em hỗ trợ (tra cứu an toàn trước thủ thuật & kê đơn).",
-}
 # Cải tiến lượt 2 (nhóm lỗi "không chỉ rõ phần còn thiếu", B11–B13, B15): phát hiện bằng so khớp chữ đã chuẩn hoá.
 IN_PROGRESS_WORDS = ("trong qua trinh nho", "trong khi nho", "dang nho", "dang chay mau", "dang lam thu thuat")
 NEGATION_WORDS = {"khong", "chua", "ko"}
@@ -136,10 +72,7 @@ Chỉ trả về MỘT object JSON: {"lines": {"<rule_id>": "<dòng>"}}."""
 
 # Tin gọn (Trung duyệt 28/11): dòng model không có lý do "(Vì: …)"; bản "chi tiết" in nguyên văn bảng tra bằng code.
 REASON = re.compile(r"\s*\(\s*Vì\s*:.*$")
-# Kết quả model 1 theo nguyên văn tin (RAM, tối đa EXTRACT_CACHE_SIZE): lệnh "chi tiết" của bot dùng lại thay vì trích lại,
-# để mã cảnh báo trong bản đủ không khác tin đầu. Chỉ dùng lại khi detail=True; eval (detail=False) luôn gọi model.
-EXTRACT_CACHE_SIZE = 64
-_EXTRACT_CACHE: dict = {}
+SOURCE_TAIL = re.compile(r"\s*Nguồn\s*:.*$")
 
 # ------------------------------------------------------------------ tiện ích
 
@@ -169,19 +102,12 @@ _SMALL_TALK = (
 _SMALL_TALK_COMPACT = tuple((kind, re.compile(p.pattern.replace(" ", ""))) for kind, p in _SMALL_TALK)
 
 
-def _plain(text: str) -> str:
-    """Chữ thường, bỏ dấu tiếng Việt và dấu câu, gộp khoảng trắng."""
-    text = unicodedata.normalize("NFD", (text or "").lower().replace("đ", "d"))
-    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
-    return " ".join(re.sub(r"[^a-z0-9 ]+", " ", text).split())
-
-
 def small_talk_kind(text: str):
     """Loại tin xã giao: "greet" (chào), "help" (hỏi bot làm gì), "thanks", "bye"; không phải xã giao → None.
     Bot dùng loại "greet" để chào lại ngắn trong 12 giờ (design §9)."""
     if len(text or "") > 60:
         return None
-    words = [w for w in _plain(text).split() if w not in _FILLER]
+    words = [w for w in fold(text).split() if w not in _FILLER]
     core = " ".join(words)   # rỗng khi chỉ toàn từ đệm ("dạ", "em ơi") → không coi là xã giao
     for kind, pattern in _SMALL_TALK:
         if core and pattern.fullmatch(core):
@@ -193,21 +119,15 @@ def small_talk_kind(text: str):
     return None
 
 
-def small_talk_reply(text: str):
-    """Trả câu đáp cố định nếu cả tin chỉ là xã giao; ngược lại None. Bot cũng gọi hàm này để không ghép
-    "cảm ơn" vào ca đang chờ bổ sung (design §9)."""
-    kind = small_talk_kind(text)
-    if kind is None:
-        return None
+def small_talk_text(kind: str) -> str:
+    """Câu đáp cố định cho một loại tin xã giao (small_talk_kind)."""
     return {"thanks": TEXT["THANKS"], "bye": TEXT["BYE"]}.get(kind, TEXT["HELLO"] + "\n" + TEXT["Q0"])
 
 
-def is_no_entity_reply(output: str) -> bool:
-    """True khi câu trả lời là tình huống 1/2 (§6): không nhận ra thực thể nào, chỉ hỏi lại Q1.
-    Bot dùng để đổi lần hỏi lại thứ 2 liên tiếp sang câu mẫu REPAIR (design §9)."""
-    out = output or ""
-    return (TEXT["Q1"] in out and "Đã đối chiếu —" not in out
-            and not any(mark in out for mark in ("❔", "🔴", "🟡")))
+def small_talk_reply(text: str):
+    """Câu đáp cố định nếu cả tin chỉ là xã giao; ngược lại None."""
+    kind = small_talk_kind(text)
+    return small_talk_text(kind) if kind else None
 
 
 # Số thứ tự BN: số đứng ngay sau bn/ca, sau số là ":" "." ")" "-", hết tin, hoặc một từ không phải đơn vị
@@ -216,29 +136,21 @@ _PATIENT_NO = re.compile(r"\b(?:bn|benh nhan|ca)\s*(?:so\s*)?([1-9])"
                          r"(?=\s*[:.)\-]|\s*$|\s+(?!(?:tuoi|tuan|ngay|thang|nam|rang|lan|vien|ben|cai|ham|gio)\b)\w)")
 # BS ghi rõ BN không dùng thuốc → không hỏi Q8.
 _NO_MEDS = re.compile(r"\b(?:khong|ko|k|chua)\s+(?:dung|uong|su dung|co)\s+thuoc\b")
-# Mỗi lượt chỉ hỏi MỘT câu (Trung chốt 28/11), theo thứ tự QUESTION_ORDER. Mỗi dòng bot ghép "Bổ sung: <tin>"
-# (design §9) trả lời câu đang hỏi lúc đó (câu mở đầu tiên): "không" / "ko" / "không có" / "chưa"… trơn đóng câu đó
-# (Q8: không dùng thuốc; Q5: không gây tê; Q2/Q3: không kê / không làm thêm); Q7 còn đóng khi BS nói giai đoạn
-# ("đang chuẩn bị", "chưa nhổ"…). Tin có thêm chữ khác ("không gây tê", "để em hỏi BN") không đóng câu nào —
-# câu đó chỉ hết khi thông tin mới làm nó không còn cần (vd nhắn tên thuốc).
-QUESTION_ORDER = ("Q5", "Q7", "Q6", "Q8", "Q2", "Q3")
+# Câu trả lời "không" trơn cho câu đang hỏi, và câu nói giai đoạn thủ thuật (đóng Q7) — xem _open_questions.
 _BARE_NO = re.compile(r"(?:bn |benh nhan )?(?:khong|ko|k|hong|hok|chua|no)(?: (?:co|dung|uong|su dung|thuoc|gi|nao|het))*")
 _STAGE_REPLY = re.compile(r"\b(?:chuan bi|chua (?:lam|nho)|dang (?:lam|nho)|xong|chay mau|cam mau)\b")
+_UNNAMED = re.compile(r"^thuoc\b|\b(?:khong|ko|k|chua) (?:nho|ro|biet)(?: ten)?\b|\bquen ten\b")
 
 
 def _replies(text: str) -> list:
-    """Phần chữ (bỏ dấu, bỏ từ đệm) của từng dòng "Bổ sung: …" bot đã ghép, theo thứ tự."""
-    out = []
-    for line in (text or "").split("\n"):
-        words = _plain(line).split()
-        if words[:2] == ["bo", "sung"]:
-            out.append(" ".join(w for w in words[2:] if w not in _FILLER))
-    return out
+    """Phần chữ (bỏ dấu, bỏ từ đệm) của từng tin bổ sung bot đã ghép (followups.merge), theo thứ tự."""
+    return [" ".join(w for w in words if w not in _FILLER) for words in followups.replies(text)]
 
 
 def _open_questions(pending: list, replies: list) -> list:
     """Câu còn phải hỏi: lần lượt từng câu trả lời đóng câu đang hỏi lúc đó (câu mở đầu tiên) nếu là "không" trơn
-    hoặc (Q7) nói giai đoạn thủ thuật."""
+    hoặc (Q7) nói giai đoạn thủ thuật. Tin có thêm chữ khác ("không gây tê", "để em hỏi BN") không đóng câu nào —
+    câu đó chỉ hết khi thông tin mới làm nó không còn cần (vd nhắn tên thuốc)."""
     closed = set()
     for core in replies:
         still = [q for q in pending if q not in closed]
@@ -249,20 +161,15 @@ def _open_questions(pending: list, replies: list) -> list:
     return [q for q in pending if q not in closed]
 
 
-# Rule đã hỏi thuốc chống đông trong hướng xử trí → không lặp Q8.
-ASKS_ANTICOAG_RULES = frozenset({"CR-021"})
-_UNNAMED = re.compile(r"^thuoc\b|\b(?:khong|ko|k|chua) (?:nho|ro|biet)(?: ten)?\b|\bquen ten\b")
-
-
 def _many_patients(text: str) -> bool:
     """Tin đánh số ≥ 2 BN khác nhau ("BN1 … BN2 …", "Ca 1: … Ca 2: …") → không ghép thuốc của hai người vào một ca."""
-    return len(set(_PATIENT_NO.findall(_plain(text)))) >= 2
+    return len(set(_PATIENT_NO.findall(fold(text)))) >= 2
 
 
 def _unmapped_blocks(n: dict, extracted, asked=()) -> tuple:
     """❔ tách theo loại (design §7, 28/11): thuốc lạ → xin tên đầy đủ / hoạt chất; thuốc không rõ tên
     ("thuốc chống đông không nhớ tên") → nhờ hỏi BN; bệnh nền / dị ứng / thủ thuật → chưa có quy tắc, BS tự đánh giá.
-    `asked`: bệnh nền đã được hỏi lại bằng Q6 (run-2) thì không in thêm ❔ cho cùng chữ.
+    `asked`: bệnh nền đang được hỏi lại bằng Q6 thì không in thêm ❔ cho cùng chữ.
     Trả (list khối, có_thuốc_chưa_rõ_tên)."""
     drugs, unnamed, other = [], [], []
     extracted = extracted or {}
@@ -273,7 +180,7 @@ def _unmapped_blocks(n: dict, extracted, asked=()) -> tuple:
         if phrase not in drug_phrases and any(phrase in extracted.get(k, [])
                                               for k in ("conditions", "allergies", "planned_procedures")):
             other.append(phrase)
-        elif _UNNAMED.search(_plain(phrase)):
+        elif _UNNAMED.search(fold(phrase)):
             unnamed.append(phrase)
         else:
             drugs.append(phrase)
@@ -325,7 +232,7 @@ def _names(entities, exclude=()):
 
 
 def _source(rule):
-    return REVIEW_NOTE.sub("", rule["source"]).strip()
+    return REVIEW_NOTE.sub("", rule["source"]).strip().rstrip(" .")
 
 
 def _short(names: str) -> str:
@@ -370,8 +277,8 @@ def _valid_model_line(line: object, rule: dict) -> bool:
 
 def _write_rule_lines(rules):
     """Bước 4: model lần 2 viết mỗi rule một dòng; code kiểm từng dòng, dòng hỏng / thiếu thì dùng khung §7.
-    Trả dict rule_id → dòng (đã kèm nguồn). Mọi rule đã khớp đều có dòng — gồm chắc chắn mọi mã HIGH.
-    Model vẫn viết "(Vì: …)" thì bỏ đi rồi mới kiểm dòng (số của guidance phải còn đủ)."""
+    Trả dict rule_id → dòng (chưa kèm nguồn). Mọi rule đã khớp đều có dòng — gồm chắc chắn mọi mã HIGH.
+    Model vẫn viết "Nguồn: …" / "(Vì: …)" thì bỏ đi rồi mới kiểm dòng (số của guidance phải còn đủ)."""
     payload = [{"rule_id": r["rule_id"], "a": _short(r["a"]), "b": _short(r["b"]),
                 "mechanism": r["mechanism"], "guidance": r["guidance"]} for r in rules]
     model_lines = {}
@@ -389,13 +296,11 @@ def _write_rule_lines(rules):
         rid = rule["rule_id"]
         line = model_lines.get(rid)
         if isinstance(line, str):
-            line = REASON.sub("", re.sub(r"\s*Nguồn\s*:.*$", "", line.strip()))
-        if _valid_model_line(line, rule):
-            text = re.sub(r"\s*Nguồn\s*:.*$", "", line.strip())
-        else:
-            text = _template_line(rule)
+            line = REASON.sub("", SOURCE_TAIL.sub("", line.strip())).strip()
+        if not _valid_model_line(line, rule):
+            line = _template_line(rule)
             (missing_high if rule["severity"] == "HIGH" else fallback).append(rid)
-        lines[rid] = "%s. Nguồn: %s." % (text.rstrip(" ."), _source(rule).rstrip(" ."))
+        lines[rid] = line.rstrip(" .")
     if missing_high:
         note("nối mã HIGH thiếu bằng khung: %s" % ", ".join(missing_high))
     if fallback:
@@ -403,12 +308,11 @@ def _write_rule_lines(rules):
     return lines
 
 
-def _checked_line(n, said, asking_roles=False, skip_drugs=False):
-    """Mục 'Đã đối chiếu' (design §7 khối 2): chỉ tên thuốc, bệnh, thủ thuật — không nhắc thông tin định danh.
-    Nhóm trống: BS không ghi → "không khai"; BS có ghi nhưng không có trong bảng → "chưa nhận ra (xem ❔)".
+def _checked_groups(n, said, asking_roles=False, skip_drugs=False):
+    """Mục 'Đã đối chiếu' (design §7 khối 2) dạng (nhãn, giá trị): chỉ tên thuốc, bệnh, thủ thuật — không thông tin
+    định danh. Nhóm trống: BS không ghi → "không khai"; BS có ghi nhưng không có trong bảng → "chưa nhận ra (xem ❔)".
     asking_roles=True (tình huống 3, đang hỏi lại Q1): không tự gán thuốc là "đang dùng" — ghi "Thuốc đã nêu";
-    chỉ in nhóm BS có ghi (đang hỏi lại nên "không khai" chỉ thêm nhiễu); skip_drugs=True khi câu hỏi đã nêu tên thuốc.
-    Không còn nhóm nào → trả chuỗi rỗng."""
+    chỉ in nhóm BS có ghi (đang hỏi lại nên "không khai" chỉ thêm nhiễu); skip_drugs=True khi câu hỏi đã nêu tên thuốc."""
     unknown_ids = {e["canonical_id"] for e in n["unknown_role_drugs"]}
     if asking_roles:
         groups = [
@@ -418,9 +322,8 @@ def _checked_line(n, said, asking_roles=False, skip_drugs=False):
         ]
         if skip_drugs:
             groups = groups[:2]
-        parts = ["%s: %s" % (label, ", ".join(names) if names else TEXT["NOT_RECOGNIZED"])
-                 for label, key, names in groups if names or said[key]]
-        return "Đã đối chiếu — " + " · ".join(parts) if parts else ""
+        return [(label, ", ".join(names) if names else TEXT["NOT_RECOGNIZED"])
+                for label, key, names in groups if names or said[key]]
     groups = [
         ("Bệnh nền", "conditions", _names(n["conditions"])),
         ("Dị ứng", "allergies", _names(n["allergies"])),
@@ -428,12 +331,12 @@ def _checked_line(n, said, asking_roles=False, skip_drugs=False):
         ("Thủ thuật", "planned_procedures", _names(n["procedure_groups"])),
         ("Thuốc định kê", "planned_drugs", _names(n["planned_drugs"], exclude=unknown_ids)),
     ]
-    parts = ["%s: %s" % (label, ", ".join(names) if names
-                         else TEXT["NOT_RECOGNIZED"] if said[key] else TEXT["NOT_DECLARED"])
+    parts = [(label, ", ".join(names) if names else TEXT["NOT_RECOGNIZED"] if said[key] else TEXT["NOT_DECLARED"])
              for label, key, names in groups]
     if n["unknown_role_drugs"]:
-        parts.append("Thuốc chưa rõ vai: " + TEXT["UNKNOWN_ROLE"].format(names=", ".join(_names(n["unknown_role_drugs"]))))
-    return "Đã đối chiếu — " + " · ".join(parts)
+        parts.append(("Thuốc chưa rõ vai",
+                      TEXT["UNKNOWN_ROLE"].format(names=", ".join(_names(n["unknown_role_drugs"])))))
+    return parts
 
 
 def _mentions(text: str, phrases: tuple) -> bool:
@@ -477,22 +380,9 @@ def _pairs_without_rule(n: dict, rules: list, limit: int = 3) -> list:
     return pairs[:limit]
 
 
-def _extract(text: str, reuse: bool = False) -> str:
-    """Bước 1: model 1 trích thực thể. reuse=True (lệnh "chi tiết") dùng lại kết quả đã có của cùng tin nếu còn trong RAM."""
-    if reuse and text in _EXTRACT_CACHE:
-        note("chi tiết: dùng lại kết quả model 1 của tin đầu")
-        return _EXTRACT_CACHE[text]
-    reply = call_model(SYSTEM_EXTRACT, "Tin nhắn của BS:\n<<<\n%s\n>>>" % text, json_mode=True)
-    _EXTRACT_CACHE.pop(text, None)
-    _EXTRACT_CACHE[text] = reply["text"]
-    while len(_EXTRACT_CACHE) > EXTRACT_CACHE_SIZE:
-        _EXTRACT_CACHE.pop(next(iter(_EXTRACT_CACHE)))
-    return reply["text"]
-
-
-def _finish(blocks, needs_more):
-    blocks.append(TEXT["FOOTER"])
-    return {"output": "\n".join(b for b in blocks if b), "needs_more": needs_more}
+def _extract(text: str) -> str:
+    """Bước 1: model 1 trích thực thể."""
+    return call_model(SYSTEM_EXTRACT, "Tin nhắn của BS:\n<<<\n%s\n>>>" % text, json_mode=True)["text"]
 
 
 def _verdict(rules: list, n_unmapped: int, together: bool = False) -> str:
@@ -507,51 +397,35 @@ def _verdict(rules: list, n_unmapped: int, together: bool = False) -> str:
     return TEXT["VERDICT_IF_TOGETHER" if together else "VERDICT"].format(parts=", ".join(parts))
 
 
-def _compact_line(rule: dict) -> str:
-    """Dòng 🟡 gọn (Trung duyệt 28/11): mã + cặp + câu đầu của cơ chế (nguyên văn bảng tra) + nguồn.
-    Không in hướng xử trí; bot cho xem bản đủ qua lệnh "chi tiết" (answer(text, detail=True))."""
-    risk = re.split(r"(?<=[.;])\s", rule["mechanism"].strip(), maxsplit=1)[0].rstrip(" .;")
-    return "[%s] %s + %s: %s. Nguồn: %s." % (rule["rule_id"], _short(rule["a"]), _short(rule["b"]), risk,
-                                             _source(rule).rstrip(" ."))
-
-
-# Rule 🟡 vẫn in đủ (hướng xử trí) khi 🟡 gọn: giá trị nằm ở hành động trong guidance, dòng gọn sẽ mất nó.
-# CR-021 rung nhĩ × thủ thuật chảy máu → "hỏi thuốc chống đông" (Trung chốt 28/11/2026).
-FULL_MODERATE = frozenset({"CR-021"})
-
-
 def _detail_line(rule: dict) -> str:
     """Dòng bản "chi tiết" (28/11): nguyên văn bảng tra — hướng xử trí, cơ chế, nguồn — bằng code, không qua model 2,
     vì dòng model viết gọn có thể bỏ ý mà bước kiểm số không bắt được."""
-    return "%s (Vì: %s). Nguồn: %s." % (_template_line(rule), rule["mechanism"].strip().rstrip(" ."),
-                                        _source(rule).rstrip(" ."))
+    return "%s (Vì: %s). Nguồn: %s." % (_template_line(rule), rule["mechanism"].strip().rstrip(" ."), _source(rule))
 
 
-def _alert_blocks(rules: list, together: bool = False, detail: bool = False) -> list:
-    """Bước 4: model 2 viết dòng cảnh báo (đã kiểm), xếp vào khối 🔴 / 🟡. Mặc định 🟡 in dòng gọn bằng code
-    (không gọi model 2 cho MODERATE); detail=True in nguyên văn bảng tra cho mọi mã (không gọi model 2)."""
-    if not rules:
-        return []
-    if detail:
-        lines = {r["rule_id"]: _detail_line(r) for r in rules}
-    else:
-        full = [r for r in rules if r["severity"] == "HIGH" or r["rule_id"] in FULL_MODERATE]
-        lines = _write_rule_lines(full) if full else {}
-        lines.update({r["rule_id"]: _compact_line(r) for r in rules if r not in full})
-    suffix = "_IF_TOGETHER" if together else ""
-    blocks = []
-    for severity in ("HIGH", "MODERATE"):
-        chosen = [lines[r["rule_id"]] for r in rules if r["severity"] == severity]
-        if chosen:
-            blocks.append(TEXT[severity + "_HEADER" + suffix] + "\n" + "\n".join("- " + line for line in chosen))
-    return blocks
+def _alerts(rules: list) -> list:
+    """Bước 4: mọi rule đã khớp thành Alert. 🔴 và rule có show_full_guidance (data/rule_behavior.csv) do model 2 viết
+    (đã kiểm); 🟡 còn lại in dòng gọn bằng code (Trung duyệt 28/11): mã + cặp + câu đầu của cơ chế, không hướng xử trí."""
+    full = [r for r in rules if r["severity"] == "HIGH" or rule_behavior(r["rule_id"])["show_full_guidance"]]
+    written = _write_rule_lines(full) if full else {}
+    alerts = []
+    for rule in rules:
+        rid, head = rule["rule_id"], ""
+        if rid in written:
+            text = written[rid]
+        else:
+            head = "[%s] %s + %s" % (rid, _short(rule["a"]), _short(rule["b"]))
+            risk = re.split(r"(?<=[.;])\s", rule["mechanism"].strip(), maxsplit=1)[0].rstrip(" .;")
+            text = "%s: %s" % (head, risk)
+        alerts.append(Alert(rid, rule["severity"], text, _source(rule), _detail_line(rule), head))
+    return alerts
 
 
 def _sort(rules: list) -> list:
     return sorted(rules, key=lambda r: (0 if r["severity"] == "HIGH" else 1, r["rule_id"]))
 
 
-def _roles_unknown(head, n, said, unmapped, refusals, text="", detail=False):
+def _roles_unknown(head, n, said, unmapped, refusals, text=""):
     """Tình huống 3: có thuốc nhưng chưa rõ vai, chưa có thủ thuật. Hỏi lại Q1, và nếu các thuốc đã nêu
     có tương tác trong bảng thì cảnh báo CÓ ĐIỀU KIỆN "nếu dùng cùng nhau" (B04–B07) — không tự gán vai."""
     drugs = n["baseline_drugs"]
@@ -559,41 +433,110 @@ def _roles_unknown(head, n, said, unmapped, refusals, text="", detail=False):
     if rules:
         note("tình huống 3: cảnh báo có điều kiện %s" % ", ".join(r["rule_id"] for r in rules))
     names = [_short(x) for x in _names(drugs)]
-    if names:   # hỏi thẳng tên thuốc vừa nêu; tên đã có trong câu hỏi thì mục "Đã đối chiếu" không lặp lại
-        question = TEXT["Q1_DRUG" if len(names) == 1 else "Q1_DRUGS"].format(names=", ".join(names))
-    else:
-        question = TEXT["Q1"]
-    checked = _checked_line(n, said, asking_roles=True, skip_drugs=bool(names))
-    blocks = head + [_verdict(rules, 0, together=True)] + _alert_blocks(rules, together=True, detail=detail)
+    key = ("Q1_DRUG" if len(names) == 1 else "Q1_DRUGS") if names else "Q1"
     limit = TEXT["SIDE_EFFECT_LIMIT"] if _mentions(text, SIDE_EFFECT_WORDS) else ""
-    blocks += [unmapped, limit] + refusals + [checked, question]
-    return _finish(blocks, True)
+    return Reply(head=head, verdict=_verdict(rules, 0, together=True), alerts=_alerts(rules), together=True,
+                 notes=[unmapped, limit], refusals=refusals,
+                 # tên đã có trong câu hỏi thì mục "Đã đối chiếu" không lặp lại
+                 checked=_checked_groups(n, said, asking_roles=True, skip_drugs=bool(names)),
+                 question=TEXT[key].format(names=", ".join(names)), question_key=key, needs_more=True)
 
 
-def _reminders(questions, has_background, bad_conditions=()):
-    """Câu nhắc cuối tin: chỉ MỘT câu hỏi mỗi lượt (câu mở đầu tiên theo QUESTION_ORDER, Trung chốt 28/11); có câu hỏi
-    thì giữ ca chờ ghép (needs_more). Hết câu hỏi mới nhắc Q4 — Q4 chỉ nhắc (BS gửi lại cả ca), không giữ ca."""
+# ------------------------------------------------------------------ câu hỏi tiếp (bảng quyết định §6)
+
+@dataclass
+class _Case:
+    """Những gì bảng câu hỏi tiếp cần biết về một ca (sau bước 2–3)."""
+    text: str
+    n: dict
+    said: dict
+    rules: list
+    bad_conditions: list
+
+    @property
+    def has_procedure(self) -> bool:
+        return bool(self.n["procedure_groups"]) or self.said["planned_procedures"]
+
+    @property
+    def has_planned(self) -> bool:
+        return bool(self.n["planned_drugs"]) or self.said["planned_drugs"]
+
+    @property
+    def bleeding_procedure(self) -> bool:
+        return any(p["drug_class"] == "invasive_bleeding" for p in self.n["procedure_groups"])
+
+
+def _needs_anesthesia(c: _Case) -> bool:
+    """Q5: dị ứng thuốc tê mà thủ thuật chưa thuộc nhóm gây tê."""
+    return (c.has_procedure and any(e["canonical_id"] == "local_anesthetic" for e in c.n["allergies"])
+            and not any(p["drug_class"] == "local_anesthesia" for p in c.n["procedure_groups"]))
+
+
+def _needs_stage(c: _Case) -> bool:
+    """Q7: thủ thuật chảy máu và tin nói đang làm."""
+    return _mentions(c.text, IN_PROGRESS_WORDS) and c.bleeding_procedure
+
+
+def _needs_anticoag(c: _Case) -> bool:
+    """Q8: thủ thuật chảy máu, chưa khai thuốc đang dùng (kể cả thuốc chưa rõ vai), BS không ghi "không dùng thuốc",
+    và chưa có rule nào đã hỏi đúng ý này (asks_anticoagulant trong data/rule_behavior.csv)."""
+    return (c.bleeding_procedure
+            and not (c.n["baseline_drugs"] or c.said["baseline_drugs"] or c.n["unknown_role_drugs"])
+            and not _NO_MEDS.search(fold(c.text))
+            and not any(rule_behavior(r["rule_id"])["asks_anticoagulant"] for r in c.rules))
+
+
+# Mỗi lượt chỉ hỏi MỘT câu, theo thứ tự bảng này (Trung chốt 28/11): (khoá TEXT, cần hỏi khi, ghi chú trace).
+FOLLOW_UPS = (
+    ("Q5", _needs_anesthesia, "dị ứng thuốc tê, thủ thuật chưa có gây tê: hỏi Q5"),
+    ("Q7", _needs_stage, "thủ thuật chảy máu, tin nói đang làm: hỏi Q7"),
+    ("Q6", lambda c: bool(c.bad_conditions), "bệnh nền chưa nhận ra: hỏi Q6"),
+    ("Q8", _needs_anticoag, "thủ thuật chảy máu, chưa khai thuốc đang dùng: hỏi Q8"),
+    ("Q2", lambda c: c.has_procedure and not c.has_planned, ""),
+    ("Q3", lambda c: c.has_planned and not c.has_procedure, ""),
+)
+QUESTION_ORDER = tuple(key for key, _, _ in FOLLOW_UPS)
+# Câu hỏi lâm sàng còn mở thì chưa được nói ✅; Q2/Q3 chỉ hỏi phần còn thiếu nên ✅ vẫn đúng cho phần đã có.
+_BLOCKS_OK = frozenset({"Q5", "Q7", "Q8"})
+
+
+def _questions(case: _Case) -> list:
+    pending = []
+    for key, needed, trace in FOLLOW_UPS:
+        if needed(case):
+            pending.append(key)
+            if trace:
+                note(trace)
+    questions = _open_questions(pending, _replies(case.text))
+    for key in pending:
+        if key not in questions:
+            note("BS đã trả lời %s: không hỏi lại" % key)
+    return questions
+
+
+def _reminder(questions: list, has_background: bool, bad_conditions: list) -> tuple:
+    """Câu nhắc cuối tin → (khoá, câu, giữ ca chờ ghép). Có câu hỏi thì hỏi câu đầu tiên và giữ ca (needs_more).
+    Hết câu hỏi mới nhắc Q4 — Q4 chỉ nhắc (BS gửi lại cả ca), không giữ ca."""
     if questions:
-        q = questions[0]
-        return [TEXT[q].format(names=", ".join(bad_conditions)) if q == "Q6" else TEXT[q]], True
-    return ([] if has_background else [TEXT["Q4"]]), False
+        key = questions[0]
+        return key, TEXT[key].format(names=", ".join(bad_conditions)) if key == "Q6" else TEXT[key], True
+    return ("", "", False) if has_background else ("Q4", TEXT["Q4"], False)
 
 
 # ------------------------------------------------------------------ luồng chính
 
-def answer(text: str, detail: bool = False) -> dict:
-    """Hợp đồng chấm: answer(text). detail=True chỉ bot dùng (lệnh "chi tiết"): in đủ hướng xử trí cho 🟡."""
+def _reply(text: str) -> Reply:
     # Tình huống 0 — tin xã giao: đáp câu cố định, không gọi model, không câu chốt (design §6).
     reply_text = small_talk_reply(text)
     if reply_text:
         note("tình huống 0: tin xã giao")
-        return {"output": reply_text, "needs_more": False}
+        return Reply.text_only(reply_text)
     if _many_patients(text):
         note("tin có nhiều BN: xin gửi từng ca")
-        return _finish([TEXT["MANY_PATIENTS"]], False)
+        return Reply(notes=[TEXT["MANY_PATIENTS"]])
 
     # Bước 1 — model lần 1 trích thực thể và cờ.
-    extracted = _clean_extracted(_parse_json(_extract(text, reuse=detail)))
+    extracted = _clean_extracted(_parse_json(_extract(text)))
     if extracted is None:
         note("json lỗi: chỉ dùng kết quả quét tin gốc")
     flags = extracted["out_of_scope"] if extracted else []
@@ -603,75 +546,48 @@ def answer(text: str, detail: bool = False) -> dict:
     # Bước 2 — chuẩn hoá và quét lại tin gốc.
     n = normalize_entities(extracted, text)
     said = {k: bool(extracted and extracted[k]) for k in LIST_KEYS}
-    has_procedure = bool(n["procedure_groups"]) or said["planned_procedures"]
-    has_planned = bool(n["planned_drugs"]) or said["planned_drugs"]
     has_background = bool(n["conditions"] or n["allergies"] or said["conditions"]
                           or said["allergies"] or said["baseline_drugs"])
-    has_any = has_procedure or has_planned or has_background or bool(n["baseline_drugs"] or n["unmapped"])
-
-    head = [TEXT["P1"] if extracted and extracted["has_pii"] else "", "" if extracted else TEXT["JSON_ERROR"]]
+    head = ([OUT_OF_SCOPE["cap_cuu"]] if "cap_cuu" in flags else []) + [   # cấp cứu lên đầu tin (design §7 khối 1)
+        TEXT["P1"] if extracted and extracted["has_pii"] else "", "" if extracted else TEXT["JSON_ERROR"]]
     refusals = [OUT_OF_SCOPE[f] for f in flags if f != "cap_cuu"]
-    if "cap_cuu" in flags:   # cấp cứu lên đầu tin, trước mọi cảnh báo (design §7 khối 1)
-        head.insert(0, OUT_OF_SCOPE["cap_cuu"])
-    bad_conditions = _unmapped_conditions(extracted, n)   # bệnh nền chưa nhận ra → hỏi Q6
-    unmapped_blocks, has_unnamed = _unmapped_blocks(n, extracted, asked=bad_conditions)
-    unmapped = "\n".join(unmapped_blocks)
+    case = _Case(text, n, said, [], _unmapped_conditions(extracted, n))
 
     # Bảng quyết định §6.
-    if not has_any:   # tình huống 1 (không cờ) / 2 (có cờ)
-        note("tình huống %d: không có thực thể" % (2 if flags else 1))
-        return _finish(head + refusals + [TEXT["Q1"]], not flags)
-    if not has_procedure and not has_planned:   # tình huống 3
-        return _roles_unknown(head, n, said, unmapped, refusals, text, detail)
+    if not (case.has_procedure or case.has_planned or has_background or n["baseline_drugs"] or n["unmapped"]):
+        note("tình huống %d: không có thực thể" % (2 if flags else 1))   # tình huống 1 (không cờ) / 2 (có cờ)
+        return Reply(head=head, refusals=refusals, question=TEXT["Q1"], question_key="Q1", needs_more=not flags)
+    if not (case.has_procedure or case.has_planned):   # tình huống 3
+        unmapped, _ = _unmapped_blocks(n, extracted, asked=case.bad_conditions)
+        return _roles_unknown(head, n, said, "\n".join(unmapped), refusals, text)
 
     # Bước 3 — tra bảng.
-    rules = _sort(check_drug_interactions(n["baseline_drugs"], n["planned_drugs"]) + check_clinical_risks(
+    case.rules = rules = _sort(check_drug_interactions(n["baseline_drugs"], n["planned_drugs"]) + check_clinical_risks(
         n["conditions"], n["allergies"], n["baseline_drugs"], n["planned_drugs"], n["procedure_groups"]))
     if not rules:
         note("không có rule khớp: bỏ qua model 2")
-
-    # Q5 (design §6): dị ứng thuốc tê mà thủ thuật chưa thuộc nhóm gây tê → hỏi; khi đó không in ✅.
-    ask_anesthesia = (has_procedure
-                      and any(e["canonical_id"] == "local_anesthetic" for e in n["allergies"])
-                      and not any(p["drug_class"] == "local_anesthesia" for p in n["procedure_groups"]))
-    if ask_anesthesia:
-        note("dị ứng thuốc tê, thủ thuật chưa có gây tê: hỏi Q5")
     missing_pairs = _pairs_without_rule(n, rules)
-    no_pair = TEXT["NO_PAIR_RULE"].format(pairs="; ".join(missing_pairs)) if missing_pairs else ""
-    limit = TEXT["SIDE_EFFECT_LIMIT"] if _mentions(text, SIDE_EFFECT_WORDS) else ""
-    ask_stage = (_mentions(text, IN_PROGRESS_WORDS)
-                 and any(p["drug_class"] == "invasive_bleeding" for p in n["procedure_groups"]))
     if missing_pairs:
         note("cặp thuốc chưa có rule: %s" % "; ".join(missing_pairs))
-    if bad_conditions:
-        note("bệnh nền chưa nhận ra: hỏi Q6")
-    if ask_stage:
-        note("thủ thuật chảy máu, tin nói đang làm: hỏi Q7")
-    # Q8: thủ thuật chảy máu, chưa khai thuốc đang dùng (kể cả thuốc chưa rõ vai), BS không ghi "không dùng thuốc",
-    # và chưa có rule nào đã hỏi đúng ý này (CR-021).
-    ask_anticoag = (any(p["drug_class"] == "invasive_bleeding" for p in n["procedure_groups"])
-                    and not (n["baseline_drugs"] or said["baseline_drugs"] or n["unknown_role_drugs"])
-                    and not _NO_MEDS.search(_plain(text))
-                    and not any(r["rule_id"] in ASKS_ANTICOAG_RULES for r in rules))
-    if ask_anticoag:
-        note("thủ thuật chảy máu, chưa khai thuốc đang dùng: hỏi Q8")
-    needed = {"Q5": ask_anesthesia, "Q7": ask_stage, "Q6": bool(bad_conditions), "Q8": ask_anticoag,
-              "Q2": has_procedure and not has_planned, "Q3": has_planned and not has_procedure}
-    pending = [q for q in QUESTION_ORDER if needed[q]]
-    questions = _open_questions(pending, _replies(text))
-    for q in pending:
-        if q not in questions:
-            note("BS đã trả lời %s: không hỏi lại" % q)
-    ask_anesthesia, ask_stage, ask_anticoag = "Q5" in questions, "Q7" in questions, "Q8" in questions
-    # Q6 không phải câu đang hỏi → bệnh nền chưa nhận ra hiện ở ❔ để không mất (mục "Đã đối chiếu" ghi "xem ❔").
-    unmapped_blocks, has_unnamed = _unmapped_blocks(n, extracted, asked=bad_conditions if questions[:1] == ["Q6"] else ())
-    unmapped = "\n".join(unmapped_blocks)
-    ok = "" if (rules or unmapped or flags or ask_anesthesia or no_pair or bad_conditions or ask_stage
-                or ask_anticoag) else TEXT["OK"]
+    no_pair = TEXT["NO_PAIR_RULE"].format(pairs="; ".join(missing_pairs)) if missing_pairs else ""
+    limit = TEXT["SIDE_EFFECT_LIMIT"] if _mentions(text, SIDE_EFFECT_WORDS) else ""
+    questions = _questions(case)
+    # Q6 đang là câu hỏi → bệnh nền chưa nhận ra nằm trong câu hỏi; ngược lại hiện ở ❔ để không mất
+    # (mục "Đã đối chiếu" ghi "xem ❔").
+    unmapped, has_unnamed = _unmapped_blocks(n, extracted, asked=case.bad_conditions if questions[:1] == ["Q6"] else ())
+    nothing_to_report = not (rules or unmapped or flags or no_pair or case.bad_conditions)
+    key, question, needs_more = _reminder(questions, has_background, case.bad_conditions)
 
     # Bước 4 + 5 — kết luận trước, cảnh báo, giới hạn, rồi mới "Đã đối chiếu" và câu nhắc.
-    reminders, needs_more = _reminders(questions, has_background, bad_conditions)
-    needs_more = needs_more or has_unnamed   # giữ ca để BS nhắn tên thuốc sau khi hỏi BN
-    blocks = head + [_verdict(rules, len(n["unmapped"])), ok] + _alert_blocks(rules, detail=detail)
-    blocks += [unmapped, no_pair, limit] + refusals + [_checked_line(n, said)] + reminders
-    return _finish(blocks, needs_more)
+    return Reply(head=head, verdict=_verdict(rules, len(n["unmapped"])),
+                 ok=TEXT["OK"] if nothing_to_report and not _BLOCKS_OK & set(questions) else "",
+                 alerts=_alerts(rules), notes=unmapped + [no_pair, limit], refusals=refusals,
+                 checked=_checked_groups(n, said), question=question, question_key=key,
+                 needs_more=needs_more or has_unnamed)   # thuốc chưa rõ tên: giữ ca để BS nhắn tên sau khi hỏi BN
+
+
+def answer(text: str) -> dict:
+    """Hợp đồng chấm: answer(text) → {"output", "needs_more", "reply"}. Eval chỉ đọc `output` (render_text);
+    bot in `reply` bằng reply.render_chat / render_detail."""
+    reply = _reply(text)
+    return {"output": render_text(reply), "needs_more": reply.needs_more, "reply": reply}

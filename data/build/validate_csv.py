@@ -237,7 +237,39 @@ def validate_all() -> tuple[list[str], list[str]]:
     else:
         errors.append("clinical_risk_rules.csv: chưa tồn tại")
 
+    _check_rule_behavior(errors, notes)
     return errors, notes
+
+
+BEHAVIOR_COLS = ["rule_id", "show_full_guidance", "asks_anticoagulant", "reason"]
+
+
+def _check_rule_behavior(errors: list[str], notes: list[str]) -> None:
+    """data/rule_behavior.csv: cách agent in / dùng một rule (codebase/tools.rule_behavior). Mỗi dòng phải trỏ tới
+    rule có thật, cờ chỉ là "yes" hoặc trống, và có lý do (người duyệt lâm sàng đọc được vì sao rule được đối xử riêng)."""
+    path = DATA_DIR / "rule_behavior.csv"
+    if not path.exists():
+        return
+    rule_ids = set()
+    for name in ("ddi_rules.csv", "clinical_risk_rules.csv"):
+        if (DATA_DIR / name).exists():
+            with (DATA_DIR / name).open(encoding="utf-8-sig", newline="") as f:
+                rule_ids |= {row["rule_id"] for row in csv.DictReader(f)}
+    rows = _read_csv(path, BEHAVIOR_COLS, errors)
+    seen = set()
+    for idx, row in enumerate(rows, start=2):
+        label = f"rule_behavior.csv:{idx} ({row['rule_id']})"
+        if row["rule_id"] not in rule_ids:
+            errors.append(f"{label}: rule_id không có trong ddi_rules.csv / clinical_risk_rules.csv")
+        if row["rule_id"] in seen:
+            errors.append(f"{label}: trùng rule_id")
+        seen.add(row["rule_id"])
+        for flag in ("show_full_guidance", "asks_anticoagulant"):
+            if row[flag] not in ("yes", ""):
+                errors.append(f"{label}: {flag} chỉ được là 'yes' hoặc trống, đang là {row[flag]!r}")
+        if not row["reason"].strip():
+            errors.append(f"{label}: thiếu lý do (cột reason)")
+    notes.append(f"rule_behavior.csv: {len(rows)} dòng")
 
 
 def main() -> int:
