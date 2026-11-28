@@ -789,6 +789,45 @@ class DeniedGroups2811(unittest.TestCase):
         self.assertNotIn("Bệnh nền: không có", out)
 
 
+class Antibiotics2811(unittest.TestCase):
+    """Log VM 28/11 16:09–16:10: BN dị ứng penicillin, BS hỏi "kê cephalosporin được không" rồi "cefuroxim ấy" → chỉ ❔.
+    Bảng chưa có cephalosporin, dị ứng kháng sinh ngoài penicillin, và tương tác giữa các kháng sinh."""
+
+    def _out(self, text, **x):
+        return run(text, _x(planned_procedures=["nhổ R48"], **x))["output"]
+
+    def test_penicillin_allergy_with_cephalosporin(self):
+        self.assertEqual(section_of(self._out("BN dị ứng penicillin, kê cefuroxim", allergies=["penicillin"],
+                                              planned_drugs=["cefuroxim"]), "CR-024"), "HIGH")
+        out = self._out("BN dị ứng penicilin, kê cephalosporin được không", allergies=["penicilin"],
+                        planned_drugs=["cephalosporin"])
+        self.assertEqual(section_of(out, "CR-024"), "HIGH")
+        self.assertIn("em mới kiểm theo nhóm", out)
+        self.assertNotIn("chưa có dữ liệu cho: cephalosporin", out)
+
+    def test_same_class_antibiotic_allergies(self):
+        cases = (("cefalexin", "cefuroxim", "CR-025"), ("azithromycin", "clarithromycin", "CR-026"),
+                 ("clarithromycin", "azithromycin", "CR-027"), ("clindamycin", "clindamycin", "CR-028"),
+                 ("metronidazol", "metronidazole", "CR-029"))
+        for allergy, drug, code in cases:
+            out = self._out("BN dị ứng %s, kê %s" % (allergy, drug), allergies=[allergy], planned_drugs=[drug])
+            self.assertEqual(section_of(out, code), "HIGH", (allergy, drug))
+
+    def test_antibiotic_interactions(self):
+        cases = ((["warfarin"], ["cefuroxim"], "DDI-039", "MODERATE"), (["metformin"], ["cefalexin"], "DDI-040", "MODERATE"),
+                 ([], ["clarithromycin", "erythromycin"], "DDI-041", "HIGH"),
+                 ([], ["azithromycin", "clarithromycin"], "DDI-042", "MODERATE"),
+                 ([], ["clindamycin", "erythromycin"], "DDI-043", "MODERATE"))
+        for base, planned, code, level in cases:
+            out = self._out("BN uống %s, kê %s" % (", ".join(base) or "không", " + ".join(planned)),
+                            baseline_drugs=base, planned_drugs=planned)
+            self.assertEqual(section_of(out, code), level, code)
+
+    def test_named_cephalosporin_replaces_the_class_name(self):
+        n = tools.normalize_entities(_x(planned_drugs=["cephalosporin cefuroxim"]), "kê cephalosporin cefuroxim")
+        self.assertEqual([d["canonical_id"] for d in n["planned_drugs"]], ["cefuroxime"])
+
+
 class UnnamedAnticoagulant2811(unittest.TestCase):
     """Log VM 28/11 14:59: "Bn uống chống đông nhổ răng được ko" → chỉ ❔ "chưa có dữ liệu cho: chống đông".
     Trung chọn 28/11: tên nhóm thuốc chưa rõ tên → 🔴 CR-022 (chống đông) / 🟡 CR-023 (kháng tiểu cầu) × thủ thuật
