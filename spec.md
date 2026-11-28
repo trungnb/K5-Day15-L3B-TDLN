@@ -27,12 +27,12 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): Không (Tr
 
 | Hướng | Bao nhiêu người gặp | Bao nhiêu lần / tháng | Mỗi lần tốn gì | Impact / tháng | Làm kịp không | Chọn? |
 |---|---|---|---|---|---|---|
-| **B2-RHM (Mở rộng):** BS RHM kiểm tra an toàn bệnh nền/thuốc nền × thủ thuật & đơn nha khoa | UNKNOWN số BS gặp vấn đề. Quy mô tham chiếu: 10.000 nha sĩ tại Việt Nam (VOSA, 2024). | [P2](evidence/interviews/P2.md) báo 2 lần, [P3](evidence/interviews/P3.md) khoảng 5 lần phải dừng để rà trong tháng qua. Tần suất đại diện: UNKNOWN. | Thời gian tự báo cáo cho ca gần nhất: P2 khoảng 90 phút, P3 khoảng 3 phút. Thời gian tra thuốc riêng: UNKNOWN. | Ước tính ~100 giờ BS *(giả định, chưa đo — xem dưới bảng)* | Kịp: danh mục ~20 thuốc RHM & nhóm thủ thuật gọn, dựng được bảng tất định chuẩn nguồn trong 10h; có đầu mối ≥3 BS RHM ngoài nhóm | **Chọn** |
+| **B2-RHM (Mở rộng):** BS RHM kiểm tra an toàn bệnh nền/thuốc nền × thủ thuật & đơn nha khoa | UNKNOWN số BS gặp vấn đề. Quy mô tham chiếu: 10.000 nha sĩ tại Việt Nam (VOSA, 2024). | [P2](evidence/interviews/P2.md) báo 2 lần, [P3](evidence/interviews/P3.md) khoảng 5 lần phải dừng để rà trong tháng qua. Tần suất đại diện: UNKNOWN. | Thời gian tự báo cáo cho ca gần nhất: P2 khoảng 90 phút, P3 khoảng 3 phút. Thời gian tra thuốc riêng: UNKNOWN. | Ước tính ~3.000 giờ BS *(giả định, chưa đo — xem dưới bảng)* | Kịp: danh mục ~20 thuốc RHM & nhóm thủ thuật gọn, dựng được bảng tất định chuẩn nguồn trong 10h; có đầu mối ≥3 BS RHM ngoài nhóm | **Chọn** |
 | **B2-BN (Gợi ý gốc):** Người nhà / bệnh nhân mạn tính kiểm tra tương tác & xếp lịch uống thuốc | Hàng triệu người bệnh mạn tính *(tự ước tính)* | ~2–4 lần/tháng khi đổi đơn *(tự ước tính)* | ~10–15 phút đọc hướng dẫn + rủi ro uống nhầm giờ/tương tác *(tự ước tính)* | Rất lớn nhưng phân tán *(tự ước tính)* | Khó: danh mục thuốc toàn bộ chuyên khoa quá rộng, không kịp đối chiếu nguồn từng dòng trong 10h | Loại |
 | **B3-Nhà thuốc:** Tư vấn khách hỏi mua thuốc qua chat nhà thuốc tối muộn | Hàng nghìn nhà thuốc *(tự ước tính)* | Hàng trăm lượt chat/nhà thuốc/tháng *(tự ước tính)* | ~3–5 phút dược sĩ trực sàng lọc ca lặp lại *(tự ước tính)* | Lớn *(tự ước tính)* | Khó: khó hẹn ≥3 dược sĩ nhà thuốc phỏng vấn & test trong 2 ngày; rủi ro gợi ý OTC cho trẻ nhỏ/bà bầu cao | Loại |
 
-- **Impact / tháng:** **ước tính ~100 giờ BS / tháng** (kịch bản cơ sở 999 BS × 2 lượt × 3 phút) — *giả định, chưa đo*. Thấp 300 BS ≈ 30 giờ · cao 3.000 BS ≈ 300 giờ.
-  - **2 lượt / BS / tháng:** trung bình có trọng số của 3 persona trong `cost/personas.yaml` (60% × 1 + 20% × 2 + 20% × 5), tần suất lấy từ P1–P5 tự báo cáo.
+- **Impact / tháng:** **ước tính ~3.000 giờ BS / tháng** (kịch bản cơ sở 999 BS × 60 lượt × 3 phút = 2.997 giờ) — *giả định, chưa đo*. Thấp 300 BS ≈ 900 giờ · cao 3.000 BS ≈ 9.000 giờ.
+  - **60 lượt / BS / tháng:** trung bình có trọng số của 3 persona trong `cost/personas.yaml` (60% × 30 + 20% × 60 + 20% × 150 = 1 / 2 / 5 lần mỗi ngày × 30 ngày). Tần suất theo ngày là *tự ước tính* (Trung chốt 28/11), cao hơn ~30 lần số ca P1–P5 tự báo cáo (1–5 lần/tháng) — giả định BS tra cả ca thường, không chỉ ca khó.
   - **3 phút tiết kiệm / lượt:** *giả định của nhóm*, lấy bằng thời gian xử lý ca ngắn nhất BS kể (P3, khoảng 3 phút cho cả lần xử lý). Không dùng 90 phút của P2 vì ca đó gồm chuyển khám chuyên khoa, bot không rút ngắn được.
   - Số đo thật vẫn UNKNOWN: chưa biết số BS thực sự gặp vấn đề, tần suất đại diện hoặc phút tra thuốc riêng. Thời gian P2 và P3 báo là thời gian xử lý ca. Quy mô toàn quốc chỉ dùng làm bối cảnh, theo [báo cáo VOSA 2024](https://www.fdiworlddental.org/sites/default/files/2025-06/2024-NLO-Reports-Compilation-for-the-General-Assembly-Binder.pdf#page=289) công bố qua FDI.
 - Hướng ĐÃ LOẠI + vì sao (giữ lại, đừng xoá):
@@ -137,10 +137,10 @@ flowchart TD
 - Kết quả: lượt 1 23/27 (85%) · lượt 2 26/27 (96%) — run ID: `run-1@20261128-085926` / `run-2@20261128-091840`. Lượt 1 **chưa đạt chuẩn**: hỏi lại đúng 4/6 (67%) < 80%; các ngưỡng khác đạt (HIGH 9/9, từ chối 7/7). Lượt 2 **đạt chuẩn**: hỏi lại đúng 6/6, HIGH 9/9, từ chối 7/7 → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
 
 ## §8. Chi phí khi dùng thật *(guide 4.2)*
-- Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-1.csv` (50 phiên, seed 42, tỉ lệ đạt từ `run-2`)
-- Chi phí / task thành công: $0.0027 (model `gemini-3.8-flash`) · $0.00049 (model `gemini-3.1-flash-lite`) · $0.0072 (model `gemini-4-argon`)
-- Chi phí / tháng ở quy mô thật (`gemini-3.8-flash`): thấp $1.93 (300 BS) · cơ sở $6.44 (999 BS) · cao $19.33 (3.000 BS) → chi tiết `cost/cost-estimate.md`
-- So với impact / người / tháng (§2): chi phí model ~$0.006 / BS / tháng so với **ước tính ~6 phút BS / tháng tiết kiệm** (2 lượt × 3 phút, giả định §2) — chi phí model không phải rào cản. Impact chưa đo (chưa có số phút tra thuốc tiết kiệm mỗi ca), nên kết luận là *iterate*, chưa phải *go*.
+- Persona + giá: `cost/personas.yaml` (1 / 2 / 5 lần mỗi ngày) · lượt mô phỏng: `cost/simulate-2.csv` (50 phiên, seed 42, tỉ lệ đạt từ `run-2`)
+- Chi phí / task thành công: $0.0029 (model `gemini-3.8-flash`) · $0.00052 (model `gemini-3.1-flash-lite`) · $0.0078 (model `gemini-4-argon`)
+- Chi phí / tháng ở quy mô thật (`gemini-3.8-flash`): thấp $63.36 (300 BS) · cơ sở $211.00 (999 BS) · cao $633.63 (3.000 BS) → chi tiết `cost/cost-estimate.md`
+- So với impact / người / tháng (§2): chi phí model ~$0.21 / BS / tháng so với **ước tính ~3 giờ BS / tháng tiết kiệm** (60 lượt × 3 phút, giả định §2) — chi phí model không phải rào cản. Impact và tần suất dùng chưa đo (chưa có số lần dùng thật, số phút tra thuốc tiết kiệm mỗi ca), nên kết luận là *iterate*, chưa phải *go*.
 
 ## §9. Rủi ro & an toàn
 - Dữ liệu: đã ẩn danh gì, không thu gì, không đưa gì vào model gói miễn phí:
@@ -223,3 +223,4 @@ flowchart TD
 | Thời điểm | Đổi gì | Vì sao |
 |---|---|---|
 | 28/11 sau CP4 (chờ merge) | Tái cấu trúc, **không đổi output**: `answer()` trả thêm `reply` có cấu trúc (`codebase/reply.py`), eval / Zalo / "chi tiết" in từ cùng một bản tin, bot thôi đọc ngược chuỗi; trạng thái hội thoại gom vào `Conversation`; bảng câu hỏi tiếp trong `answer()`; cách in riêng của rule ra `data/rule_behavior.csv`; danh mục bí danh ra `data/build/alias_specs.csv`; một bộ chuẩn hoá chữ (`tools.fold`). | Review chất lượng code `main` (Nguyên): bot đọc ngược output bằng regex nên đổi câu chữ là vỡ âm thầm. Golden 62 ca (replay `traces/run-1`, `run-2` + 8 ca dựng) khớp từng byte cả output eval, tin chat và "chi tiết"; `entity_aliases.csv` sinh lại y hệt. |
+| 28/11 15:16 (sau CP4) | Persona tính theo ngày (Trung chốt): 1 / 2 / 5 lần mỗi ngày thay cho 1 / 2 / 5 lần mỗi tháng → chạy lại `simulate-2`. §2 impact ~100 → ~3.000 giờ BS / tháng (999 × 60 lượt × 3 phút), §8 chi phí $6.44 → $211.00 / tháng ($0.0064 → $0.2112 / BS); `cost/cost-estimate.md` và slide 3, 7, 8 cập nhật theo. | Tần suất cũ chỉ đếm ca khó BS nhớ trong phỏng vấn; bot dùng cho cả ca thường nên dùng hằng ngày. Vẫn là giả định, chưa đo — chi phí và impact cùng tăng ~30 lần, tỉ lệ không đổi. |
