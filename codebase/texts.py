@@ -29,6 +29,8 @@ TEXT = {
     # (vd DDI-004, DDI-040) cần tên thuốc
     "CLASS_ONLY": "❔ {names}: em mới kiểm theo nhóm. Định kê thuốc nào thì nhắn thêm tên để em kiểm tương tác riêng.",
     # 28/11 (Trung chọn): ℹ️ là dòng phụ dưới ✅, không chặn ✅; câu "tự đánh giá lâm sàng" đã nằm ở ✅ / câu chốt.
+    # Tin bổ sung nêu thuốc định kê mới, không rõ thêm hay đổi (log VM 28/11 16:24): vẫn kiểm cả hai, nói cách đổi.
+    "ADD_OR_SWITCH": "ℹ️ Em đang kiểm cả {old} và {new}. Nếu là đổi thuốc, anh/chị nhắn \"đổi sang {new}\" để em bỏ {old}.",
     "NO_PAIR_RULE": "ℹ️ Bảng tra chưa có quy tắc cho cặp: {pairs}.",
     "SIDE_EFFECT_LIMIT": "ℹ️ Em chỉ rà tương tác và nguy cơ theo ca, không tra tác dụng phụ chung của thuốc — "
                          "BS xem Dược thư Quốc gia / tờ hướng dẫn sử dụng.",
