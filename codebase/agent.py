@@ -12,6 +12,7 @@ Hợp đồng: answer(text) -> {"output": str, "needs_more": bool}. Không có b
 """
 import json
 import re
+import threading
 import unicodedata
 from collections import Counter
 
@@ -141,6 +142,7 @@ REASON = re.compile(r"\s*\(\s*Vì\s*:.*$")
 # để mã cảnh báo trong bản đủ không khác tin đầu. Chỉ dùng lại khi detail=True; eval (detail=False) luôn gọi model.
 EXTRACT_CACHE_SIZE = 64
 _EXTRACT_CACHE: dict = {}
+_EXTRACT_LOCK = threading.Lock()
 
 # ------------------------------------------------------------------ tiện ích
 
@@ -483,14 +485,18 @@ def _pairs_without_rule(n: dict, rules: list, limit: int = 3) -> list:
 
 def _extract(text: str, reuse: bool = False) -> str:
     """Bước 1: model 1 trích thực thể. reuse=True (lệnh "chi tiết") dùng lại kết quả đã có của cùng tin nếu còn trong RAM."""
-    if reuse and text in _EXTRACT_CACHE:
-        note("chi tiết: dùng lại kết quả model 1 của tin đầu")
-        return _EXTRACT_CACHE[text]
+    if reuse:
+        with _EXTRACT_LOCK:
+            cached = _EXTRACT_CACHE.get(text)
+        if cached is not None:
+            note("chi tiết: dùng lại kết quả model 1 của tin đầu")
+            return cached
     reply = call_model(SYSTEM_EXTRACT, "Tin nhắn của BS:\n<<<\n%s\n>>>" % text, json_mode=True)
-    _EXTRACT_CACHE.pop(text, None)
-    _EXTRACT_CACHE[text] = reply["text"]
-    while len(_EXTRACT_CACHE) > EXTRACT_CACHE_SIZE:
-        _EXTRACT_CACHE.pop(next(iter(_EXTRACT_CACHE)))
+    with _EXTRACT_LOCK:   # bot chạy nhiều ca song song trong các luồng
+        _EXTRACT_CACHE.pop(text, None)
+        _EXTRACT_CACHE[text] = reply["text"]
+        while len(_EXTRACT_CACHE) > EXTRACT_CACHE_SIZE:
+            _EXTRACT_CACHE.pop(next(iter(_EXTRACT_CACHE)))
     return reply["text"]
 
 
