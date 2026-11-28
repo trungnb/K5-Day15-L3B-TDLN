@@ -146,7 +146,8 @@ class Issue3Fallback(unittest.TestCase):
 
 class Issue4Q4(unittest.TestCase):
     def test_q4_reminder_does_not_hold_case(self):
-        res = run(HEALTHY, HEALTHY_X)
+        # 28/11: "khoẻ mạnh" chưa phải "không dùng thuốc" → ca HEALTHY giờ hỏi Q8 và giữ ca; ghi rõ không dùng thuốc thì không.
+        res = run("BN 25t khoẻ mạnh, không dùng thuốc gì, nhổ R38, định kê Augmentin", HEALTHY_X)
         self.assertIn("✅", res["output"])
         self.assertIn("bệnh nền", res["output"])   # vẫn nhắc Q4
         self.assertFalse(res["needs_more"])
@@ -258,6 +259,55 @@ class SeveralPatients(unittest.TestCase):
             res = run(text, EXAMPLE_X)
             self.assertNotIn("mỗi ca một tin", res["output"], text)
 
+
+
+ASK_ANTICOAG = "BN có đang dùng thuốc chống đông hoặc kháng tiểu cầu không? Nếu có, nhắn tên thuốc để em kiểm."
+
+
+class AskAnticoagulant2811(unittest.TestCase):
+    """Trung chốt 28/11: thủ thuật chảy máu mà chưa khai thuốc đang dùng → luôn hỏi thuốc chống đông / kháng tiểu cầu
+    (thay cho việc thêm luật riêng cho từng bệnh: stent, van tim, đột quỵ…). Câu hỏi giữ ca chờ BS trả lời."""
+
+    def test_stent_case_asks_and_holds(self):
+        res = run("Bn đặt stent 6 tháng, giờ nhổ răng đc ko",
+                  _x(conditions=["đặt stent 6 tháng"], planned_procedures=["nhổ răng"]))
+        self.assertIn(ASK_ANTICOAG, res["output"])
+        self.assertTrue(res["needs_more"])
+
+    def test_healthy_extraction_asks_and_has_no_green_check(self):
+        res = run("Nhổ R48, kê paracetamol", _x(planned_procedures=["nhổ R48"], planned_drugs=["paracetamol"]))
+        self.assertIn(ASK_ANTICOAG, res["output"])
+        self.assertNotIn("✅", res["output"])
+        self.assertTrue(res["needs_more"])
+
+    def test_not_asked_when_baseline_drugs_declared(self):
+        res = run("BN uống Sintrom. Nhổ R48", _x(baseline_drugs=["Sintrom"], planned_procedures=["nhổ R48"]))
+        self.assertNotIn(ASK_ANTICOAG, res["output"])
+        res = run("BN uống metformin. Nhổ R48, kê paracetamol",
+                  _x(baseline_drugs=["metformin"], planned_procedures=["nhổ R48"], planned_drugs=["paracetamol"]))
+        self.assertNotIn(ASK_ANTICOAG, res["output"])
+
+    def test_not_asked_for_non_bleeding_procedure(self):
+        res = run("Trám răng R36, kê paracetamol", _x(planned_procedures=["trám răng R36"], planned_drugs=["paracetamol"]))
+        self.assertNotIn(ASK_ANTICOAG, res["output"])
+
+    def test_not_asked_when_bs_says_no_medication(self):
+        for text in ("BN không dùng thuốc gì. Nhổ R48, kê paracetamol", "bn ko uống thuốc, nhổ R48, kê paracetamol"):
+            res = run(text, _x(planned_procedures=["nhổ R48"], planned_drugs=["paracetamol"]))
+            self.assertNotIn(ASK_ANTICOAG, res["output"], text)
+
+    def test_answer_merged_by_bot_brings_existing_rule(self):
+        # Bot ghép câu trả lời vào ca đang chờ → thuốc nền có tên → luật sẵn có cảnh báo, không hỏi Q8 nữa.
+        res = run("Bn đặt stent 6 tháng, giờ nhổ răng đc ko\nBổ sung: có, đang uống Plavix",
+                  _x(conditions=["đặt stent 6 tháng"], baseline_drugs=["Plavix"], planned_procedures=["nhổ răng"]))
+        self.assertIn("[CR-004]", res["output"])
+        self.assertNotIn(ASK_ANTICOAG, res["output"])
+
+    def test_not_repeated_when_cr021_already_asks(self):
+        res = run("BN rung nhĩ. Nhổ R18, kê paracetamol",
+                  _x(conditions=["rung nhĩ"], planned_procedures=["nhổ R18"], planned_drugs=["paracetamol"]))
+        self.assertIn("[CR-021]", res["output"])
+        self.assertNotIn(ASK_ANTICOAG, res["output"])
 
 class ExtractPrompt(unittest.TestCase):
     def test_emergency_flag_points_to_emergency_care_and_keeps_checking(self):

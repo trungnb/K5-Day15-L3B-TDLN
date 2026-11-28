@@ -40,6 +40,8 @@ TEXT = {
     "Q6": "Bệnh nền \"{names}\" em chưa nhận ra. Anh/chị ghi rõ tên bệnh và tình trạng hiện tại "
           "(ổn định hay chưa, đang điều trị gì, chỉ số gần nhất nếu có) để em kiểm.",
     "Q7": "Ca đang chuẩn bị hay đang làm thủ thuật, và hiện có chảy máu khó cầm không? Nhắn thêm để em đối chiếu.",
+    # Trung chốt 28/11: thủ thuật chảy máu mà chưa khai thuốc đang dùng → luôn hỏi (stent, van tim, đột quỵ… không cần luật riêng).
+    "Q8": "BN có đang dùng thuốc chống đông hoặc kháng tiểu cầu không? Nếu có, nhắn tên thuốc để em kiểm.",
     "NO_PAIR_RULE": "ℹ️ Bảng tra hiện chưa có quy tắc tương tác cho cặp: {pairs}. "
                     "Chưa có quy tắc không thay cho đánh giá lâm sàng của BS.",
     "SIDE_EFFECT_LIMIT": "ℹ️ Hệ thống chỉ rà tương tác và nguy cơ theo ca trong bảng tra, không tra tác dụng phụ "
@@ -199,6 +201,10 @@ def is_no_entity_reply(output: str) -> bool:
 # ("BN 7 tuổi", "ca 2 răng", "BN 1 tuần", "cả 2 bên" là tuổi / số đếm — review PR #30).
 _PATIENT_NO = re.compile(r"\b(?:bn|benh nhan|ca)\s*(?:so\s*)?([1-9])"
                          r"(?=\s*[:.)\-]|\s*$|\s+(?!(?:tuoi|tuan|ngay|thang|nam|rang|lan|vien|ben|cai|ham|gio)\b)\w)")
+# BS ghi rõ BN không dùng thuốc → không hỏi Q8.
+_NO_MEDS = re.compile(r"\b(?:khong|ko|k|chua)\s+(?:dung|uong|su dung|co)\s+thuoc\b")
+# Rule đã hỏi thuốc chống đông trong hướng xử trí → không lặp Q8.
+ASKS_ANTICOAG_RULES = frozenset({"CR-021"})
 _UNNAMED = re.compile(r"^thuoc\b|\b(?:khong|ko|k|chua) (?:nho|ro|biet)(?: ten)?\b|\bquen ten\b")
 
 
@@ -490,10 +496,12 @@ def _roles_unknown(head, n, said, unmapped, refusals, text="", detail=False):
     return _finish(blocks, True)
 
 
-def _reminders(has_procedure, has_planned, has_background, ask_anesthesia, ask_stage=False, bad_conditions=()):
-    """Câu nhắc cuối tin, thứ tự Q5, Q7, Q6, Q2, Q3, Q4 (như run-2). Câu hỏi thật thì giữ ca chờ ghép (needs_more);
+def _reminders(has_procedure, has_planned, has_background, ask_anesthesia, ask_stage=False, bad_conditions=(),
+               ask_anticoag=False):
+    """Câu nhắc cuối tin, thứ tự Q5, Q7, Q8, Q6, Q2, Q3, Q4 (Q8 thêm 28/11). Câu hỏi thật thì giữ ca chờ ghép (needs_more);
     Q4 chỉ nhắc (BS gửi lại cả ca), không giữ ca — tránh ghép nhầm sang BN sau."""
     asks = ([TEXT["Q5"]] if ask_anesthesia else []) + ([TEXT["Q7"]] if ask_stage else []) \
+        + ([TEXT["Q8"]] if ask_anticoag else []) \
         + ([TEXT["Q6"].format(names=", ".join(bad_conditions))] if bad_conditions else []) \
         + ([TEXT["Q2"]] if has_procedure and not has_planned else []) \
         + ([TEXT["Q3"]] if has_planned and not has_procedure else [])
@@ -569,11 +577,20 @@ def answer(text: str, detail: bool = False) -> dict:
         note("bệnh nền chưa nhận ra: hỏi Q6")
     if ask_stage:
         note("thủ thuật chảy máu, tin nói đang làm: hỏi Q7")
-    ok = "" if (rules or unmapped or flags or ask_anesthesia or no_pair or bad_conditions or ask_stage) else TEXT["OK"]
+    # Q8: thủ thuật chảy máu, chưa khai thuốc đang dùng (kể cả thuốc chưa rõ vai), BS không ghi "không dùng thuốc",
+    # và chưa có rule nào đã hỏi đúng ý này (CR-021).
+    ask_anticoag = (any(p["drug_class"] == "invasive_bleeding" for p in n["procedure_groups"])
+                    and not (n["baseline_drugs"] or said["baseline_drugs"] or n["unknown_role_drugs"])
+                    and not _NO_MEDS.search(_plain(text))
+                    and not any(r["rule_id"] in ASKS_ANTICOAG_RULES for r in rules))
+    if ask_anticoag:
+        note("thủ thuật chảy máu, chưa khai thuốc đang dùng: hỏi Q8")
+    ok = "" if (rules or unmapped or flags or ask_anesthesia or no_pair or bad_conditions or ask_stage
+                or ask_anticoag) else TEXT["OK"]
 
     # Bước 4 + 5 — kết luận trước, cảnh báo, giới hạn, rồi mới "Đã đối chiếu" và câu nhắc.
     reminders, needs_more = _reminders(has_procedure, has_planned, has_background, ask_anesthesia,
-                                       ask_stage, bad_conditions)
+                                       ask_stage, bad_conditions, ask_anticoag)
     needs_more = needs_more or has_unnamed   # giữ ca để BS nhắn tên thuốc sau khi hỏi BN
     blocks = head + [_verdict(rules, len(n["unmapped"])), ok] + _alert_blocks(rules, detail=detail)
     blocks += [unmapped, no_pair, limit] + refusals + [_checked_line(n, said)] + reminders
