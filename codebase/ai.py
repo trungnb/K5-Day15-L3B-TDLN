@@ -8,6 +8,7 @@ Hợp đồng (giữ nguyên để khung đo được token):
         "tokens_out": int   số token ra, GỒM CẢ token suy luận / suy nghĩ nếu API tính riêng
     json_mode=True: xin model trả đúng một object JSON (dùng cho model lần 1, design §4.2).
     Lỗi gọi model (hết lượt, sai key, mất mạng): để exception bay ra — khung ghi lỗi vào cột error.
+    Lỗi tạm (429, 5xx, mất kết nối) post_json thử lại tối đa 3 lần trước khi báo lỗi.
 
 Chọn nhà cung cấp trong .env:
     MODEL_PROVIDER = fake | gemini | openai | openrouter | anthropic | ollama
@@ -18,6 +19,8 @@ Chọn nhà cung cấp trong .env:
 """
 import json
 import os
+import random
+import time
 import urllib.error
 import urllib.request
 
@@ -48,16 +51,30 @@ API_KEY = (os.environ.get("API_KEY") or "").strip()
 MODEL_THINKING = (os.environ.get("MODEL_THINKING") or "").strip()
 
 
+# Lỗi tạm của API (quá tải, hết lượt theo phút, mất kết nối): thử lại tối đa ATTEMPTS lần, chờ 1 s rồi 2 s (+ ngẫu
+# nhiên) để nhiều BS nhắn cùng lúc không cùng gọi lại một lúc. Lỗi khác (sai key, 400…) và hết giờ chờ báo ngay:
+# thử lại hết giờ chờ làm BS đợi tới 3 × TIMEOUT.
+RETRY_STATUS = {429, 500, 502, 503, 504}
+ATTEMPTS = 3
+
+
 def post_json(url, headers, body, timeout=TIMEOUT):
     """Gửi POST JSON, trả về JSON phản hồi. Chỉ dùng thư viện chuẩn (urllib)."""
     req = urllib.request.Request(
         url, data=json.dumps(body).encode("utf-8"), method="POST",
         headers=dict({"Content-Type": "application/json"}, **headers))
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            data = json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        raise RuntimeError("HTTP %d: %s" % (e.code, e.read().decode("utf-8", "replace")[:300]))
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = json.loads(r.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as e:
+            if e.code not in RETRY_STATUS or attempt == ATTEMPTS:
+                raise RuntimeError("HTTP %d: %s" % (e.code, e.read().decode("utf-8", "replace")[:300]))
+        except urllib.error.URLError as e:
+            if isinstance(e.reason, TimeoutError) or attempt == ATTEMPTS:
+                raise RuntimeError("URLError: %s" % e.reason)
+        time.sleep(attempt + random.random() / 2)
     if SHOW_RAW:
         print(json.dumps(data, ensure_ascii=False, indent=2)[:3000])
     return data
