@@ -203,6 +203,21 @@ _PATIENT_NO = re.compile(r"\b(?:bn|benh nhan|ca)\s*(?:so\s*)?([1-9])"
                          r"(?=\s*[:.)\-]|\s*$|\s+(?!(?:tuoi|tuan|ngay|thang|nam|rang|lan|vien|ben|cai|ham|gio)\b)\w)")
 # BS ghi rõ BN không dùng thuốc → không hỏi Q8.
 _NO_MEDS = re.compile(r"\b(?:khong|ko|k|chua)\s+(?:dung|uong|su dung|co)\s+thuoc\b")
+# Dòng bot ghép "Bổ sung: <tin>" (design §9) mà cả tin chỉ là "không" / "ko" / "không có" / "chưa"… = BS trả lời Q8 là
+# BN không dùng thuốc (log VM 28/11: trước đây bot hỏi lại Q8 mãi). Tin có thêm chữ khác ("không gây tê") không tính.
+_BARE_NO = re.compile(r"(?:bn |benh nhan )?(?:khong|ko|k|hong|hok|chua|no)(?: (?:co|dung|uong|su dung|thuoc|gi|nao|het))*")
+
+
+def _bare_no_reply(text: str) -> bool:
+    for line in (text or "").split("\n"):
+        words = _plain(line).split()
+        if words[:2] == ["bo", "sung"]:
+            core = " ".join(w for w in words[2:] if w not in _FILLER)
+            if core and _BARE_NO.fullmatch(core):
+                return True
+    return False
+
+
 # Rule đã hỏi thuốc chống đông trong hướng xử trí → không lặp Q8.
 ASKS_ANTICOAG_RULES = frozenset({"CR-021"})
 _UNNAMED = re.compile(r"^thuoc\b|\b(?:khong|ko|k|chua) (?:nho|ro|biet)(?: ten)?\b|\bquen ten\b")
@@ -582,6 +597,8 @@ def answer(text: str, detail: bool = False) -> dict:
     ask_anticoag = (any(p["drug_class"] == "invasive_bleeding" for p in n["procedure_groups"])
                     and not (n["baseline_drugs"] or said["baseline_drugs"] or n["unknown_role_drugs"])
                     and not _NO_MEDS.search(_plain(text))
+                    # "không" trơn chỉ trả lời Q8 khi không hỏi kèm Q5/Q7 (không rõ trả lời câu nào → vẫn hỏi).
+                    and not (_bare_no_reply(text) and not ask_anesthesia and not ask_stage)
                     and not any(r["rule_id"] in ASKS_ANTICOAG_RULES for r in rules))
     if ask_anticoag:
         note("thủ thuật chảy máu, chưa khai thuốc đang dùng: hỏi Q8")
