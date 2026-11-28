@@ -45,6 +45,7 @@ def run(text, extracted, model2=None, detail=False):
                 "model": "stub", "tokens_in": 0, "tokens_out": 0}
     old_call, old_note = agent.call_model, agent.note
     agent.call_model, agent.note = fake, (lambda *a, **k: None)
+    agent._EXTRACT_CACHE.clear()   # mỗi lần chạy dùng đúng `extracted` của test đó
     try:
         return agent.answer(text, detail=True) if detail else agent.answer(text)
     finally:
@@ -136,12 +137,11 @@ class Issue3Fallback(unittest.TestCase):
 
     def test_good_model_line_is_used(self):
         def model2(rules):
-            return {"lines": {r["rule_id"]: "[%s] %s + %s: model viết gọn. → làm theo bảng." % (
-                r["rule_id"], r["a"], r["b"]) for r in rules if r["rule_id"] == "DDI-027"}}
-        # DDI-027 là MODERATE: từ 28/11 bản mặc định in dòng 🟡 gọn bằng code, dòng model chỉ dùng ở bản "chi tiết".
-        out = run(EXAMPLE, EXAMPLE_X, model2=model2, detail=True)["output"]
-        self.assertIn("model viết gọn", out)
-        self.assertNotIn("model viết gọn", run(EXAMPLE, EXAMPLE_X, model2=model2)["output"])
+            return {"lines": {r["rule_id"]: "[%s] %s + %s → model viết gọn." % (
+                r["rule_id"], r["a"], r["b"]) for r in rules if r["rule_id"] == "DDI-001"}}
+        # Dòng model chỉ dùng ở bản mặc định; bản "chi tiết" in nguyên văn bảng tra bằng code (28/11).
+        self.assertIn("model viết gọn", run(EXAMPLE, EXAMPLE_X, model2=model2)["output"])
+        self.assertNotIn("model viết gọn", run(EXAMPLE, EXAMPLE_X, model2=model2, detail=True)["output"])
 
 
 class Issue4Q4(unittest.TestCase):
@@ -186,7 +186,7 @@ class SmallTalk(unittest.TestCase):
 class FollowUpAnswers(unittest.TestCase):
     def test_q5_tells_doctor_a_reply_the_merge_can_read(self):
         # Bot ghép "…\nBổ sung: <tin mới>" (design §9); "có" trơn không khớp alias thủ thuật, "gây tê" thì khớp.
-        self.assertIn("gây tê", agent.TEXT["Q5"].split("Nếu có", 1)[1])
+        self.assertIn("gây tê", agent.TEXT["Q5"].split("Có thì", 1)[1])
 
 
 class DrugOnly(unittest.TestCase):
@@ -261,7 +261,7 @@ class SeveralPatients(unittest.TestCase):
 
 
 
-ASK_ANTICOAG = "BN có đang dùng thuốc chống đông hoặc kháng tiểu cầu không? Nếu có, nhắn tên thuốc để em kiểm."
+ASK_ANTICOAG = "BN có dùng thuốc chống đông hoặc kháng tiểu cầu không? Có thì nhắn tên thuốc để em kiểm."
 
 
 class AskAnticoagulant2811(unittest.TestCase):
@@ -396,6 +396,34 @@ class OneQuestionPerTurn2811(unittest.TestCase):
         self.assertEqual(self._questions(res["output"]), [ASK_ANTICOAG])
 
 
+class GeneralMatching2811(unittest.TestCase):
+    """Log VM 28/11 — sửa tổng quát, không thêm từng alias: (1) tin xã giao viết liền không dấu cách ("Huongdan");
+    (2) bệnh nền đã biết tên và BS đã ghi tình trạng ("tăng huyết áp đang ổn định") thì không hỏi lại Q6."""
+
+    Q6_MARK = "em chưa nhận ra. Anh/chị ghi rõ"
+
+    def test_small_talk_without_spaces(self):
+        for text, kind in (("Huongdan", "help"), ("xinchao", "greet"), ("camon em", "thanks"), ("tambiet", "bye"),
+                           ("lamduocgi", "help")):
+            self.assertEqual(agent.small_talk_kind(text), kind, text)
+        self.assertIsNone(agent.small_talk_kind("nhorang"))
+
+    def _case(self, condition):
+        return run("BN %s. Nhổ R48, kê paracetamol" % condition,
+                   _x(conditions=[condition], planned_procedures=["nhổ R48"], planned_drugs=["paracetamol"]))
+
+    def test_known_condition_with_status_is_not_asked_again(self):
+        for condition in ("tăng huyết áp đang ổn định", "THA ổn định", "huyết áp đã kiểm soát tốt"):
+            out = self._case(condition)["output"]
+            self.assertNotIn(self.Q6_MARK, out, condition)
+            self.assertIn("❔ Em chưa có quy tắc cho: " + condition, out)   # vẫn hiện, BS tự đánh giá
+            self.assertNotIn("✅", out)
+
+    def test_q6_still_asked_when_name_unknown_or_status_missing(self):
+        for condition in ("th áp đang điều trị", "đặt stent 6 tháng", "tăng huyết áp"):
+            self.assertIn(self.Q6_MARK, self._case(condition)["output"], condition)
+
+
 class ExtractPrompt(unittest.TestCase):
     def test_emergency_flag_points_to_emergency_care_and_keeps_checking(self):
         res = run("BN uống Sintrom, nhổ R48 xong chảy máu không cầm, kê thêm gì?",
@@ -512,8 +540,9 @@ class Communication2811(unittest.TestCase):
         self.assertEqual(len(mods), 3)
         for line in mods:
             self.assertIn("→", line)
+            self.assertIn("(Vì: ", line)
             self.assertIn("Nguồn:", line)
-        self.assertEqual(len(sent), 5)             # đủ 2 HIGH + 3 MODERATE
+        self.assertEqual(sent, [])                 # bản đủ in nguyên văn bảng tra bằng code, không gọi model 2
 
     def test_conditional_moderate_only_case_needs_no_model_2(self):
         calls = []
@@ -526,6 +555,70 @@ class Communication2811(unittest.TestCase):
         self.assertIn("nếu dùng cùng nhau", out)
         line = [l for l in out.splitlines() if "[DDI-029]" in l][0]
         self.assertIn("Nguồn:", line)
+
+
+class ConciseReply2811(unittest.TestCase):
+    """Trung duyệt 28/11: tin trả lời gọn hơn nhưng giữ mã, cặp, hướng xử trí và nguồn. Lý do "(Vì: …)" của dòng 🔴
+    chỉ in ở bản "chi tiết"; câu hỏi cuối tin không nhắc lại điều mục "Đã đối chiếu" đã ghi ("không khai")."""
+
+    @staticmethod
+    def _model2(rules):
+        return {"lines": {r["rule_id"]: "[%s] %s + %s → %s. (Vì: lý do mẫu)" % (
+            r["rule_id"], r["a"], r["b"], r["guidance"].rstrip(" .")) for r in rules}}
+
+    def test_high_line_drops_reason_but_keeps_action_and_source(self):
+        out = run(EXAMPLE, EXAMPLE_X, model2=self._model2)["output"]
+        line = next(l for l in out.splitlines() if "[CR-001]" in l)
+        self.assertNotIn("Vì:", out)
+        self.assertIn("INR < 4", line)
+        self.assertIn("Nguồn:", line)
+
+    def test_detail_prints_table_text_verbatim(self):
+        # Dòng model viết gọn có thể bỏ ý (vd "xin hội chẩn" của CR-001) mà bước kiểm số không bắt được →
+        # bản "chi tiết" in nguyên văn guidance + mechanism + nguồn từ bảng tra.
+        from tools import check_clinical_risks, normalize_entities
+        out = run(EXAMPLE, EXAMPLE_X, model2=self._model2, detail=True)["output"]
+        self.assertNotIn("lý do mẫu", out)
+        n = normalize_entities(EXAMPLE_X, EXAMPLE)
+        cr001 = next(r for r in check_clinical_risks(n["conditions"], n["allergies"], n["baseline_drugs"],
+                                                     n["planned_drugs"], n["procedure_groups"]) if r["rule_id"] == "CR-001")
+        line = next(l for l in out.splitlines() if "[CR-001]" in l)
+        self.assertIn(cr001["guidance"].strip().rstrip(" ."), line)
+        self.assertIn("(Vì: " + cr001["mechanism"].strip().rstrip(" ."), line)
+
+    def test_questions_do_not_repeat_not_declared(self):
+        x = dict(HEALTHY_X, planned_drugs=[])
+        out = run("BN 25t khoẻ mạnh, nhổ R38", x)["output"]
+        self.assertIn("Thuốc định kê: không khai", out)
+        self.assertNotIn("chưa có thuốc định kê", out)
+        for key in ("Q2", "Q3", "Q4"):
+            self.assertFalse(agent.TEXT[key].startswith("Ca này chưa"), key)
+
+
+class DetailReusesExtraction2811(unittest.TestCase):
+    """ "chi tiết" dùng lại kết quả model 1 của lần đầu (cùng tin) — không trích lại, để mã cảnh báo không đổi giữa hai tin."""
+
+    def test_detail_uses_first_extraction(self):
+        calls = []
+
+        def fake(system, user, json_mode=False):
+            calls.append(system)
+            if system == agent.SYSTEM_EXTRACT:
+                x = EXAMPLE_X if len(calls) == 1 else dict(EXAMPLE_X, baseline_drugs=[], conditions=[])
+                return {"text": json.dumps(x, ensure_ascii=False), "model": "stub", "tokens_in": 0, "tokens_out": 0}
+            raise RuntimeError("model 2 giả lỗi")
+        old_call, old_note = agent.call_model, agent.note
+        agent.call_model, agent.note = fake, (lambda *a, **k: None)
+        agent._EXTRACT_CACHE.clear()
+        try:
+            first = agent.answer(EXAMPLE)["output"]
+            detail = agent.answer(EXAMPLE, detail=True)["output"]
+        finally:
+            agent.call_model, agent.note = old_call, old_note
+            agent._EXTRACT_CACHE.clear()
+        self.assertEqual(calls.count(agent.SYSTEM_EXTRACT), 1)
+        codes = lambda o: sorted(set(re.findall(r"\[(?:DDI|CR)-\d+\]", o)))
+        self.assertEqual(codes(first), codes(detail))
 
 
 if __name__ == "__main__":

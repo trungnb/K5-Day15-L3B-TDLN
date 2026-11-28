@@ -77,7 +77,7 @@ FOLLOW_UP_HINT_MERGED = "(Hỏi tiếp cho BN này: nhắn \"thêm <tên thuốc
 GREET_AGAIN_SEC = 12 * 3600   # chào lại trong 12 giờ → câu ngắn HELLO_AGAIN (mốc đề xuất, không có nguồn)
 DETAIL_RE = re.compile(r"^\s*(?:xem\s+|cho\s+(?:em\s+|mình\s+|minh\s+)?xem\s+)?chi\s+ti[eếê]t"
                        r"(?:\s+(?:đi|di|nhé|nhe|nha|ạ|a))?\s*[.!?]*\s*$", re.IGNORECASE)
-DETAIL_HINT = "(Nhắn \"chi tiết\" trong 10 phút để xem hướng xử trí các mục 🟡.)"
+DETAIL_HINT = "(Nhắn \"chi tiết\" trong 10 phút để xem lý do, hướng xử trí 🟡 và nguồn.)"
 NO_DETAIL_TEXT = "Em chưa có ca nào trong 10 phút qua để xem chi tiết ạ. Anh/chị gửi lại ca giúp em nhé."
 FEEDBACK_ACK = "Dạ em ghi nhận, cảm ơn anh/chị. Nhóm sẽ xem lại cảnh báo này."
 DROPPED_NOTE = (
@@ -126,7 +126,7 @@ USAGE_TEXT = (
     "Lệnh:\n"
     "• /moi — chuyển sang BN khác.\n"
     "• \"thêm <thuốc / thủ thuật>\" — hỏi tiếp cho ca vừa xong (trong 10 phút).\n"
-    "• \"chi tiết\" — xem hướng xử trí các mục 🟡 của ca vừa xong.\n"
+    "• \"chi tiết\" — xem lý do, hướng xử trí 🟡 và nguồn của ca vừa xong.\n"
     "• /sai <lý do> — báo cảnh báo sai hoặc không hữu ích.\n\n"
     "Ví dụ:\n"
     "BN nam 65t, rung nhĩ uống Sintrom, ĐTĐ type 2 uống metformin. Dự kiến nhổ R48. Định kê Augmentin + Ibuprofen"
@@ -676,18 +676,54 @@ def _recent_case(chat_id: str, now: float | None = None) -> str | None:
     return None
 
 
-def _moderate_block(output: str) -> str:
-    """ "chi tiết" chỉ gửi khối 🟡 (bản đủ hướng xử trí) + câu cuối: BS đã đọc 🔴 và 📋 ở tin trước
-    (tự thử 28/11/2026: gửi lại cả bản tin thì BS phải đọc lại từ đầu). Không thấy khối 🟡 → gửi nguyên bản."""
+# Tin gọn (Trung duyệt 28/11): tin đầu bỏ phần "Nguồn: …" của dòng cảnh báo; "chi tiết" gửi bản đủ (lý do, hướng xử trí
+# 🟡, nguồn). Agent không đổi — `run.py eval` vẫn chấm bản đủ có nguồn.
+ALERT_HEADERS = tuple(AGENT_TEXT[k].split(":")[0] for k in ("HIGH_HEADER", "MODERATE_HEADER"))
+_SOURCE_TAIL_RE = re.compile(r"\s+Nguồn\s*:.*$")
+# Dòng 🟡 gọn của agent: "- [mã] a + b: nguy cơ. Nguồn: …" (không có "→") → tin đầu chỉ giữ "- [mã] a + b".
+_COMPACT_MODERATE_RE = re.compile(r"^(- \[(?:DDI|CR)-\d+\] [^:→]+?): [^→]*$")
+
+
+def _alert_ranges(lines: list[str]) -> list[tuple[int, int]]:
+    """Vị trí các khối 🔴 / 🟡 (dòng tiêu đề + các dòng "- [mã] …" ngay sau), gồm cả bản "nếu dùng cùng nhau"."""
+    ranges, i = [], 0
+    while i < len(lines):
+        if lines[i].startswith(ALERT_HEADERS):
+            end = i + 1
+            while end < len(lines) and lines[end].startswith("- "):
+                end += 1
+            ranges.append((i, end))
+            i = end
+        else:
+            i += 1
+    return ranges
+
+
+def has_alerts(output: str) -> bool:
+    return bool(_alert_ranges(output.split("\n")))
+
+
+def short_reply(output: str) -> str:
+    """Tin đầu: bỏ "Nguồn: …" ở cuối mỗi dòng cảnh báo, giữ nguyên mã, cặp và hướng xử trí (cả mọi con số).
+    Dòng 🟡 gọn (không có hướng xử trí "→") chỉ còn mã + cặp; dòng có "→" (🔴, CR-021) giữ nguyên hành động."""
     lines = output.split("\n")
-    header = AGENT_TEXT["MODERATE_HEADER"].split(":")[0]
-    start = next((i for i, line in enumerate(lines) if line.startswith(header)), None)
-    if start is None:
+    moderate = AGENT_TEXT["MODERATE_HEADER"].split(":")[0]
+    for start, end in _alert_ranges(lines):
+        for i in range(start + 1, end):
+            lines[i] = _SOURCE_TAIL_RE.sub("", lines[i])
+            if lines[start].startswith(moderate):
+                lines[i] = _COMPACT_MODERATE_RE.sub(r"\1", lines[i])
+    return "\n".join(lines)
+
+
+def _alert_blocks_only(output: str) -> str:
+    """ "chi tiết" chỉ gửi các khối 🔴 / 🟡 bản đủ + câu cuối: BS đã đọc kết luận và 📋 ở tin trước
+    (tự thử 28/11/2026: gửi lại cả bản tin thì BS phải đọc lại từ đầu). Không thấy khối nào → gửi nguyên bản."""
+    lines = output.split("\n")
+    ranges = _alert_ranges(lines)
+    if not ranges:
         return output
-    end = start + 1
-    while end < len(lines) and lines[end].startswith("- "):
-        end += 1
-    return "\n".join(lines[start:end] + [AGENT_TEXT["FOOTER"]])
+    return "\n".join([line for start, end in ranges for line in lines[start:end]] + [AGENT_TEXT["FOOTER"]])
 
 
 async def _reply_detail(update: Update, chat_id: str) -> None:
@@ -704,7 +740,7 @@ async def _reply_detail(update: Update, chat_id: str) -> None:
         _log_safely(chat_id=chat_id, user_input="chi tiết", output="", summary={}, error=err_msg, kind="detail")
         await _reply_chunks(update, ERROR_TEXT)
         return
-    output = format_reply(_moderate_block(output))
+    output = format_reply(_alert_blocks_only(output))
     _log_safely(chat_id=chat_id, user_input="chi tiết", output=output, summary=summary, kind="detail")
     await _reply_chunks(update, output)
 
@@ -785,8 +821,8 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     output = output.replace(AGENT_TEXT["Q1"], AGENT_TEXT["REPAIR"])
             else:
                 _misses.pop(chat_id, None)
-            if AGENT_TEXT["MODERATE_HEADER"].split(":")[0] in output:   # có khối 🟡 gọn → mời xem chi tiết
-                output = f"{output}\n{DETAIL_HINT}"
+            if has_alerts(output):   # có khối 🔴 / 🟡 → tin gọn (bỏ nguồn) và mời xem chi tiết
+                output = f"{short_reply(output)}\n{DETAIL_HINT}"
             output = format_reply(output)
             if not needs_more:
                 output = f"{output}\n{FOLLOW_UP_HINT_MERGED if case_status == 'merged' else FOLLOW_UP_HINT}"
