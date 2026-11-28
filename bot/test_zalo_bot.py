@@ -82,6 +82,32 @@ class ZaloBotInviteTests(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.assertEqual(bot_mod._format_doctor_title(raw or ""), expected)
 
+    def _log_records(self) -> list[dict]:
+        if not self.log_dir.exists():
+            return []
+        return [json.loads(line) for f in sorted(self.log_dir.glob("*.jsonl"))
+                for line in f.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+    def test_unauthorized_steps_are_logged_without_text_or_name(self) -> None:
+        """Người chưa có mã: mỗi bước ghi 1 dòng kind="invite" (chỉ kết quả), không ghi chữ đã gõ hay tên."""
+        ctx = _FakeContext()
+        asyncio.run(bot_mod.on_text(_FakeUpdate("chat_301", "BN uống warfarin 0912345678", display_name="Lan"), ctx))
+        asyncio.run(bot_mod.on_text(_FakeUpdate("chat_301", "SAIMA99", display_name="Lan"), ctx))
+        asyncio.run(bot_mod.on_text(_FakeUpdate("chat_301", "rhm2026", display_name="Lan"), ctx))
+        sticker = _FakeUpdate("chat_302", "", display_name="Hùng")
+        sticker.message.text = None
+        asyncio.run(bot_mod.on_non_text(sticker, ctx))
+        recs = self._log_records()
+        self.assertEqual([(r["kind"], r["input"]) for r in recs], [
+            ("invite", "[invite] prompt"), ("invite", "[invite] wrong"),
+            ("invite", "[invite] activated"), ("invite", "[invite] non_text"),
+        ])
+        raw = "".join(json.dumps(r, ensure_ascii=False) for r in recs)
+        for secret in ("warfarin", "0912345678", "SAIMA99", "rhm2026", "RHM2026", "Lan", "Hùng", "chat_301"):
+            self.assertNotIn(secret, raw)
+        self.assertEqual({r["output"] for r in recs}, {""})
+        self.assertEqual(self.agent_calls, [])
+
     def test_first_start_unauthorized_prompts_and_does_not_fail_or_log(self) -> None:
         upd = _FakeUpdate("chat_101", "/start", display_name="Nguyễn Bảo Trung")
         ctx = _FakeContext()
@@ -97,7 +123,7 @@ class ZaloBotInviteTests(unittest.TestCase):
         )
         self.assertEqual(self.agent_calls, [])
         self.assertEqual(bot_mod._failed_attempts.get("chat_101", []), [])
-        self.assertFalse(self.log_dir.exists())
+        self.assertEqual([r["input"] for r in self._log_records()], ["[invite] prompt"])   # chỉ ghi kết quả
 
     def test_first_plain_greeting_unauthorized_prompts_friendly(self) -> None:
         upd = _FakeUpdate("chat_102", "Xin chào", display_name="BS Minh")
@@ -425,6 +451,10 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         upd.message.photo_url = "https://example.invalid/don.jpg"
         asyncio.run(bot_mod.on_non_text(upd, _FakeContext()))
         self.assertEqual(self.agent_calls, [])
+        recs = [json.loads(line) for f in bot_mod.LOG_DIR.glob("*.jsonl")
+                for line in f.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(recs[-1]["kind"], "non_text")   # BS đã kích hoạt gửi ảnh: có dòng log
+        self.assertNotIn("example.invalid", json.dumps(recs, ensure_ascii=False))
         self.assertIn("ảnh", upd.message.replies[-1])
         self.assertIn("gõ", upd.message.replies[-1])
         # Chat chưa kích hoạt: không trả lời gì (không lộ bot cho người lạ).
