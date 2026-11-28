@@ -428,6 +428,12 @@ def _sort(rules: list) -> list:
     return sorted(rules, key=lambda r: (0 if r["severity"] == "HIGH" else 1, r["rule_id"]))
 
 
+def _near_note(n: dict) -> str:
+    """🔎 chữ BS viết khớp gần đúng tên trong bảng (tools.near_match) — để BS thấy chỗ em đoán."""
+    pairs = ['"%s" là %s' % (said, name) for said, name in n["near_matches"]]
+    return TEXT["NEAR_MATCH"].format(pairs="; ".join(pairs)) if pairs else ""
+
+
 def _roles_unknown(head, n, said, unmapped, refusals, text=""):
     """Tình huống 3: có thuốc nhưng chưa rõ vai, chưa có thủ thuật. Hỏi lại Q1, và nếu các thuốc đã nêu
     có tương tác trong bảng thì cảnh báo CÓ ĐIỀU KIỆN "nếu dùng cùng nhau" (B04–B07) — không tự gán vai."""
@@ -439,7 +445,7 @@ def _roles_unknown(head, n, said, unmapped, refusals, text=""):
     key = ("Q1_DRUG" if len(names) == 1 else "Q1_DRUGS") if names else "Q1"
     limit = TEXT["SIDE_EFFECT_LIMIT"] if _mentions(text, SIDE_EFFECT_WORDS) else ""
     return Reply(head=head, verdict=_verdict(rules, 0, together=True), alerts=_alerts(rules), together=True,
-                 notes=[unmapped, limit], refusals=refusals,
+                 notes=[_near_note(n), unmapped, limit], refusals=refusals,
                  # tên đã có trong câu hỏi thì mục "Đã đối chiếu" không lặp lại
                  checked=_checked_groups(n, said, asking_roles=True, skip_drugs=bool(names)),
                  question=TEXT[key].format(names=", ".join(names)), question_key=key, needs_more=True)
@@ -588,7 +594,7 @@ def _reply(text: str) -> Reply:
     # Bước 4 + 5 — kết luận trước, cảnh báo, giới hạn, rồi mới "Đã đối chiếu" và câu nhắc.
     return Reply(head=head, verdict=_verdict(rules, len(n["unmapped"])),
                  ok=TEXT["OK"] if nothing_to_report and not _BLOCKS_OK & set(questions) else "",
-                 alerts=_alerts(rules), notes=unmapped + [no_pair, limit], refusals=refusals,
+                 alerts=_alerts(rules), notes=[_near_note(n)] + unmapped + [no_pair, limit], refusals=refusals,
                  checked=_checked_groups(n, said), question=question, question_key=key,
                  needs_more=needs_more or has_unnamed)   # thuốc chưa rõ tên: giữ ca để BS nhắn tên sau khi hỏi BN
 

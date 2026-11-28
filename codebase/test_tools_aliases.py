@@ -153,3 +153,19 @@ class OutsideTesterAliasTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NearMatch2811(unittest.TestCase):
+    """So gần đúng chỉ dùng cho chữ không khớp alias nào, chỉ trong đúng loại thực thể của danh sách model trả."""
+
+    def test_near_match_only_within_list_type(self):
+        n = normalize_entities({"conditions": [], "allergies": ["peniciline"], "baseline_drugs": [],
+                                "planned_procedures": [], "planned_drugs": []}, "")
+        self.assertEqual([e["canonical_id"] for e in n["allergies"]], ["penicillin"])
+        self.assertEqual(n["unmapped"], [])
+        self.assertEqual(n["near_matches"][0][0], "peniciline")
+
+    def test_exact_alias_does_not_report_near_match(self):
+        n = normalize_entities({"conditions": [], "allergies": ["penicillin"], "baseline_drugs": [],
+                                "planned_procedures": [], "planned_drugs": []}, "")
+        self.assertEqual(n["near_matches"], [])

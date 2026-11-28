@@ -682,3 +682,30 @@ class DetailFromSameReply2811(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NearMatchSpelling2811(unittest.TestCase):
+    """Log VM 28/11 14:57: "Dị ứng peniciline định cho augmentin được ko" → bot chỉ báo ❔, sót 🔴 CR-008.
+    Trung chọn 28/11: tên hơi sai chính tả vẫn phải nhận ra (so gần đúng với tên trong bảng), và tin ghi rõ
+    "em hiểu … là …" để BS thấy chỗ bot đoán."""
+
+    def test_misspelled_allergen_still_fires_high_alert(self):
+        res = run("Dị ứng peniciline định cho augmentin được ko",
+                  _x(allergies=["peniciline"], planned_drugs=["augmentin"]))
+        out = res["output"]
+        self.assertEqual(section_of(out, "CR-008"), "HIGH")
+        self.assertIn('"peniciline"', next(l for l in out.splitlines() if l.startswith("🔎")))
+        self.assertNotIn("❔ Em chưa có quy tắc cho: peniciline", out)
+
+    def test_misspelled_drug_names_are_recognised(self):
+        for typo in ("wafarine", "warfarim", "ibuprofene", "aspirn"):
+            out = run("BN uống %s, nhổ R48, kê augmentin" % typo,
+                      _x(baseline_drugs=[typo], planned_procedures=["nhổ R48"], planned_drugs=["augmentin"]))["output"]
+            self.assertIn("🔎", out, typo)
+            self.assertNotIn("❔ Em chưa có dữ liệu cho: " + typo, out, typo)
+
+    def test_unknown_or_short_words_are_not_forced_onto_table_names(self):
+        for word in ("hen", "abc", "paroxetin", "thuốc lạ xyz"):
+            out = run("BN uống %s, nhổ R48, kê augmentin" % word,
+                      _x(baseline_drugs=[word], planned_procedures=["nhổ R48"], planned_drugs=["augmentin"]))["output"]
+            self.assertNotIn("🔎", out, word)

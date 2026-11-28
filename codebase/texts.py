@@ -23,6 +23,8 @@ TEXT = {
     "Q7": "Ca đang chuẩn bị hay đang làm thủ thuật, có chảy máu khó cầm không ạ?",
     # Trung chốt 28/11: thủ thuật chảy máu mà chưa khai thuốc đang dùng → luôn hỏi (stent, van tim, đột quỵ… không cần luật riêng).
     "Q8": "BN có dùng thuốc chống đông hoặc kháng tiểu cầu không? Có thì nhắn tên thuốc để em kiểm.",
+    # Trung chọn 28/11 (log VM 14:57, "peniciline"): tên hơi sai chính tả vẫn nhận ra, nói rõ chỗ em đoán.
+    "NEAR_MATCH": "🔎 Em hiểu {pairs} — nếu sai, anh/chị nhắn lại tên đúng.",
     "NO_PAIR_RULE": "ℹ️ Bảng tra chưa có quy tắc cho cặp: {pairs} — anh/chị tự đánh giá lâm sàng.",
     "SIDE_EFFECT_LIMIT": "ℹ️ Em chỉ rà tương tác và nguy cơ theo ca, không tra tác dụng phụ chung của thuốc — "
                          "BS xem Dược thư Quốc gia / tờ hướng dẫn sử dụng.",

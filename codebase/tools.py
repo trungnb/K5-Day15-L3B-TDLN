@@ -119,6 +119,64 @@ def find_aliases(normalized_text):
     return [(alias, index[alias]) for _, alias in chosen]
 
 
+# ------------------------------------------------------------------ so gần đúng (tên hơi sai chính tả)
+
+# Log VM 28/11 14:57: "dị ứng peniciline" không khớp alias nào nên sót 🔴 CR-008. Chữ model trả mà không khớp alias
+# được so gần đúng với alias CÙNG LOẠI thực thể của danh sách đó; tin trả lời ghi rõ "em hiểu … là …" (agent.py).
+NEAR_MATCH_TYPES = {"allergies": "allergy", "baseline_drugs": "drug", "planned_drugs": "drug",
+                    "conditions": "condition", "planned_procedures": "procedure"}
+NEAR_MATCH_MIN_LEN = 5   # alias ngắn hơn ("ibu", "af", "tha") không so gần đúng: quá dễ trùng nhầm
+_ALLERGY_PREFIX = "di ung "
+
+
+def _edit_distance(a, b, limit):
+    """Khoảng cách sửa (thêm / bớt / thay / đổi chỗ 2 ký tự liền nhau). Vượt `limit` thì trả limit + 1."""
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    prev2, prev = None, list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i] + [0] * len(b)
+        for j, cb in enumerate(b, 1):
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb))
+            if i > 1 and j > 1 and ca == b[j - 2] and a[i - 2] == cb:
+                cur[j] = min(cur[j], prev2[j - 2] + 1)
+        if min(cur) > limit:
+            return limit + 1
+        prev2, prev = prev, cur
+    return prev[-1]
+
+
+def _near_limit(length):
+    """Số lỗi chấp nhận theo độ dài tên (bỏ dấu cách): 5–8 ký tự → 1, từ 9 ký tự → 2."""
+    return 0 if length < NEAR_MATCH_MIN_LEN else 1 if length <= 8 else 2
+
+
+def near_match(normalized_phrase, list_name):
+    """Alias gần đúng duy nhất cho một chữ không khớp alias nào: (alias, list[thực thể]) hoặc None.
+    So từng cụm từ liên tiếp của chữ (cùng số từ với alias, ±1 để bắt tách / dính chữ), bỏ dấu cách.
+    Nhiều thực thể khác nhau cùng gần nhất → không đoán (None)."""
+    entity_type = NEAR_MATCH_TYPES.get(list_name)
+    words = normalized_phrase.removeprefix(_ALLERGY_PREFIX).split()
+    if not entity_type or not words:
+        return None
+    best, hits = None, {}
+    for alias, entities in _alias_index().items():
+        matching = [e for e in entities if e["entity_type"] == entity_type]
+        target = alias.removeprefix(_ALLERGY_PREFIX).replace(" ", "")
+        limit = _near_limit(len(target))
+        if not matching or not limit:
+            continue
+        size = len(alias.removeprefix(_ALLERGY_PREFIX).split())
+        for k in {max(1, size - 1), size, size + 1}:
+            for start in range(len(words) - k + 1):
+                d = _edit_distance("".join(words[start:start + k]), target, limit)
+                if d <= limit and (best is None or d <= best):
+                    if best is None or d < best:
+                        best, hits = d, {}
+                    hits.setdefault(frozenset(e["canonical_id"] for e in matching), (alias, matching))
+    return next(iter(hits.values())) if len(hits) == 1 else None
+
+
 # ------------------------------------------------------------------ bước 2: chuẩn hoá
 
 def _add(bucket, entity):
@@ -143,6 +201,7 @@ def normalize_entities(extracted, raw_text):
     out = {k: [] for k in ("conditions", "allergies", "baseline_drugs", "planned_drugs",
                            "procedure_groups", "unknown_role_drugs", "procedure_drugs")}
     out["unmapped"] = []
+    out["near_matches"] = []   # (chữ BS viết, tên trong bảng) khớp gần đúng — tin trả lời ghi "em hiểu … là …"
     by_type = {"condition": "conditions", "allergy": "allergies", "procedure": "procedure_groups"}
     role_of_list = {"baseline_drugs": "baseline_drugs", "planned_drugs": "planned_drugs"}
 
@@ -159,6 +218,11 @@ def normalize_entities(extracted, raw_text):
                     allergy = [e for _, ents in find_aliases("di ung " + norm) for e in ents
                                if e["entity_type"] == "allergy"]
                 found = allergy
+            if not found:
+                near = near_match(norm, list_name)
+                if near:
+                    found = near[1]
+                    out["near_matches"].append((phrase.strip(), near[1][0]["display_name"]))
             if not found:
                 if phrase.strip() and phrase.strip() not in out["unmapped"]:
                     out["unmapped"].append(phrase.strip())
