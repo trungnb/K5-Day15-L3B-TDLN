@@ -122,7 +122,8 @@ class ZaloBotCommunicationTests(unittest.TestCase):
         with patch.object(bot_mod, "INVITE_CODE", "RHM2026"):
             replies = self._send("/sai abc", chat_id="chat_z")
         self.assertIn("mã mời", replies[-1])
-        self.assertFalse(bot_mod.LOG_DIR.exists())
+        recs = self._log_records()   # không ghi góp ý của chat lạ; chỉ ghi bước mã mời, không ghi chữ đã gõ
+        self.assertEqual([(r["kind"], r["input"]) for r in recs], [("invite", "[invite] prompt")])
 
     # F
     FULL = Reply(verdict="Em rà xong rồi ạ — có 1 nguy cơ cao, 1 cần thận trọng.", alerts=[HIGH_ALERT, MODERATE_ALERT],

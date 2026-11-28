@@ -325,7 +325,8 @@ def log_turn(
     drop_input: bool = False,
     kind: str = "case",
 ) -> None:
-    """kind: "case" · "small_talk" · "feedback" (/sai) · "detail" ("chi tiết") — bot/log_stats.py đếm theo trường này."""
+    """kind: "case" · "small_talk" · "feedback" (/sai) · "detail" ("chi tiết") · "non_text" (ảnh/sticker)
+    · "invite" (chat chưa có quyền, chỉ ghi bước) — bot/log_stats.py đếm theo trường này."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
     log_path = LOG_DIR / f"{now.strftime('%Y%m%d')}.jsonl"
@@ -486,6 +487,12 @@ def _is_non_private_chat(update: Update) -> bool:
     return str(raw_type).strip().lower() != "private"
 
 
+def _log_invite(chat_id: str, step: str) -> None:
+    """Người chưa có quyền: chỉ ghi bước (prompt · wrong · activated · …), không ghi chữ đã gõ, tên hay mã mời —
+    để đếm được bao nhiêu người mới vào chat mà chưa dùng được bot."""
+    _log_safely(chat_id=chat_id, user_input=f"[invite] {step}", output="", summary={}, kind="invite")
+
+
 async def _handle_unauthorized(
     update: Update,
     chat_id: str,
@@ -494,6 +501,7 @@ async def _handle_unauthorized(
     raw_text: str,
 ) -> None:
     if not INVITE_CODE:
+        _log_invite(chat_id, "no_code_mode")
         await _reply_chunks(
             update,
             f"Chat id của anh/chị là {chat_id}. Anh/chị gửi id này cho nhóm để được cấp quyền dùng thử.",
@@ -501,6 +509,7 @@ async def _handle_unauthorized(
         return
 
     if _is_non_private_chat(update):
+        _log_invite(chat_id, "group")
         await _reply_chunks(
             update,
             "Kích hoạt bằng mã mời chỉ dùng được khi nhắn riêng 1-1 với em. "
@@ -510,11 +519,13 @@ async def _handle_unauthorized(
 
     if cmd in ("/help", "/huongdan") or (cmd in ("/start", "/join") and not arg):
         _prompted_chats.add(chat_id)
+        _log_invite(chat_id, "prompt")
         await _reply_chunks(update, _invite_prompt_text(update))
         return
 
     candidate = arg if cmd in ("/start", "/join") else raw_text
     if _is_invite_throttled(chat_id):
+        _log_invite(chat_id, "throttled")
         await _reply_chunks(
             update,
             "Anh/chị đã nhập sai mã mời quá nhiều lần. Anh/chị thử lại sau ít phút giúp em nhé.",
@@ -523,6 +534,7 @@ async def _handle_unauthorized(
 
     if _verify_invite_code(candidate):
         await _grant_access(chat_id)
+        _log_invite(chat_id, "activated")
         title = _format_doctor_title(_extract_display_name(update))
         await _reply_chunks(
             update,
@@ -533,10 +545,12 @@ async def _handle_unauthorized(
     _record_invite_failure(chat_id)
     if cmd not in ("/start", "/join") and chat_id not in _prompted_chats:
         _prompted_chats.add(chat_id)
+        _log_invite(chat_id, "prompt")
         await _reply_chunks(update, _invite_prompt_text(update))
         return
 
     _prompted_chats.add(chat_id)
+    _log_invite(chat_id, "wrong")
     await _reply_chunks(
         update,
         "Mã mời chưa đúng ạ. Anh/chị kiểm tra lại và gửi đúng mã mời nhóm đã cung cấp giúp em.",
@@ -676,8 +690,12 @@ async def on_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 async def on_non_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Ảnh / sticker / tin thoại: bot chỉ đọc chữ — trả một câu hướng dẫn thay vì im lặng. Chat lạ thì bỏ qua."""
     chat_id = _extract_chat_id(update)
-    if chat_id is None or update.message is None or chat_id not in ALLOWED_CHAT_IDS:
+    if chat_id is None or update.message is None:
         return
+    if chat_id not in ALLOWED_CHAT_IDS:
+        _log_invite(chat_id, "non_text")   # vẫn không trả lời người lạ, chỉ đếm
+        return
+    _log_safely(chat_id=chat_id, user_input="[non_text]", output=NON_TEXT_TEXT, summary={}, kind="non_text")
     await _reply_chunks(update, NON_TEXT_TEXT)
 
 

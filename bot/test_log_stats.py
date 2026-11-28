@@ -52,6 +52,16 @@ class LogStatsTests(unittest.TestCase):
         self.assertEqual(s["repair"], 1)
         self.assertEqual(s["errors"], 1)
 
+    def test_invite_records_counted_apart_from_turns(self):
+        extra = [rec("04:00:00", "n1", "[invite] prompt", "", kind="invite"),
+                 rec("04:01:00", "n1", "[invite] activated", "", kind="invite"),
+                 rec("04:02:00", "n2", "[invite] prompt", "", kind="invite")]
+        s = log_stats.compute(RECORDS + extra)
+        self.assertEqual(s["turns"], 9)                 # lượt BS dùng bot: không tính bước nhập mã
+        self.assertEqual(s["by_kind"]["invite"], 3)
+        self.assertEqual(s["invite_chats"], 2)
+        self.assertEqual(s["invite_activated"], 1)
+
     def test_left_in_red_proxy(self):
         s = log_stats.compute(RECORDS)
         # c1 ca đầu: 2 🔴 → 1 🔴 trong 10 phút = đã sửa; c1 ca sau và c2: không có tin sau làm giảm 🔴.

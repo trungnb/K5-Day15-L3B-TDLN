@@ -64,10 +64,16 @@ def compute(records: list[dict]) -> dict:
     stats = {"turns": 0, "cases_with_high": 0, "cases_with_moderate": 0, "follow_up_them": 0,
              "repair": 0, "errors": 0, "red_cases": 0, "left_in_red": 0}
     cases_by_chat: dict[str, list[tuple[float, int]]] = {}
+    invite_chats: set[str] = set()
+    stats["invite_activated"] = 0
     for rec in records:
-        stats["turns"] += 1
         kind = _kind(rec)
         by_kind[kind] += 1
+        if kind == "invite":   # chat chưa có quyền: không phải lượt BS dùng bot
+            invite_chats.add(str(rec.get("chat")))
+            stats["invite_activated"] += str(rec.get("input") or "").endswith(" activated")
+            continue
+        stats["turns"] += 1
         out = str(rec.get("output") or "")
         if rec.get("error"):
             stats["errors"] += 1
@@ -93,6 +99,7 @@ def compute(records: list[dict]) -> dict:
             fixed = any(later_reds < reds for later_ts, later_reds in cases[i + 1:] if later_ts - ts <= WINDOW_SEC)
             stats["left_in_red"] += not fixed
     stats["by_kind"] = dict(by_kind)
+    stats["invite_chats"] = len(invite_chats)
     stats["refusals"] = dict(refusals)
     return stats
 
