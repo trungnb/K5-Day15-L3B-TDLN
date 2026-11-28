@@ -74,10 +74,13 @@ def _alias_index():
 # soát" và "tăng huyết áp đang ổn định" cùng gốc "tang huyet ap". Dùng để biết BS đã ghi tên bệnh ĐÃ CÓ trong bảng
 # kèm tình trạng, chỉ là bảng chưa có quy tắc cho tình trạng đó — khi ấy không hỏi lại Q6 (agent.py).
 PROCEDURE_DRUG_CLASSES = frozenset({"local_anesthetic", "vasoconstrictor"})
-# Tên NHÓM thuốc khi chưa biết tên thuốc ("uống chống đông", "thuốc kháng tiểu cầu"; log VM 28/11 14:59) → nhóm thuốc
-# cụ thể thay thế nó: có tên thuốc cụ thể thì bỏ thực thể nhóm (CR-022 / CR-023 chỉ dành cho lúc chưa rõ tên).
-UNSPECIFIED_DRUG_CLASSES = {"anticoagulant_unspecified": frozenset({"vka", "doac", "lmwh"}),
-                            "antiplatelet_unspecified": frozenset({"antiplatelet", "p2y12_antiplatelet"})}
+# Tên NHÓM thuốc khi chưa biết tên thuốc ("uống chống đông", "thuốc kháng tiểu cầu"; log VM 28/11 14:59) → các nhóm
+# thuốc cụ thể thay thế nó: có tên thuốc cụ thể thì bỏ thực thể nhóm (CR-022 / CR-023 chỉ dành cho lúc chưa rõ tên).
+# BS hay gọi chung aspirin / clopidogrel là "chống đông" (log VM 15:29: "chống đông" rồi "đang uống aspirin"), nên tên
+# thuốc chống huyết khối nào cũng trả lời được câu hỏi tên, cho cả hai nhóm.
+ANTITHROMBOTIC_CLASSES = frozenset({"vka", "doac", "lmwh", "antiplatelet", "p2y12_antiplatelet"})
+UNSPECIFIED_DRUG_CLASSES = {"anticoagulant_unspecified": ANTITHROMBOTIC_CLASSES,
+                            "antiplatelet_unspecified": ANTITHROMBOTIC_CLASSES}
 STATUS_MARK = re.compile(r"\b(?:on dinh|kiem soat|dieu tri)\b")
 _STATUS_WORDS = re.compile(r"\b(?:on dinh|kiem soat|dieu tri|tot|kem|dang|da|chua|khong)\b")
 

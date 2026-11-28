@@ -739,6 +739,16 @@ class UnnamedAnticoagulant2811(unittest.TestCase):
         self.assertEqual(section_of(out, "CR-001"), "HIGH")
         self.assertNotIn("CR-022", out)
 
+    def test_any_named_antithrombotic_answers_the_name_question(self):
+        # Log VM 28/11 15:29: BS hỏi tên xong nhắn "đang uống aspirin" → vẫn còn 🔴 CR-022 cạnh CR-005.
+        # BS hay gọi chung aspirin / clopidogrel là "chống đông": có tên thuốc chống huyết khối nào thì bỏ dòng chưa rõ tên.
+        for named, code in (("aspirin", "CR-005"), ("clopidogrel", "CR-004"), ("warfarin", "CR-001")):
+            for unnamed, rule in (("chống đông", "CR-022"), ("thuốc kháng tiểu cầu", "CR-023")):
+                out = run("BN uống %s, %s. Nhổ R48" % (unnamed, named),
+                          _x(baseline_drugs=[unnamed, named], planned_procedures=["nhổ R48"]))["output"]
+                self.assertIn(code, out, (unnamed, named))
+                self.assertNotIn(rule, out, (unnamed, named))
+
     def test_negated_mention_in_text_does_not_fire(self):
         out = run("BN không dùng thuốc chống đông, nhổ R48, kê augmentin",
                   _x(planned_procedures=["nhổ R48"], planned_drugs=["augmentin"]))["output"]
