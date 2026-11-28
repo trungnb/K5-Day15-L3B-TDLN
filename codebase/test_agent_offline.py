@@ -151,10 +151,12 @@ class Issue3Fallback(unittest.TestCase):
 
 class Issue4Q4(unittest.TestCase):
     def test_q4_reminder_does_not_hold_case(self):
-        # 28/11: "khoẻ mạnh" chưa phải "không dùng thuốc" → ca HEALTHY giờ hỏi Q8 và giữ ca; ghi rõ không dùng thuốc thì không.
-        res = run("BN 25t khoẻ mạnh, không dùng thuốc gì, nhổ R38, định kê Augmentin", HEALTHY_X)
+        # 28/11: thủ thuật không chảy máu (không hỏi Q8), BS không khai cả ba mục → nhắc Q4 mà không giữ ca.
+        # Ghi "khoẻ mạnh" / "không dùng thuốc" thì mục đó là "không có", không nhắc Q4 (test_khong_tuong_tac).
+        res = run("BN 25t, trám răng, định kê Paracetamol",
+                  dict(HEALTHY_X, planned_procedures=["trám răng"], planned_drugs=["Paracetamol"]))
         self.assertIn("✅", res["output"])
-        self.assertIn("bệnh nền", res["output"])   # vẫn nhắc Q4
+        self.assertEqual(res["reply"].question_key, "Q4")
         self.assertFalse(res["needs_more"])
 
 
