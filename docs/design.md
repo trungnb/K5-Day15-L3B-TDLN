@@ -105,6 +105,7 @@ Model chỉ có ở 2 ô xanh. Mọi hình thoi là if/else trong code. Ô đỏ
 
 ```python
 answer(text: str) -> {"output": str, "needs_more": bool}
+answer(text: str, detail=True)   # (28/11) chỉ bot gọi, cho lệnh "chi tiết": in đủ hướng xử trí của 🟡
 ```
 
 - `output`: tin trả lời hoàn chỉnh, mục tiêu ≤ 1800 ký tự (Zalo giới hạn 2000/tin; bot tự cắt nếu dài hơn).
@@ -204,7 +205,7 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 
 | # | Tình huống | Hành vi | `needs_more` |
 |---|---|---|---|
-| 0 | *(28/11)* **Cả tin** chỉ là xã giao: chào / hỏi bot làm được gì / cảm ơn, ok (code so khớp sau khi bỏ dấu, dấu câu, từ đệm; tin ≤ 60 ký tự; "có", "không", "dạ" trơn **không** tính vì có thể là câu trả lời Q5) | Không gọi model. Chào / hỏi → HELLO + Q0; cảm ơn → THANKS. Không câu chốt | `False` |
+| 0 | *(28/11)* **Cả tin** chỉ là xã giao: chào / hỏi bot làm được gì / cảm ơn, ok / tạm biệt (code so khớp sau khi bỏ dấu, dấu câu, từ đệm; tin ≤ 60 ký tự; "có", "không", "dạ" trơn **không** tính vì có thể là câu trả lời Q5) | Không gọi model. Chào / hỏi → HELLO + Q0 (bot đổi lần chào lại trong 12 giờ thành HELLO_AGAIN, §9); cảm ơn → THANKS; tạm biệt → BYE. Không câu chốt | `False` |
 | 0b | *(28/11)* Tin đánh số ≥ 2 BN khác nhau ("BN1 … BN2 …", "Ca 1: … Ca 2: …") | Không gọi model. MANY_PATIENTS (xin gửi mỗi ca một tin) + câu chốt — để không trộn thuốc hai người vào một ca | `False` |
 | 1 | Không có thực thể nào, không có cờ (vd "nhờ rà tương tác nhưng chưa ghi tên thuốc", "em ơi") | Gửi câu hỏi Q1 (hỏi thuốc đang dùng, thuốc định kê, thủ thuật). Q0 dùng ở tình huống 0 (sau HELLO) | `True` |
 | 2 | Không có thực thể nào, có `out_of_scope` | Gửi khối 🚫 + câu hỏi Q1 (xin tên thuốc / thủ thuật) | `False` |
@@ -246,7 +247,7 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 2. **Kết luận** — code đếm: "Em rà xong rồi ạ — có {n} nguy cơ cao, {n} cần thận trọng, {n} mục em chưa có dữ liệu." Tình huống 3 dùng câu có điều kiện. Không có rule → bỏ dòng này (✅ đứng đầu)
 3. ✅ — chỉ khi 🔴 🟡 ❔ 🚫 đều rỗng và không hỏi Q5 — code
 4. 🔴 Nguy cơ cao — model viết + dòng code nối thêm
-5. 🟡 Cần thận trọng — model viết
+5. 🟡 Cần thận trọng — *(28/11, Trung duyệt)* dòng gọn do code viết, không gọi model 2: mã + cặp + câu đầu của cơ chế (nguyên văn bảng tra) + nguồn; không in hướng xử trí. `answer(text, detail=True)` in đủ như 🔴
 6. ❔ Chưa có dữ liệu — code
 7. 🚫 Ngoài phạm vi — code
 8. **Đã đối chiếu:** bệnh nền · dị ứng · thuốc đang dùng · thủ thuật · thuốc định kê (tên hiển thị đầy đủ, in một lần). Nhóm trống ghi "không khai". Thuốc trong `unknown_role_drugs` ghi kèm "(không rõ đang dùng hay định kê — đã kiểm cả hai)". Ở tình huống 3, thuốc ghi chung là "Thuốc đã nêu (chưa rõ đang dùng hay định kê)" — không tự gán vai trò *(28/11, B04–B07)*; chỉ in nhóm BS có ghi (bỏ "không khai") và bỏ nhóm thuốc khi câu Q1_DRUG(S) đã nêu tên; không còn nhóm nào thì bỏ cả mục *(28/11)*.
@@ -288,7 +289,10 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | 🚫 `khac` | "🚫 Yêu cầu này nằm ngoài phạm vi em hỗ trợ (tra cứu an toàn trước thủ thuật & kê đơn)." |
 | ✅ | "✅ Em chưa thấy cảnh báo nào trong bảng tra hiện có. Bảng tra chưa phủ mọi tương tác nên không thay được đánh giá lâm sàng của anh/chị." |
 | Câu chốt | "Em chỉ đối chiếu theo bảng tra — BS là người quyết định." |
-| HELLO | *(28/11, tình huống 0)* "Dạ em đây ạ. Em đối chiếu tương tác thuốc và rủi ro thủ thuật RHM theo bảng tra có nguồn — không kê đơn, không tư vấn liều." + xuống dòng + Q0 |
+| HELLO | *(28/11, tình huống 0; thêm "trợ lý AI" theo kế hoạch giao tiếp Trung duyệt 28/11)* "Dạ em đây ạ. Em là trợ lý AI đối chiếu tương tác thuốc và rủi ro thủ thuật RHM theo bảng tra có nguồn — không kê đơn, không tư vấn liều." + xuống dòng + Q0 |
+| HELLO_AGAIN | *(28/11, Trung duyệt)* "Dạ em đây ạ, anh/chị gửi ca nhé." — bot dùng khi chat đã chào trong 12 giờ (§9) |
+| BYE | *(28/11, Trung duyệt)* "Dạ, chào anh/chị ạ." |
+| REPAIR | *(28/11, Trung duyệt)* "Em vẫn chưa nhận ra thuốc hay thủ thuật nào trong tin này. Anh/chị thử gõ theo mẫu: "BN uống <thuốc đang dùng>. Dự kiến <thủ thuật>. Định kê <thuốc>." Nhắn /huongdan để xem đủ." — bot thay Q1 bằng câu này ở lần thứ 2 liên tiếp không nhận ra thực thể (§9) |
 | THANKS | *(28/11, tình huống 0)* "Dạ không có gì ạ. Có ca mới anh/chị cứ nhắn em." |
 
 **Khung một dòng cảnh báo** — hướng xử trí trước, lý do sau; tên ngắn (bỏ chú thích trong ngoặc) *(đổi 28/11)*:
@@ -297,6 +301,8 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 Model viết:    [DDI-001] Ibuprofen + Acenocoumarol → {hướng xử trí rút gọn, giữ mọi con số}. (Vì: {cơ chế rút gọn}). Nguồn: {source}
 Khung dự phòng: [DDI-001] Ibuprofen + Acenocoumarol → {guidance NGUYÊN VĂN, không cắt câu}. Nguồn: {source}
 ```
+
+Dòng 🟡 gọn *(28/11, Trung duyệt)*: `[DDI-029] Paracetamol + Warfarin: {câu đầu của mechanism, nguyên văn}. Nguồn: {source}`. Bản "chi tiết" dùng khung như 🔴. **Hệ quả cần biết:** rule MODERATE có hành động nằm ở guidance (vd `CR-021` rung nhĩ → hỏi thuốc chống đông) chỉ còn hành động đó ở bản "chi tiết".
 
 Khung dự phòng (code nối mã HIGH thiếu, dòng model bị loại, hoặc model 2 lỗi) in nguyên văn guidance: bản cũ chỉ lấy câu đầu và làm mất ngưỡng INR của `CR-001`. Khung dự phòng bỏ phần cơ chế cho tin gọn; cơ chế vẫn tra được qua mã và nguồn.
 
@@ -325,6 +331,13 @@ Khung dự phòng (code nối mã HIGH thiếu, dòng model bị loại, hoặc 
 - Gọi `answer(text_đã_ghép)`. Kết quả `needs_more = True` → lưu `pending`; `False` → xoá.
 - *(28/11)* Ca xong (`needs_more = False`) → cuối tin thêm FOLLOW_UP_HINT: "(Hỏi tiếp cho BN này: nhắn "thêm <tên thuốc / thủ thuật>" trong 10 phút. BN khác: nhắn /moi.)"
 - *(28/11)* Ảnh / sticker / tin không có chữ → trả "Em chưa đọc được ảnh, sticker hay tin thoại ạ. Anh/chị gõ tên thuốc, bệnh nền, thủ thuật giúp em — đừng gửi ảnh đơn thuốc thật của BN nhé." Chat chưa kích hoạt thì bỏ qua.
+- *(28/11, kế hoạch giao tiếp Trung duyệt — A–F)*
+  - **Kích hoạt:** tin ngắn ACTIVATED_TEXT (là trợ lý AI · làm gì · không làm gì · ẩn danh · ví dụ · `/huongdan`); `/huongdan` (và `/help`) in USAGE_TEXT đủ, có danh sách lệnh. Mọi câu của bot xưng "em", gọi "anh/chị".
+  - **Chào lại:** loại `greet` (`agent.small_talk_kind`) trong 12 giờ kể từ lần chào trước → HELLO_AGAIN; hỏi "làm được gì" luôn nhận HELLO + Q0. Giờ chào giữ trong RAM.
+  - **Hỏi lại tăng dần:** `agent.is_no_entity_reply(output)` đúng 2 lần liên tiếp → thay Q1 bằng REPAIR. Có ca nhận ra thực thể hoặc `/moi` → đếm lại.
+  - **`/sai <lý do>`:** ghi log `kind = "feedback"` (đã che số định danh), trả "Dạ em ghi nhận, cảm ơn anh/chị. Nhóm sẽ xem lại cảnh báo này." Không gọi agent, không đổi ca.
+  - **"chi tiết":** tin có khối 🟡 → thêm "(Nhắn "chi tiết" trong 10 phút để xem hướng xử trí các mục 🟡.)". "chi tiết" → gọi `answer(ca, detail=True)` với ca đang chờ hoặc ca vừa xong trong 10 phút, không đổi trạng thái ca; không có ca → "Em chưa có ca nào trong 10 phút qua để xem chi tiết ạ. Anh/chị gửi lại ca giúp em nhé." Gọi lại model 1 nên trích thực thể có thể khác lần đầu.
+  - **Log:** thêm trường `kind` (`case` · `small_talk` · `feedback` · `detail`). `bot/log_stats.py` chỉ in số đếm, gồm chỉ số gần đúng "để nguyên 🔴" (ca có 🔴 mà 10 phút sau không có ca nào ít dòng 🔴 hơn).
 - Tắt bot là mất `pending` (chấp nhận được cho demo). Không ghi `pending` ra đĩa.
 - `run.py eval` không đi qua bot nên không bị ảnh hưởng.
 
@@ -371,7 +384,8 @@ Mã quy tắc trên lấy từ CSV v1.1 hiện tại; kết quả thật phụ t
 | *(28/11, rà UX)* Alias đề xuất — **Trung đã duyệt ngày 28/11/2026** (cột `source` ghi "Trung duyệt 28/11/2026"), còn chờ Nguyên (data): `ibu` → ibuprofen, `metro` → metronidazole, `extraction` / `tooth extraction` → nhổ răng, `chich ap xe` / `trich ap xe` / `dan luu ap xe` → rạch dẫn lưu áp xe, `dieu tri tuy` / `lay tuy` / `dieu tri noi nha` → nhóm không xâm lấn (như `chua tuy`) | Nguyên (Trung ✓ 28/11) | Trước khi merge PR |
 | *(28/11, rà UX)* Chưa nhận ra, **cần quyết định lâm sàng + nguồn** (bot hiện báo ❔ "chưa có quy tắc"): "tăng huyết áp" đã kiểm soát / chưa rõ (chỉ có dạng "chưa kiểm soát" — ca P5), "lấy cao răng" trơn (trên hay dưới nướu?), van tim cơ học, đặt stent < 6 tháng, xạ trị vùng đầu cổ, đang cho con bú, hen, dị ứng sulfa, dị ứng cao su, ghép xương, nâng xoang | Trung (luật), Nguyên (data) | Sau CP4 |
 | *(28/11, rà UX)* Thuốc không rõ tên theo nhóm ("thuốc chống đông", "thuốc loãng xương chích hằng năm"): có nên thêm thực thể "nhóm, chưa rõ tên" kèm câu hỏi riêng (VKA / DOAC / kháng tiểu cầu? chích hay uống?) và cảnh báo chung không | Trung | Sau CP4 |
-| *(28/11, rà UX)* Bản tin gọn cho điện thoại (chỉ 🔴 + việc cần làm, "chi tiết" mới in đủ): chưa làm — bỏ chi tiết có thể giấu hướng xử trí HIGH và lệch tiêu chí đạt | Cả nhóm | Sau CP4 |
+| ~~*(28/11, rà UX)* Bản tin gọn cho điện thoại~~ — làm cho 🟡 theo kế hoạch giao tiếp Trung duyệt 28/11 (🔴 giữ nguyên). `eval --try 27` (không tính là lượt) cho `eval/grade.py` xếp từng câu đúng như run-2 (9 🟢 / 18 🟡 / 0 🔴); **chưa chấm tay**. Cần Trung xem lại các rule MODERATE có hành động trong guidance (vd `CR-021`) | Trung | Trước khi merge PR |
+| *(28/11)* **Nói về bot khi thuyết trình** (kế hoạch giao tiếp, mục G): chỉ nói bot giúp BS phát hiện sớm tương tác thuốc và rủi ro thủ thuật, có nguồn, BS quyết định. Không nói bot cải thiện kết cục BN hay giảm biến chứng — nhóm chưa có số liệu đó (Penda Health, 39.849 lượt khám, cũng chưa chứng minh được kết cục). Số được dẫn: kết quả eval (run-2 26/27) và số đếm từ `bot/log_stats.py` | Người làm slide | CP4 |
 
 **Trung chốt ngày 27/11/2026:** Q0–Q4 giữ nguyên văn bản của Lĩnh. Tự gán thêm nhóm `local_anesthesia` cho nhổ răng, cấy implant và phẫu thuật nha chu/tạo vạt. Với các thủ thuật còn lại, chỉ gán nhóm này khi tin nhắn ghi rõ có gây tê. Bảng alias đã có các nhóm bổ sung. CLI CP2 hiện chỉ tra DDI; bước tra rủi ro theo nhóm thủ thuật thuộc luồng triển khai của Lĩnh.
 

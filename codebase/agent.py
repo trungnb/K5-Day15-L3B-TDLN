@@ -44,8 +44,12 @@ TEXT = {
                     "Chưa có quy tắc không thay cho đánh giá lâm sàng của BS.",
     "SIDE_EFFECT_LIMIT": "ℹ️ Hệ thống chỉ rà tương tác và nguy cơ theo ca trong bảng tra, không tra tác dụng phụ "
                          "chung của từng thuốc. BS xem Dược thư Quốc gia / tờ hướng dẫn sử dụng.",
-    "HELLO": "Dạ em đây ạ. Em đối chiếu tương tác thuốc và rủi ro thủ thuật RHM theo bảng tra có nguồn — "
+    "HELLO": "Dạ em đây ạ. Em là trợ lý AI đối chiếu tương tác thuốc và rủi ro thủ thuật RHM theo bảng tra có nguồn — "
              "không kê đơn, không tư vấn liều.",
+    "HELLO_AGAIN": "Dạ em đây ạ, anh/chị gửi ca nhé.",
+    "BYE": "Dạ, chào anh/chị ạ.",
+    "REPAIR": "Em vẫn chưa nhận ra thuốc hay thủ thuật nào trong tin này. Anh/chị thử gõ theo mẫu: "
+              "\"BN uống <thuốc đang dùng>. Dự kiến <thủ thuật>. Định kê <thuốc>.\" Nhắn /huongdan để xem đủ.",
     "THANKS": "Dạ không có gì ạ. Có ca mới anh/chị cứ nhắn em.",
     "P1": "⚠️ Tin nhắn có thông tin định danh BN — lần sau anh/chị gửi ca đã ẩn danh giúp em nhé.",
     "UNMAPPED": "❔ Em chưa có dữ liệu cho: {names}, nên không đoán. Nếu là viết tắt hoặc tên chung, anh/chị ghi rõ "
@@ -146,8 +150,9 @@ _FILLER = {"da", "vang", "a", "u", "uh", "em", "anh", "chi", "minh", "bot", "ban
 _SMALL_TALK = (
     ("greet", re.compile(r"(?:xin )?chao|hi|hello|helo|hey|alo|a lo|test|"
                          r"(?:con|co) (?:onl|online|do|o do|o day)(?: (?:khong|ko|k|hong|hok))?")),
-    ("greet", re.compile(r"(?:lam|giup|ho tro) (?:duoc|dc|đc) (?:gi|nhung gi|viec gi)|huong dan|cach dung|"
-                         r"dung (?:sao|the nao|nhu the nao)")),
+    ("help", re.compile(r"(?:lam|giup|ho tro) (?:duoc|dc|đc) (?:gi|nhung gi|viec gi)|huong dan|cach dung|"
+                        r"dung (?:sao|the nao|nhu the nao)")),
+    ("bye", re.compile(r"(?:tam biet|bye|bai|goodbye|good bye|hen gap lai)(?: (?:bye|nhe|nha))*")),
     ("thanks", re.compile(r"(?:{t})(?: (?:{t}))*".format(
         t=r"cam on|cam ou|lam|thanks?|thank you|tks|thx|ok|oke|okie|okay|okela|(?:duoc|ro|hieu) roi|tot qua|tuyet"))),
 )
@@ -160,17 +165,34 @@ def _plain(text: str) -> str:
     return " ".join(re.sub(r"[^a-z0-9 ]+", " ", text).split())
 
 
-def small_talk_reply(text: str):
-    """Trả câu đáp cố định nếu cả tin chỉ là xã giao; ngược lại None. Bot cũng gọi hàm này để không ghép
-    "cảm ơn" vào ca đang chờ bổ sung (design §9)."""
+def small_talk_kind(text: str):
+    """Loại tin xã giao: "greet" (chào), "help" (hỏi bot làm gì), "thanks", "bye"; không phải xã giao → None.
+    Bot dùng loại "greet" để chào lại ngắn trong 12 giờ (design §9)."""
     if len(text or "") > 60:
         return None
     words = [w for w in _plain(text).split() if w not in _FILLER]
     core = " ".join(words)   # rỗng khi chỉ toàn từ đệm ("dạ", "em ơi") → không coi là xã giao
     for kind, pattern in _SMALL_TALK:
         if core and pattern.fullmatch(core):
-            return TEXT["THANKS"] if kind == "thanks" else TEXT["HELLO"] + "\n" + TEXT["Q0"]
+            return kind
     return None
+
+
+def small_talk_reply(text: str):
+    """Trả câu đáp cố định nếu cả tin chỉ là xã giao; ngược lại None. Bot cũng gọi hàm này để không ghép
+    "cảm ơn" vào ca đang chờ bổ sung (design §9)."""
+    kind = small_talk_kind(text)
+    if kind is None:
+        return None
+    return {"thanks": TEXT["THANKS"], "bye": TEXT["BYE"]}.get(kind, TEXT["HELLO"] + "\n" + TEXT["Q0"])
+
+
+def is_no_entity_reply(output: str) -> bool:
+    """True khi câu trả lời là tình huống 1/2 (§6): không nhận ra thực thể nào, chỉ hỏi lại Q1.
+    Bot dùng để đổi lần hỏi lại thứ 2 liên tiếp sang câu mẫu REPAIR (design §9)."""
+    out = output or ""
+    return (TEXT["Q1"] in out and "Đã đối chiếu —" not in out
+            and not any(mark in out for mark in ("❔", "🔴", "🟡")))
 
 
 _PATIENT_NO = re.compile(r"\b(?:bn|benh nhan|ca)\s*(?:so\s*)?([1-9])\b")
@@ -411,11 +433,23 @@ def _verdict(rules: list, n_unmapped: int, together: bool = False) -> str:
     return TEXT["VERDICT_IF_TOGETHER" if together else "VERDICT"].format(parts=", ".join(parts))
 
 
-def _alert_blocks(rules: list, together: bool = False) -> list:
-    """Bước 4: model 2 viết dòng cảnh báo (đã kiểm), xếp vào khối 🔴 / 🟡."""
+def _compact_line(rule: dict) -> str:
+    """Dòng 🟡 gọn (Trung duyệt 28/11): mã + cặp + câu đầu của cơ chế (nguyên văn bảng tra) + nguồn.
+    Không in hướng xử trí; bot cho xem bản đủ qua lệnh "chi tiết" (answer(text, detail=True))."""
+    risk = re.split(r"(?<=[.;])\s", rule["mechanism"].strip(), maxsplit=1)[0].rstrip(" .;")
+    return "[%s] %s + %s: %s. Nguồn: %s." % (rule["rule_id"], _short(rule["a"]), _short(rule["b"]), risk,
+                                             _source(rule).rstrip(" ."))
+
+
+def _alert_blocks(rules: list, together: bool = False, detail: bool = False) -> list:
+    """Bước 4: model 2 viết dòng cảnh báo (đã kiểm), xếp vào khối 🔴 / 🟡. Mặc định 🟡 in dòng gọn bằng code
+    (không gọi model 2 cho MODERATE); detail=True in đủ như 🔴."""
     if not rules:
         return []
-    lines = _write_rule_lines(rules)
+    full = rules if detail else [r for r in rules if r["severity"] == "HIGH"]
+    lines = _write_rule_lines(full) if full else {}
+    if not detail:
+        lines.update({r["rule_id"]: _compact_line(r) for r in rules if r["severity"] != "HIGH"})
     suffix = "_IF_TOGETHER" if together else ""
     blocks = []
     for severity in ("HIGH", "MODERATE"):
@@ -429,7 +463,7 @@ def _sort(rules: list) -> list:
     return sorted(rules, key=lambda r: (0 if r["severity"] == "HIGH" else 1, r["rule_id"]))
 
 
-def _roles_unknown(head, n, said, unmapped, refusals, text=""):
+def _roles_unknown(head, n, said, unmapped, refusals, text="", detail=False):
     """Tình huống 3: có thuốc nhưng chưa rõ vai, chưa có thủ thuật. Hỏi lại Q1, và nếu các thuốc đã nêu
     có tương tác trong bảng thì cảnh báo CÓ ĐIỀU KIỆN "nếu dùng cùng nhau" (B04–B07) — không tự gán vai."""
     drugs = n["baseline_drugs"]
@@ -442,7 +476,7 @@ def _roles_unknown(head, n, said, unmapped, refusals, text=""):
     else:
         question = TEXT["Q1"]
     checked = _checked_line(n, said, asking_roles=True, skip_drugs=bool(names))
-    blocks = head + [_verdict(rules, 0, together=True)] + _alert_blocks(rules, together=True)
+    blocks = head + [_verdict(rules, 0, together=True)] + _alert_blocks(rules, together=True, detail=detail)
     limit = TEXT["SIDE_EFFECT_LIMIT"] if _mentions(text, SIDE_EFFECT_WORDS) else ""
     blocks += [unmapped, limit] + refusals + [checked, question]
     return _finish(blocks, True)
@@ -460,7 +494,8 @@ def _reminders(has_procedure, has_planned, has_background, ask_anesthesia, ask_s
 
 # ------------------------------------------------------------------ luồng chính
 
-def answer(text: str) -> dict:
+def answer(text: str, detail: bool = False) -> dict:
+    """Hợp đồng chấm: answer(text). detail=True chỉ bot dùng (lệnh "chi tiết"): in đủ hướng xử trí cho 🟡."""
     # Tình huống 0 — tin xã giao: đáp câu cố định, không gọi model, không câu chốt (design §6).
     reply_text = small_talk_reply(text)
     if reply_text:
@@ -501,7 +536,7 @@ def answer(text: str) -> dict:
         note("tình huống %d: không có thực thể" % (2 if flags else 1))
         return _finish(head + refusals + [TEXT["Q1"]], not flags)
     if not has_procedure and not has_planned:   # tình huống 3
-        return _roles_unknown(head, n, said, unmapped, refusals, text)
+        return _roles_unknown(head, n, said, unmapped, refusals, text, detail)
 
     # Bước 3 — tra bảng.
     rules = _sort(check_drug_interactions(n["baseline_drugs"], n["planned_drugs"]) + check_clinical_risks(
@@ -532,6 +567,6 @@ def answer(text: str) -> dict:
     reminders, needs_more = _reminders(has_procedure, has_planned, has_background, ask_anesthesia,
                                        ask_stage, bad_conditions)
     needs_more = needs_more or has_unnamed   # giữ ca để BS nhắn tên thuốc sau khi hỏi BN
-    blocks = head + [_verdict(rules, len(n["unmapped"])), ok] + _alert_blocks(rules)
+    blocks = head + [_verdict(rules, len(n["unmapped"])), ok] + _alert_blocks(rules, detail=detail)
     blocks += [unmapped, no_pair, limit] + refusals + [_checked_line(n, said)] + reminders
     return _finish(blocks, needs_more)
