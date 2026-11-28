@@ -303,6 +303,46 @@ class AskAnticoagulant2811(unittest.TestCase):
         self.assertIn("[CR-004]", res["output"])
         self.assertNotIn(ASK_ANTICOAG, res["output"])
 
+    def test_bare_no_merged_by_bot_answers_q8(self):
+        # Log VM 28/11: BS trả lời Q8 chỉ bằng "không" → bot hỏi lại Q8 mãi, ca không bao giờ chốt.
+        for reply in ("không", "ko", "Không có", "k", "chưa", "dạ không ạ", "không dùng", "ko có thuốc gì"):
+            res = run("Nhổ R48, kê paracetamol\nBổ sung: " + reply,
+                      _x(planned_procedures=["nhổ R48"], planned_drugs=["paracetamol"]))
+            self.assertNotIn(ASK_ANTICOAG, res["output"], reply)
+            self.assertFalse(res["needs_more"], reply)
+
+    def test_bare_no_does_not_answer_q8_when_q5_also_asked(self):
+        # Q5 (gây tê) và Q8 cùng hỏi: "không" trơn không rõ trả lời câu nào → vẫn hỏi Q8 (an toàn hơn đoán).
+        # Lấy cao dưới nướu: thủ thuật chảy máu chưa thuộc nhóm gây tê → Q5 được hỏi.
+        res = run("BN dị ứng thuốc tê. Lấy cao dưới nướu, kê paracetamol\nBổ sung: không",
+                  _x(allergies=["thuốc tê"], planned_procedures=["lấy cao dưới nướu"], planned_drugs=["paracetamol"]))
+        self.assertIn(agent.TEXT["Q5"], res["output"])
+        self.assertIn(ASK_ANTICOAG, res["output"])
+
+    def test_bare_no_does_not_answer_q8_when_q2_or_q6_also_asked(self):
+        # Review PR #39: lượt hỏi cả Q2 (chưa có thuốc định kê) hoặc Q6 với Q8 → "không" có thể trả lời câu khác
+        # → vẫn hỏi Q8, không in ✅.
+        cases = (("Nhổ R48\nBổ sung: không", _x(planned_procedures=["nhổ R48"])),
+                 ("Bn đặt stent 6 tháng, giờ nhổ răng đc ko\nBổ sung: không",
+                  _x(conditions=["đặt stent 6 tháng"], planned_procedures=["nhổ răng"])))
+        for text, extracted in cases:
+            res = run(text, extracted)
+            self.assertIn(ASK_ANTICOAG, res["output"], text)
+            self.assertNotIn("✅", res["output"], text)
+
+    def test_no_with_more_words_is_not_a_bare_no(self):
+        # "không" kèm chữ khác (vd "không gây tê", "không nhớ tên") không phải câu trả lời Q8.
+        for reply in ("không gây tê", "không nhớ tên thuốc", "không biết"):
+            res = run("Nhổ R48, kê paracetamol\nBổ sung: " + reply,
+                      _x(planned_procedures=["nhổ R48"], planned_drugs=["paracetamol"]))
+            self.assertIn(ASK_ANTICOAG, res["output"], reply)
+
+    def test_bare_no_outside_merged_line_does_not_answer_q8(self):
+        # Chữ "không" trong tin gốc ("đau không") không phải câu trả lời Q8.
+        res = run("Nhổ R48 đau không, kê paracetamol",
+                  _x(planned_procedures=["nhổ R48"], planned_drugs=["paracetamol"]))
+        self.assertIn(ASK_ANTICOAG, res["output"])
+
     def test_not_repeated_when_cr021_already_asks(self):
         res = run("BN rung nhĩ. Nhổ R18, kê paracetamol",
                   _x(conditions=["rung nhĩ"], planned_procedures=["nhổ R18"], planned_drugs=["paracetamol"]))
