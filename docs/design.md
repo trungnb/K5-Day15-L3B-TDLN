@@ -308,6 +308,8 @@ Khung dự phòng (code nối mã HIGH thiếu, dòng model bị loại, hoặc 
 
 ---
 
+
+*(28/11, issue #31)* Bot Zalo định dạng lại bản tin trước khi gửi (`bot/zalo_bot.py::format_reply`), không đổi chữ của agent nên `run.py eval` không đổi: dòng "Đã đối chiếu — …" tách thành "📋 Em đã đối chiếu:" + gạch đầu dòng, các mục "không khai" gom về "• Chưa khai: …"; trước dòng 🚫 đầu tiên (trừ dòng cấp cứu) thêm "Dạ, phần này nằm ngoài việc em hỗ trợ:"; Q1 khi không nhận ra thực thể nào thêm "Dạ, em chưa đọc ra đủ thông tin để rà ca này." trước và "Hoặc nhắn /moi để bắt đầu ca khác." sau. Không nhận ra cấu trúc hoặc lỗi → gửi nguyên bản gốc.
 ## 8. Xử lý lỗi
 
 | Lỗi | Xử lý | Ghi trace |
@@ -323,7 +325,7 @@ Khung dự phòng (code nối mã HIGH thiếu, dòng model bị loại, hoặc 
 
 - Bot giữ `pending[chat_id] = (tin đã ghép, thời điểm)` trong RAM.
 - Tin mới đến:
-  - `/moi` → xoá `pending` của chat đó, trả "Đã bắt đầu ca mới."
+  - `/moi` → xoá `pending` của chat đó, trả "Dạ, em đã chuyển sang BN mới. Anh/chị gửi ca tiếp theo nhé." *(28/11, issue #31; trước đó "Đã bắt đầu ca mới.")*
   - Tin xã giao (`agent.small_talk_reply` khác `None`, §6 tình huống 0) → trả câu đó, **không** ghép, **không** đổi `pending` *(28/11: "cảm ơn" từng bị ghép làm bot gửi lại nguyên ca)*.
   - Có `pending` và chưa quá **10 phút** → ghép `tin cũ + "\nBổ sung: " + tin mới`.
   - *(28/11)* Không có `pending` nhưng tin mở đầu bằng "thêm" / "bổ sung" và ca vừa xong (`needs_more = False`) chưa quá 10 phút → ghép với ca vừa xong (`_last_case`). Tin khác là ca mới. `/moi` xoá cả hai.
