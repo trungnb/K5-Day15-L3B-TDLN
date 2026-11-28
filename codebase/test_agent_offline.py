@@ -269,8 +269,13 @@ class AskAnticoagulant2811(unittest.TestCase):
     (thay cho việc thêm luật riêng cho từng bệnh: stent, van tim, đột quỵ…). Câu hỏi giữ ca chờ BS trả lời."""
 
     def test_stent_case_asks_and_holds(self):
-        res = run("Bn đặt stent 6 tháng, giờ nhổ răng đc ko",
-                  _x(conditions=["đặt stent 6 tháng"], planned_procedures=["nhổ răng"]))
+        # Một câu mỗi lượt (28/11): Q6 (bệnh nền "đặt stent" chưa nhận ra) hỏi trước, BS trả lời xong mới tới Q8.
+        x = _x(conditions=["đặt stent 6 tháng"], planned_procedures=["nhổ răng"])
+        res = run("Bn đặt stent 6 tháng, giờ nhổ răng đc ko", x)
+        self.assertIn("đặt stent 6 tháng", res["output"])
+        self.assertNotIn(ASK_ANTICOAG, res["output"])
+        self.assertTrue(res["needs_more"])
+        res = run("Bn đặt stent 6 tháng, giờ nhổ răng đc ko\nBổ sung: không", x)
         self.assertIn(ASK_ANTICOAG, res["output"])
         self.assertTrue(res["needs_more"])
 
@@ -311,25 +316,6 @@ class AskAnticoagulant2811(unittest.TestCase):
             self.assertNotIn(ASK_ANTICOAG, res["output"], reply)
             self.assertFalse(res["needs_more"], reply)
 
-    def test_bare_no_does_not_answer_q8_when_q5_also_asked(self):
-        # Q5 (gây tê) và Q8 cùng hỏi: "không" trơn không rõ trả lời câu nào → vẫn hỏi Q8 (an toàn hơn đoán).
-        # Lấy cao dưới nướu: thủ thuật chảy máu chưa thuộc nhóm gây tê → Q5 được hỏi.
-        res = run("BN dị ứng thuốc tê. Lấy cao dưới nướu, kê paracetamol\nBổ sung: không",
-                  _x(allergies=["thuốc tê"], planned_procedures=["lấy cao dưới nướu"], planned_drugs=["paracetamol"]))
-        self.assertIn(agent.TEXT["Q5"], res["output"])
-        self.assertIn(ASK_ANTICOAG, res["output"])
-
-    def test_bare_no_does_not_answer_q8_when_q2_or_q6_also_asked(self):
-        # Review PR #39: lượt hỏi cả Q2 (chưa có thuốc định kê) hoặc Q6 với Q8 → "không" có thể trả lời câu khác
-        # → vẫn hỏi Q8, không in ✅.
-        cases = (("Nhổ R48\nBổ sung: không", _x(planned_procedures=["nhổ R48"])),
-                 ("Bn đặt stent 6 tháng, giờ nhổ răng đc ko\nBổ sung: không",
-                  _x(conditions=["đặt stent 6 tháng"], planned_procedures=["nhổ răng"])))
-        for text, extracted in cases:
-            res = run(text, extracted)
-            self.assertIn(ASK_ANTICOAG, res["output"], text)
-            self.assertNotIn("✅", res["output"], text)
-
     def test_no_with_more_words_is_not_a_bare_no(self):
         # "không" kèm chữ khác (vd "không gây tê", "không nhớ tên") không phải câu trả lời Q8.
         for reply in ("không gây tê", "không nhớ tên thuốc", "không biết"):
@@ -348,6 +334,67 @@ class AskAnticoagulant2811(unittest.TestCase):
                   _x(conditions=["rung nhĩ"], planned_procedures=["nhổ R18"], planned_drugs=["paracetamol"]))
         self.assertIn("[CR-021]", res["output"])
         self.assertNotIn(ASK_ANTICOAG, res["output"])
+
+class OneQuestionPerTurn2811(unittest.TestCase):
+    """Trung chốt 28/11: mỗi lượt chỉ hỏi MỘT câu (thứ tự Q5, Q7, Q6, Q8, Q2, Q3) để "không" trơn luôn rõ trả lời câu
+    nào. Mỗi dòng bot ghép "Bổ sung: …" trả lời câu đang hỏi lúc đó; "không" trơn đóng câu đó, lượt sau hỏi câu kế."""
+
+    Q2 = agent.TEXT["Q2"]
+    Q4 = agent.TEXT["Q4"]
+    Q5 = agent.TEXT["Q5"]
+    Q7 = agent.TEXT["Q7"]
+    BLEED_X = _x(conditions=["rối loạn đông máu"], planned_procedures=["nhổ răng"])
+    LA_X = _x(allergies=["thuốc tê"], planned_procedures=["lấy cao dưới nướu"], planned_drugs=["paracetamol"])
+    STENT_X = _x(conditions=["đặt stent 6 tháng"], planned_procedures=["nhổ răng"])
+
+    def _questions(self, out):
+        return [q for q in (self.Q5, self.Q7, "em chưa nhận ra. Anh/chị ghi rõ", ASK_ANTICOAG, self.Q2,
+                            agent.TEXT["Q3"]) if q in out]
+
+    def test_only_one_question_and_no_q4_while_asking(self):
+        res = run("Nhổ R48", _x(planned_procedures=["nhổ R48"]))
+        self.assertEqual(self._questions(res["output"]), [ASK_ANTICOAG])
+        self.assertNotIn(self.Q4, res["output"])
+        self.assertTrue(res["needs_more"])
+
+    def test_bare_no_closes_shown_question_then_next_one(self):
+        x = _x(planned_procedures=["nhổ R48"])
+        res = run("Nhổ R48\nBổ sung: không", x)
+        self.assertEqual(self._questions(res["output"]), [self.Q2])
+        self.assertTrue(res["needs_more"])
+        res = run("Nhổ R48\nBổ sung: không\nBổ sung: ko", x)
+        self.assertEqual(self._questions(res["output"]), [])
+        self.assertIn(self.Q4, res["output"])   # hết câu hỏi mới nhắc Q4
+        self.assertFalse(res["needs_more"])
+
+    def test_q5_first_and_bare_no_means_no_anesthesia(self):
+        res = run("BN dị ứng thuốc tê. Lấy cao dưới nướu, kê paracetamol", self.LA_X)
+        self.assertEqual(self._questions(res["output"]), [self.Q5])
+        res = run("BN dị ứng thuốc tê. Lấy cao dưới nướu, kê paracetamol\nBổ sung: không", self.LA_X)
+        self.assertEqual(self._questions(res["output"]), [ASK_ANTICOAG])
+
+    def test_q7_first_and_stage_reply_closes_it(self):
+        text = "Bn rối loạn đông máu trong quá trình nhổ răng"
+        res = run(text, self.BLEED_X)
+        self.assertEqual(self._questions(res["output"]), [self.Q7])
+        self.assertIn("[CR-016]", res["output"])
+        for reply in ("đang chuẩn bị, chưa nhổ", "không"):
+            res = run(text + "\nBổ sung: " + reply, self.BLEED_X)
+            self.assertEqual(self._questions(res["output"]), [ASK_ANTICOAG], reply)
+
+    def test_q6_before_q8_and_unknown_condition_stays_visible(self):
+        text = "Bn đặt stent 6 tháng, giờ nhổ răng đc ko"
+        res = run(text, self.STENT_X)
+        self.assertEqual(self._questions(res["output"]), ["em chưa nhận ra. Anh/chị ghi rõ"])
+        res = run(text + "\nBổ sung: không", self.STENT_X)
+        self.assertEqual(self._questions(res["output"]), [ASK_ANTICOAG])
+        self.assertIn("❔", res["output"])                 # bệnh nền chưa nhận ra vẫn hiện, không mất
+        self.assertIn("đặt stent 6 tháng", res["output"])
+
+    def test_reply_with_words_does_not_close_q8(self):
+        res = run("Nhổ R48\nBổ sung: để em hỏi lại BN", _x(planned_procedures=["nhổ R48"]))
+        self.assertEqual(self._questions(res["output"]), [ASK_ANTICOAG])
+
 
 class ExtractPrompt(unittest.TestCase):
     def test_emergency_flag_points_to_emergency_care_and_keeps_checking(self):

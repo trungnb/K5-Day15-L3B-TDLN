@@ -203,19 +203,37 @@ _PATIENT_NO = re.compile(r"\b(?:bn|benh nhan|ca)\s*(?:so\s*)?([1-9])"
                          r"(?=\s*[:.)\-]|\s*$|\s+(?!(?:tuoi|tuan|ngay|thang|nam|rang|lan|vien|ben|cai|ham|gio)\b)\w)")
 # BS ghi rõ BN không dùng thuốc → không hỏi Q8.
 _NO_MEDS = re.compile(r"\b(?:khong|ko|k|chua)\s+(?:dung|uong|su dung|co)\s+thuoc\b")
-# Dòng bot ghép "Bổ sung: <tin>" (design §9) mà cả tin chỉ là "không" / "ko" / "không có" / "chưa"… = BS trả lời Q8 là
-# BN không dùng thuốc (log VM 28/11: trước đây bot hỏi lại Q8 mãi). Tin có thêm chữ khác ("không gây tê") không tính.
+# Mỗi lượt chỉ hỏi MỘT câu (Trung chốt 28/11), theo thứ tự QUESTION_ORDER. Mỗi dòng bot ghép "Bổ sung: <tin>"
+# (design §9) trả lời câu đang hỏi lúc đó (câu mở đầu tiên): "không" / "ko" / "không có" / "chưa"… trơn đóng câu đó
+# (Q8: không dùng thuốc; Q5: không gây tê; Q2/Q3: không kê / không làm thêm); Q7 còn đóng khi BS nói giai đoạn
+# ("đang chuẩn bị", "chưa nhổ"…). Tin có thêm chữ khác ("không gây tê", "để em hỏi BN") không đóng câu nào —
+# câu đó chỉ hết khi thông tin mới làm nó không còn cần (vd nhắn tên thuốc).
+QUESTION_ORDER = ("Q5", "Q7", "Q6", "Q8", "Q2", "Q3")
 _BARE_NO = re.compile(r"(?:bn |benh nhan )?(?:khong|ko|k|hong|hok|chua|no)(?: (?:co|dung|uong|su dung|thuoc|gi|nao|het))*")
+_STAGE_REPLY = re.compile(r"\b(?:chuan bi|chua (?:lam|nho)|dang (?:lam|nho)|xong|chay mau|cam mau)\b")
 
 
-def _bare_no_reply(text: str) -> bool:
+def _replies(text: str) -> list:
+    """Phần chữ (bỏ dấu, bỏ từ đệm) của từng dòng "Bổ sung: …" bot đã ghép, theo thứ tự."""
+    out = []
     for line in (text or "").split("\n"):
         words = _plain(line).split()
         if words[:2] == ["bo", "sung"]:
-            core = " ".join(w for w in words[2:] if w not in _FILLER)
-            if core and _BARE_NO.fullmatch(core):
-                return True
-    return False
+            out.append(" ".join(w for w in words[2:] if w not in _FILLER))
+    return out
+
+
+def _open_questions(pending: list, replies: list) -> list:
+    """Câu còn phải hỏi: lần lượt từng câu trả lời đóng câu đang hỏi lúc đó (câu mở đầu tiên) nếu là "không" trơn
+    hoặc (Q7) nói giai đoạn thủ thuật."""
+    closed = set()
+    for core in replies:
+        still = [q for q in pending if q not in closed]
+        if not still or not core:
+            continue
+        if _BARE_NO.fullmatch(core) or (still[0] == "Q7" and _STAGE_REPLY.search(core)):
+            closed.add(still[0])
+    return [q for q in pending if q not in closed]
 
 
 # Rule đã hỏi thuốc chống đông trong hướng xử trí → không lặp Q8.
@@ -511,16 +529,13 @@ def _roles_unknown(head, n, said, unmapped, refusals, text="", detail=False):
     return _finish(blocks, True)
 
 
-def _reminders(has_procedure, has_planned, has_background, ask_anesthesia, ask_stage=False, bad_conditions=(),
-               ask_anticoag=False):
-    """Câu nhắc cuối tin, thứ tự Q5, Q7, Q8, Q6, Q2, Q3, Q4 (Q8 thêm 28/11). Câu hỏi thật thì giữ ca chờ ghép (needs_more);
-    Q4 chỉ nhắc (BS gửi lại cả ca), không giữ ca — tránh ghép nhầm sang BN sau."""
-    asks = ([TEXT["Q5"]] if ask_anesthesia else []) + ([TEXT["Q7"]] if ask_stage else []) \
-        + ([TEXT["Q8"]] if ask_anticoag else []) \
-        + ([TEXT["Q6"].format(names=", ".join(bad_conditions))] if bad_conditions else []) \
-        + ([TEXT["Q2"]] if has_procedure and not has_planned else []) \
-        + ([TEXT["Q3"]] if has_planned and not has_procedure else [])
-    return asks + ([] if has_background else [TEXT["Q4"]]), bool(asks)
+def _reminders(questions, has_background, bad_conditions=()):
+    """Câu nhắc cuối tin: chỉ MỘT câu hỏi mỗi lượt (câu mở đầu tiên theo QUESTION_ORDER, Trung chốt 28/11); có câu hỏi
+    thì giữ ca chờ ghép (needs_more). Hết câu hỏi mới nhắc Q4 — Q4 chỉ nhắc (BS gửi lại cả ca), không giữ ca."""
+    if questions:
+        q = questions[0]
+        return [TEXT[q].format(names=", ".join(bad_conditions)) if q == "Q6" else TEXT[q]], True
+    return ([] if has_background else [TEXT["Q4"]]), False
 
 
 # ------------------------------------------------------------------ luồng chính
@@ -597,19 +612,25 @@ def answer(text: str, detail: bool = False) -> dict:
     ask_anticoag = (any(p["drug_class"] == "invasive_bleeding" for p in n["procedure_groups"])
                     and not (n["baseline_drugs"] or said["baseline_drugs"] or n["unknown_role_drugs"])
                     and not _NO_MEDS.search(_plain(text))
-                    # "không" trơn chỉ trả lời Q8 khi lượt đó chỉ hỏi Q8: không kèm Q5/Q7/Q6/Q2 (review PR #39) —
-                    # không rõ trả lời câu nào thì vẫn hỏi Q8.
-                    and not (_bare_no_reply(text) and not (ask_anesthesia or ask_stage or bad_conditions
-                                                           or (has_procedure and not has_planned)))
                     and not any(r["rule_id"] in ASKS_ANTICOAG_RULES for r in rules))
     if ask_anticoag:
         note("thủ thuật chảy máu, chưa khai thuốc đang dùng: hỏi Q8")
+    needed = {"Q5": ask_anesthesia, "Q7": ask_stage, "Q6": bool(bad_conditions), "Q8": ask_anticoag,
+              "Q2": has_procedure and not has_planned, "Q3": has_planned and not has_procedure}
+    pending = [q for q in QUESTION_ORDER if needed[q]]
+    questions = _open_questions(pending, _replies(text))
+    for q in pending:
+        if q not in questions:
+            note("BS đã trả lời %s: không hỏi lại" % q)
+    ask_anesthesia, ask_stage, ask_anticoag = "Q5" in questions, "Q7" in questions, "Q8" in questions
+    # Q6 không phải câu đang hỏi → bệnh nền chưa nhận ra hiện ở ❔ để không mất (mục "Đã đối chiếu" ghi "xem ❔").
+    unmapped_blocks, has_unnamed = _unmapped_blocks(n, extracted, asked=bad_conditions if questions[:1] == ["Q6"] else ())
+    unmapped = "\n".join(unmapped_blocks)
     ok = "" if (rules or unmapped or flags or ask_anesthesia or no_pair or bad_conditions or ask_stage
                 or ask_anticoag) else TEXT["OK"]
 
     # Bước 4 + 5 — kết luận trước, cảnh báo, giới hạn, rồi mới "Đã đối chiếu" và câu nhắc.
-    reminders, needs_more = _reminders(has_procedure, has_planned, has_background, ask_anesthesia,
-                                       ask_stage, bad_conditions, ask_anticoag)
+    reminders, needs_more = _reminders(questions, has_background, bad_conditions)
     needs_more = needs_more or has_unnamed   # giữ ca để BS nhắn tên thuốc sau khi hỏi BN
     blocks = head + [_verdict(rules, len(n["unmapped"])), ok] + _alert_blocks(rules, detail=detail)
     blocks += [unmapped, no_pair, limit] + refusals + [_checked_line(n, said)] + reminders
