@@ -34,5 +34,30 @@ class AliasAdditionsTests(unittest.TestCase):
         self.assertIn("chống đông", af[0]["guidance"])
 
 
+class AliasProposals2811Tests(unittest.TestCase):
+    """Rà UX 28/11: viết tắt / cách gọi khác của thực thể ĐÃ có (không thêm quy tắc mới)."""
+
+    def test_short_drug_names(self):
+        self.assertIn(("ibuprofen", "nsaid"), _ids("kê ibu"))
+        self.assertIn(("metronidazole", "nitroimidazole"), _ids("kê metro"))
+
+    def test_other_names_of_known_procedures(self):
+        cases = {"tooth extraction": ("extraction", "invasive_bleeding"), "Chích áp xe": ("abscess_drainage",
+                 "invasive_bleeding"), "dẫn lưu áp xe": ("abscess_drainage", "invasive_bleeding"),
+                 "điều trị tủy R46": ("non_invasive_dental", "non_invasive")}
+        for text, key in cases.items():
+            with self.subTest(text=text):
+                self.assertIn(key, _ids(text))
+
+    def test_proposed_rows_do_not_borrow_reviewed_sources(self):
+        import csv
+        from pathlib import Path
+        rows = csv.DictReader((Path(__file__).resolve().parents[1] / "data" / "entity_aliases.csv")
+                              .open(encoding="utf-8-sig"))
+        for row in rows:
+            if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy"}:
+                self.assertIn("CHỜ BS RHM duyệt", row["source"], row["alias"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -92,7 +92,9 @@ class HoiLaiTests(unittest.TestCase):
         out = run("Tac dung phu/ chong chi dinh Methylpred 16, metronidazol 500, amox 500",
                   baseline_drugs=["Methylpred 16", "metronidazol 500", "amox 500"])
         self.assertIn(agent.TEXT["SIDE_EFFECT_LIMIT"], out["output"])
-        self.assertIn(agent.TEXT["Q1"], out["output"])
+        # 28/11 (rà UX): tình huống 3 có thuốc nhận ra thì hỏi bằng Q1_DRUGS (nêu tên thuốc) thay cho Q1 — vẫn hỏi vai trò.
+        self.assertIn(agent.TEXT["Q1_DRUGS"].format(names="Methylprednisolone, Metronidazole, Amoxicillin"),
+                      out["output"])
 
     def test_no_side_effect_words_no_limit_line(self):
         out = run("BN đang dùng warfarin, tôi dự định kê ibuprofen.",

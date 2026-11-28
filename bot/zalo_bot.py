@@ -30,7 +30,7 @@ if str(CODEBASE_DIR) not in sys.path:
     sys.path.insert(0, str(CODEBASE_DIR))
 
 import tracing  # noqa: E402
-from agent import TEXT as AGENT_TEXT, answer  # noqa: E402  (import agent -> ai.py tự nạp .env ở gốc repo)
+from agent import TEXT as AGENT_TEXT, answer, small_talk_reply  # noqa: E402  (import agent -> ai.py tự nạp .env ở gốc repo)
 
 from zalo_bot import Update  # noqa: E402
 from zalo_bot.constants import ChatAction  # noqa: E402
@@ -53,6 +53,10 @@ INVITE_WINDOW_SEC = 600
 PENDING_TTL_SEC = 600
 MAX_PENDING_CHARS = 4000
 NEW_CASE_TEXT = "Đã bắt đầu ca mới."
+FOLLOW_UP_HINT = "(Hỏi tiếp cho BN này: nhắn \"thêm <tên thuốc / thủ thuật>\" trong 10 phút. BN khác: nhắn /moi.)"
+NON_TEXT_TEXT = ("Em chưa đọc được ảnh, sticker hay tin thoại ạ. Anh/chị gõ tên thuốc, bệnh nền, thủ thuật giúp em — "
+                 "đừng gửi ảnh đơn thuốc thật của BN nhé.")
+FOLLOW_UP_RE = re.compile(r"^\s*(?:thêm|them|bổ sung|bo sung)\b", re.IGNORECASE)
 MERGED_NOTE = "(Em đã ghép với tin trước của ca này. Nếu là BN khác, nhắn /moi rồi gửi lại.)"
 DROPPED_NOTE = (
     f"⏱️ Ca trước đã quá {PENDING_TTL_SEC // 60} phút (hoặc quá dài) nên em KHÔNG ghép, tin này được đối chiếu như ca mới. "
@@ -79,6 +83,8 @@ _allowlist_lock = asyncio.Lock()
 _prompted_chats: set[str] = set()
 _failed_attempts: dict[str, list[float]] = {}
 _pending: dict[str, tuple[str, float]] = {}
+# Ca vừa xong (needs_more=False) — chỉ ghép khi BS mở đầu tin bằng "thêm"/"bổ sung" (design §9, 28/11).
+_last_case: dict[str, tuple[str, float]] = {}
 
 _DOCTOR_PREFIX_RE = re.compile(
     r"^(?:(?:bs|dr)(?:\.|\s|$)|(?:bác|bac)\s*s[ĩi](?:\s|$))",
@@ -230,13 +236,16 @@ def _compose_case(chat_id: str, text: str, now: float | None = None) -> tuple[st
     có thể thiếu thuốc nền và mất cảnh báo HIGH (vd warfarin rồi "Định kê ibuprofen").
     """
     ts = time.monotonic() if now is None else now
+    store = _pending
     pending = _pending.get(chat_id)
+    if pending is None and FOLLOW_UP_RE.match(text or ""):
+        store, pending = _last_case, _last_case.get(chat_id)
     if pending is None:
         return text, "new"
     old_text, saved_at = pending
     merged = f"{old_text}\nBổ sung: {text}"
     if ts - saved_at > PENDING_TTL_SEC or len(merged) > MAX_PENDING_CHARS:
-        _pending.pop(chat_id, None)
+        store.pop(chat_id, None)
         return text, "dropped"
     return merged, "merged"
 
@@ -244,8 +253,10 @@ def _compose_case(chat_id: str, text: str, now: float | None = None) -> tuple[st
 def _remember_case(chat_id: str, case_text: str, needs_more: bool) -> None:
     if needs_more:
         _pending[chat_id] = (case_text, time.monotonic())
+        _last_case.pop(chat_id, None)
     else:
         _pending.pop(chat_id, None)
+        _last_case[chat_id] = (case_text, time.monotonic())
 
 
 def run_agent(text: str) -> tuple[str, dict[str, Any], bool]:
@@ -482,7 +493,16 @@ async def on_new_case(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _handle_unauthorized(update, chat_id, "", "", raw_text)
         return
     _pending.pop(chat_id, None)
+    _last_case.pop(chat_id, None)
     await _reply_chunks(update, NEW_CASE_TEXT)
+
+
+async def on_non_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Ảnh / sticker / tin thoại: bot chỉ đọc chữ — trả một câu hướng dẫn thay vì im lặng. Chat lạ thì bỏ qua."""
+    chat_id = _extract_chat_id(update)
+    if chat_id is None or update.message is None or chat_id not in ALLOWED_CHAT_IDS:
+        return
+    await _reply_chunks(update, NON_TEXT_TEXT)
 
 
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -511,6 +531,13 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception:
         pass
 
+    # Tin xã giao ("cảm ơn", "chào em"): đáp ngay, không ghép vào ca đang chờ, không đụng tới pending.
+    small_talk = small_talk_reply(text)
+    if small_talk:
+        log_turn(chat_id=chat_id, user_input=text, output=small_talk, summary={}, error="")
+        await _reply_chunks(update, small_talk)
+        return
+
     masked, had_ids = mask_identifiers(text)
     output = ""
     summary: dict[str, Any] = {}
@@ -521,6 +548,8 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             case_text, case_status = _compose_case(chat_id, masked)
             output, summary, needs_more = await asyncio.to_thread(run_agent, case_text)
             _remember_case(chat_id, case_text, needs_more)
+            if not needs_more:
+                output = f"{output}\n{FOLLOW_UP_HINT}"
     except Exception as exc:
         err_msg = redact(f"{type(exc).__name__}: {exc}")
         print(f"[error] {err_msg}")
@@ -558,6 +587,7 @@ def main() -> None:
     app.add_handler(CommandHandler("join", on_join))
     app.add_handler(CommandHandler("moi", on_new_case))
     app.add_handler(MessageHandler(filters.TEXT, on_text))
+    app.add_handler(MessageHandler(~filters.TEXT, on_non_text))
 
     provider = (os.environ.get("MODEL_PROVIDER") or "fake").strip()
     model_name = (os.environ.get("MODEL_NAME") or "—").strip()

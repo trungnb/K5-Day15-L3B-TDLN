@@ -639,6 +639,9 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             "SDCEP QRG (2022), p. 1–2 (BS RHM duyệt 27/11/2026)",
             ["roi loan dong mau", "hemophilia", "giam tieu cau", "xuat huyet giam tieu cau"],
         ),
+        # Viết tắt hay gặp khi BS nhắn nhanh (đề xuất 28/11, rà UX) — tách dòng riêng để không mượn nguồn đã duyệt.
+        ("ibuprofen", "Ibuprofen", "drug", "nsaid", "ibuprofen", "Đề xuất alias TDLN 28/11/2026 — CHỜ BS RHM duyệt", ["ibu"]),
+        ("metronidazole", "Metronidazole", "drug", "nitroimidazole", "metronidazole", "Đề xuất alias TDLN 28/11/2026 — CHỜ BS RHM duyệt", ["metro"]),
         # --- Thủ thuật RHM ---
         (
             "extraction",
@@ -695,6 +698,13 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             "SDCEP QRG (2022), Table 1 p. 3",
             ["tram rang", "noi nha", "chua tuy", "lay cao rang tren nuou", "kham rang"],
         ),
+        # Cách gọi khác của thủ thuật đã có (đề xuất 28/11, rà UX) — tách dòng riêng để không mượn nguồn đã duyệt.
+        ("extraction", "Nhổ răng / Tiểu phẫu răng khôn", "procedure", "invasive_bleeding", None, "Đề xuất alias TDLN 28/11/2026 — CHỜ BS RHM duyệt",
+         ["extraction", "tooth extraction"]),
+        ("abscess_drainage", "Rạch dẫn lưu áp xe trong miệng", "procedure", "invasive_bleeding", None, "Đề xuất alias TDLN 28/11/2026 — CHỜ BS RHM duyệt",
+         ["chich ap xe", "trich ap xe", "dan luu ap xe"]),
+        ("non_invasive_dental", "Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu", "procedure", "non_invasive",
+         None, "Đề xuất alias TDLN 28/11/2026 — CHỜ BS RHM duyệt", ["dieu tri tuy", "lay tuy", "dieu tri noi nha"]),
     ]
 
     rows: list[dict[str, str]] = []
@@ -778,7 +788,7 @@ def build_ddi_rows(ddinter_pairs: dict[tuple[str, str], str]) -> list[dict[str, 
             "drug_b": "class:lmwh",
             "severity": "HIGH",
             "mechanism": "NSAID ức chế chức năng tiểu cầu và tăng tổn thương niêm mạc dạ dày, hiệp đồng làm tăng nguy cơ xuất huyết khi dùng đồng thời với heparin trọng lượng phân tử thấp (enoxaparin).",
-            "clinical_guidance": "Tránh phối hợp NSAID với LMWH nếu không có chỉ định và theo dõi chuyên khoa; để BS cân nhắc lựa chọn giảm đau an toàn hơn.",
+            "clinical_guidance": "Tránh phối hợp NSAID với LMWH nếu không có chỉ định và theo dõi chuyên khoa; để BS cân nhắc lựa chọn giảm đau không làm tăng nguy cơ chảy máu.",
             "source": "DDInter (Major: Enoxaparin + Ibuprofen/Naproxen/Meloxicam/Diclofenac/Ketorolac) (BS RHM duyệt 27/11/2026)",
             "ddinter_checks": [
                 ("enoxaparin", "ibuprofen", "Major"),
@@ -967,7 +977,7 @@ def build_ddi_rows(ddinter_pairs: dict[tuple[str, str], str]) -> list[dict[str, 
             "drug_b": "amiodarone",
             "severity": "HIGH",
             "mechanism": "Hiệp đồng kéo dài khoảng QT trên điện tâm đồ, làm tăng nguy cơ loạn nhịp thất nghiêm trọng (xoắn đỉnh).",
-            "clinical_guidance": "Tránh / chống chỉ định phối hợp với thuốc kéo dài khoảng QT như amiodarone; để BS lựa chọn phác đồ kháng sinh khác an toàn hơn.",
+            "clinical_guidance": "Tránh / chống chỉ định phối hợp với thuốc kéo dài khoảng QT như amiodarone; để BS lựa chọn phác đồ kháng sinh khác không kéo dài QT.",
             "source": "FDA Drug Safety Communication / Azithromycin Label (QT prolongation); CredibleMeds (Known Risk of TdP); Drugs.com (Major)",
             "ddinter_checks": [],
         },
@@ -1141,7 +1151,7 @@ def build_ddi_rows(ddinter_pairs: dict[tuple[str, str], str]) -> list[dict[str, 
             "drug_b": "class:doac",
             "severity": "MODERATE",
             "mechanism": "Phối hợp thuốc ức chế chọn lọc COX-2 (celecoxib) với thuốc chống đông đường uống trực tiếp (DOAC) làm tăng nguy cơ xuất huyết tiêu hoá và chảy máu.",
-            "clinical_guidance": "Thận trọng / tránh dùng celecoxib kéo dài cùng DOAC; dặn BN theo dõi dấu hiệu chảy máu bất thường và để BS cân nhắc hướng giảm đau an toàn hơn.",
+            "clinical_guidance": "Thận trọng / tránh dùng celecoxib kéo dài cùng DOAC; dặn BN theo dõi dấu hiệu chảy máu bất thường và để BS cân nhắc hướng giảm đau không làm tăng nguy cơ chảy máu.",
             "source": "DDInter (Moderate: Celecoxib + Rivaroxaban/Apixaban)",
             "ddinter_checks": [
                 ("celecoxib", "rivaroxaban", "Moderate"),
