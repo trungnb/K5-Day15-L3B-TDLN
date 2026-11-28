@@ -64,6 +64,31 @@ def _alias_index():
     return index
 
 
+# Từ chỉ tình trạng bệnh nền (log VM 28/11). Bỏ các từ này khỏi tên bệnh để so "gốc" tên: "tăng huyết áp chưa kiểm
+# soát" và "tăng huyết áp đang ổn định" cùng gốc "tang huyet ap". Dùng để biết BS đã ghi tên bệnh ĐÃ CÓ trong bảng
+# kèm tình trạng, chỉ là bảng chưa có quy tắc cho tình trạng đó — khi ấy không hỏi lại Q6 (agent.py).
+STATUS_MARK = re.compile(r"\b(?:on dinh|kiem soat|dieu tri)\b")
+_STATUS_WORDS = re.compile(r"\b(?:on dinh|kiem soat|dieu tri|tot|kem|dang|da|chua|khong)\b")
+
+
+def condition_base(normalized_text):
+    """Tên bệnh đã bỏ từ chỉ tình trạng (chuỗi đã chuẩn hoá)."""
+    return " ".join(_STATUS_WORDS.sub(" ", normalized_text).split())
+
+
+@lru_cache(maxsize=1)
+def _condition_bases():
+    return frozenset(filter(None, (condition_base(alias) for alias, ents in _alias_index().items()
+                                   if any(e["entity_type"] == "condition" for e in ents))))
+
+
+def known_condition_with_status(phrase):
+    """True khi cụm bệnh nền có từ chỉ tình trạng và phần còn lại TRÙNG gốc tên một bệnh nền trong bảng
+    (vd "THA ổn định" → gốc "tha" của "tha chua kiem soat"). Tên lạ ("th áp", "đặt stent") hoặc thiếu tình trạng → False."""
+    norm = normalize_text(phrase)
+    return bool(STATUS_MARK.search(norm)) and condition_base(norm) in _condition_bases()
+
+
 def find_aliases(normalized_text):
     """Tìm mọi alias trong chuỗi đã chuẩn hoá: ưu tiên khớp dài nhất, không chồng lấn (design §5 bước 2.4).
     Trả list[(alias, list[thực thể])] theo thứ tự xuất hiện."""
