@@ -1,2 +1,4 @@
 rule_id,show_full_guidance,asks_anticoagulant,reason
 CR-021,yes,yes,"Rung nhĩ × thủ thuật chảy máu: giá trị nằm ở hành động ""hỏi thuốc chống đông"" — dòng 🟡 gọn sẽ mất nó, và hành động đó đã hỏi đúng ý Q8 (Nguyễn Bảo Trung chốt 28/11/2026)"
+CR-022,,yes,"Chống đông chưa rõ tên × thủ thuật chảy máu: hướng xử trí đã hỏi tên thuốc, nên không hỏi lại Q8 (Nguyễn Bảo Trung chọn 28/11/2026)"
+CR-023,yes,yes,"Kháng tiểu cầu chưa rõ tên × thủ thuật chảy máu: giá trị nằm ở hành động ""hỏi tên thuốc"" — dòng 🟡 gọn sẽ mất nó; đã hỏi đúng ý Q8 (Nguyễn Bảo Trung chọn 28/11/2026)"
