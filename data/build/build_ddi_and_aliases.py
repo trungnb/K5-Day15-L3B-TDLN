@@ -153,6 +153,15 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             ["azithromycin", "zithromax", "azi", "zaromax", "azicine", "azimycin", "zitromax"],
         ),
         (
+            "azithromycin",
+            "Azithromycin",
+            "drug",
+            "macrolide_azithromycin",
+            "azithromycin",
+            "DDInter; viết tắt BS hay dùng, thấy ở B13 (BS RHM duyệt 28/11/2026)",
+            ["azithro"],
+        ),
+        (
             "clarithromycin",
             "Clarithromycin",
             "drug",
@@ -259,6 +268,15 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             "methylprednisolone",
             "DDInter; biệt dược phổ biến tại VN (BS RHM duyệt 27/11/2026)",
             ["methylprednisolone", "medrol", "menison", "solu-medrol"],
+        ),
+        (
+            "methylprednisolone",
+            "Methylprednisolone",
+            "drug",
+            "corticosteroid",
+            "methylprednisolone",
+            "DDInter; viết tắt BS hay dùng, thấy ở B15 (BS RHM duyệt 28/11/2026)",
+            ["methylpred"],
         ),
         (
             "lidocaine",
