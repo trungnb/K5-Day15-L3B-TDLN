@@ -640,8 +640,8 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             ["roi loan dong mau", "hemophilia", "giam tieu cau", "xuat huyet giam tieu cau"],
         ),
         # Viết tắt hay gặp khi BS nhắn nhanh (đề xuất 28/11, rà UX) — tách dòng riêng để không mượn nguồn đã duyệt.
-        ("ibuprofen", "Ibuprofen", "drug", "nsaid", "ibuprofen", "Đề xuất alias TDLN 28/11/2026 — CHỜ BS RHM duyệt", ["ibu"]),
-        ("metronidazole", "Metronidazole", "drug", "nitroimidazole", "metronidazole", "Đề xuất alias TDLN 28/11/2026 — CHỜ BS RHM duyệt", ["metro"]),
+        ("ibuprofen", "Ibuprofen", "drug", "nsaid", "ibuprofen", "Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026", ["ibu"]),
+        ("metronidazole", "Metronidazole", "drug", "nitroimidazole", "metronidazole", "Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026", ["metro"]),
         # --- Thủ thuật RHM ---
         (
             "extraction",
@@ -699,12 +699,12 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             ["tram rang", "noi nha", "chua tuy", "lay cao rang tren nuou", "kham rang"],
         ),
         # Cách gọi khác của thủ thuật đã có (đề xuất 28/11, rà UX) — tách dòng riêng để không mượn nguồn đã duyệt.
-        ("extraction", "Nhổ răng / Tiểu phẫu răng khôn", "procedure", "invasive_bleeding", None, "Đề xuất alias TDLN 28/11/2026 — CHỜ BS RHM duyệt",
+        ("extraction", "Nhổ răng / Tiểu phẫu răng khôn", "procedure", "invasive_bleeding", None, "Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026",
          ["extraction", "tooth extraction"]),
-        ("abscess_drainage", "Rạch dẫn lưu áp xe trong miệng", "procedure", "invasive_bleeding", None, "Đề xuất alias TDLN 28/11/2026 — CHỜ BS RHM duyệt",
+        ("abscess_drainage", "Rạch dẫn lưu áp xe trong miệng", "procedure", "invasive_bleeding", None, "Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026",
          ["chich ap xe", "trich ap xe", "dan luu ap xe"]),
         ("non_invasive_dental", "Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu", "procedure", "non_invasive",
-         None, "Đề xuất alias TDLN 28/11/2026 — CHỜ BS RHM duyệt", ["dieu tri tuy", "lay tuy", "dieu tri noi nha"]),
+         None, "Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026", ["dieu tri tuy", "lay tuy", "dieu tri noi nha"]),
     ]
 
     rows: list[dict[str, str]] = []

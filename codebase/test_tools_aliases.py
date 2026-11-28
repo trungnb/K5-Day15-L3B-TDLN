@@ -56,7 +56,7 @@ class AliasProposals2811Tests(unittest.TestCase):
                               .open(encoding="utf-8-sig"))
         for row in rows:
             if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy"}:
-                self.assertIn("CHỜ BS RHM duyệt", row["source"], row["alias"])
+                self.assertIn("Trung duyệt 28/11/2026", row["source"], row["alias"])
 
 
 if __name__ == "__main__":

@@ -33,8 +33,9 @@ HEALTHY_X = {"conditions": [], "allergies": [], "baseline_drugs": [], "planned_p
              "planned_drugs": ["Augmentin"], "out_of_scope": [], "has_pii": False}
 
 
-def run(text, extracted, model2=None):
-    """Chạy answer() với model giả: lần 1 trả `extracted`, lần 2 trả `model2` (None → lỗi → khung dự phòng)."""
+def run(text, extracted, model2=None, detail=False):
+    """Chạy answer() với model giả: lần 1 trả `extracted`, lần 2 trả `model2` (None → lỗi → khung dự phòng).
+    detail=True gọi answer(text, detail=True) (bản tin đủ cho lệnh "chi tiết" của bot)."""
     def fake(system, user, json_mode=False):
         if system == agent.SYSTEM_EXTRACT:
             return {"text": json.dumps(extracted, ensure_ascii=False), "model": "stub", "tokens_in": 0, "tokens_out": 0}
@@ -45,7 +46,7 @@ def run(text, extracted, model2=None):
     old_call, old_note = agent.call_model, agent.note
     agent.call_model, agent.note = fake, (lambda *a, **k: None)
     try:
-        return agent.answer(text)
+        return agent.answer(text, detail=True) if detail else agent.answer(text)
     finally:
         agent.call_model, agent.note = old_call, old_note
 
@@ -137,8 +138,10 @@ class Issue3Fallback(unittest.TestCase):
         def model2(rules):
             return {"lines": {r["rule_id"]: "[%s] %s + %s: model viết gọn. → làm theo bảng." % (
                 r["rule_id"], r["a"], r["b"]) for r in rules if r["rule_id"] == "DDI-027"}}
-        out = run(EXAMPLE, EXAMPLE_X, model2=model2)["output"]
+        # DDI-027 là MODERATE: từ 28/11 bản mặc định in dòng 🟡 gọn bằng code, dòng model chỉ dùng ở bản "chi tiết".
+        out = run(EXAMPLE, EXAMPLE_X, model2=model2, detail=True)["output"]
         self.assertIn("model viết gọn", out)
+        self.assertNotIn("model viết gọn", run(EXAMPLE, EXAMPLE_X, model2=model2)["output"])
 
 
 class Issue4Q4(unittest.TestCase):
@@ -274,6 +277,95 @@ class ExtractPrompt(unittest.TestCase):
     def test_prompt_says_written_dose_is_not_a_dose_question(self):
         self.assertIn("ghi sẵn liều", agent.SYSTEM_EXTRACT)
         self.assertIn('"cap_cuu"', agent.SYSTEM_EXTRACT)
+
+
+EMPTY_X = {"conditions": [], "allergies": [], "baseline_drugs": [], "planned_procedures": [], "planned_drugs": [],
+           "out_of_scope": [], "has_pii": False}
+PAIR_ONLY = "paracetamol, warfarin"
+PAIR_ONLY_X = dict(EMPTY_X, baseline_drugs=["paracetamol", "warfarin"])
+
+
+def moderate_lines(output):
+    lines, current = [], None
+    for line in output.splitlines():
+        if line.lstrip().startswith("🔴"):
+            current = "HIGH"
+        elif line.lstrip().startswith("🟡"):
+            current = "MODERATE"
+        elif not line.startswith("- "):
+            current = None
+        elif current == "MODERATE":
+            lines.append(line)
+    return lines
+
+
+class Communication2811(unittest.TestCase):
+    """Kế hoạch giao tiếp Trung duyệt 28/11: câu chào nói rõ AI, chào tạm biệt, nhận ra tin không có thực thể,
+    bản tin gọn cho 🟡 (🔴 giữ nguyên), bản đủ khi bot gọi answer(text, detail=True)."""
+
+    def test_hello_says_it_is_ai(self):
+        self.assertIn("trợ lý AI", agent.TEXT["HELLO"])
+        self.assertIn("trợ lý AI", agent.small_talk_reply("hi"))
+
+    def test_bye_gets_short_goodbye(self):
+        for text in ("tạm biệt", "bye em", "Bye bye!", "hẹn gặp lại nhé"):
+            self.assertEqual(agent.small_talk_reply(text), agent.TEXT["BYE"], text)
+            self.assertEqual(agent.small_talk_kind(text), "bye", text)
+
+    def test_small_talk_kind_separates_greeting_from_help(self):
+        self.assertEqual(agent.small_talk_kind("hi"), "greet")
+        self.assertEqual(agent.small_talk_kind("em làm được gì"), "help")
+        self.assertEqual(agent.small_talk_kind("cảm ơn em"), "thanks")
+        self.assertIsNone(agent.small_talk_kind("BN uống Sintrom"))
+
+    def test_no_entity_reply_is_detectable(self):
+        self.assertTrue(agent.is_no_entity_reply(run("abc xyz", EMPTY_X)["output"]))
+        self.assertFalse(agent.is_no_entity_reply(run(EXAMPLE, EXAMPLE_X)["output"]))
+        self.assertFalse(agent.is_no_entity_reply(run(LIST_ONLY, LIST_ONLY_X)["output"]))
+
+    def test_moderate_lines_are_compact_and_skip_model_2(self):
+        sent = []
+        def model2(payload):
+            sent.extend(payload)
+            return {"lines": {}}
+        out = run(EXAMPLE, EXAMPLE_X, model2=model2)["output"]
+        mods = moderate_lines(out)
+        self.assertEqual(len(mods), 3)
+        for line in mods:
+            self.assertRegex(line, r"^- \[(?:DDI|CR)-\d+\] ")
+            self.assertIn("Nguồn:", line)
+            self.assertNotIn("→", line)            # không in hướng xử trí
+        self.assertTrue(sent)
+        self.assertTrue(all(item["rule_id"] in out for item in sent))
+        mod_ids = {re.search(r"\[((?:DDI|CR)-\d+)\]", l).group(1) for l in mods}
+        self.assertFalse(mod_ids & {item["rule_id"] for item in sent})   # model 2 chỉ viết dòng HIGH
+        self.assertEqual(section_of(out, "CR-001"), "HIGH")
+        self.assertIn("INR", out)                  # 🔴 vẫn đủ hướng xử trí
+
+    def test_detail_mode_prints_full_moderate_guidance(self):
+        sent = []
+        def model2(payload):
+            sent.extend(payload)
+            return {"lines": {}}
+        out = run(EXAMPLE, EXAMPLE_X, model2=model2, detail=True)["output"]
+        mods = moderate_lines(out)
+        self.assertEqual(len(mods), 3)
+        for line in mods:
+            self.assertIn("→", line)
+            self.assertIn("Nguồn:", line)
+        self.assertEqual(len(sent), 5)             # đủ 2 HIGH + 3 MODERATE
+
+    def test_conditional_moderate_only_case_needs_no_model_2(self):
+        calls = []
+        def model2(payload):   # agent nuốt lỗi model 2 → phải đếm lời gọi, không raise
+            calls.append(payload)
+            return {"lines": {}}
+        out = run(PAIR_ONLY, PAIR_ONLY_X, model2=model2)["output"]
+        self.assertEqual(calls, [])
+        self.assertEqual(section_of(out, "DDI-029"), "MODERATE")
+        self.assertIn("nếu dùng cùng nhau", out)
+        line = [l for l in out.splitlines() if "[DDI-029]" in l][0]
+        self.assertIn("Nguồn:", line)
 
 
 if __name__ == "__main__":
