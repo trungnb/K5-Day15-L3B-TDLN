@@ -222,15 +222,16 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | Bệnh nền / dị ứng / thuốc đang dùng | Hành vi | `needs_more` |
 |---|---|---|
 | Có ít nhất một | Không nhắc gì thêm; nhóm nào trống thì mục "Đã đối chiếu" ghi "không khai" | Theo bảng trên |
+| *(28/11)* BS ghi rõ BN **không có** một nhóm | Nhóm đó ghi "không có" thay "không khai" và tính như đã khai (không nhắc Q4). Code so khớp cụm phủ định **đứng cuối một vế** (tách theo `, . ; ! ?`): bệnh nền — "khoẻ mạnh", "không (có) bệnh lý / bệnh nền / bệnh (gì)", "bệnh nền: không"; dị ứng — "không dị ứng (thuốc) (gì)", "dị ứng: không"; thuốc đang dùng — "không dùng/uống thuốc", "thuốc đang dùng: không". "Không bệnh tim", "không dị ứng thuốc tê" chỉ loại một bệnh / một nhóm nên **không** tính. Nhóm có tên đã nhận ra thì in tên, bỏ qua cụm phủ định. "Khoẻ mạnh" không đóng Q8; "không khoẻ mạnh", "không dùng thuốc chống đông" không tính "không có" (Q8 vẫn đóng như cũ khi có "không dùng thuốc…"). "và / hay / với" cũng tách vế. Tình huống 3 chưa áp dụng (chỉ in nhóm BS có ghi) | Theo bảng trên |
 | **Thiếu cả ba** | Thêm câu nhắc Q4 (mời BS **gửi lại cả ca**); mục "Đã đối chiếu" ghi "không khai" cho cả ba | Theo bảng trên — Q4 **không** bật `needs_more` *(28/11: bật thì bot giữ ca 10 phút và có thể ghép nhầm ca BN kế tiếp vào ca khoẻ mạnh vừa xong)* |
 
-- Không hỏi lại khi thiếu 3 trường này: hệ thống không phân biệt được BN thật sự không có với BS quên ghi, và BN khoẻ mạnh đi nhổ răng khôn là ca phổ biến. Vẫn tra được tương tác giữa các thuốc định kê với nhau (vd `DDI-006` ibuprofen + ketorolac).
+- Không hỏi lại khi thiếu 3 trường này: khi BS không ghi gì, hệ thống không phân biệt được BN thật sự không có với BS quên ghi (BS ghi rõ "không có" thì xem dòng 28/11 ở bảng trên), và BN khoẻ mạnh đi nhổ răng khôn là ca phổ biến. Vẫn tra được tương tác giữa các thuốc định kê với nhau (vd `DDI-006` ibuprofen + ketorolac).
 **Dị ứng thuốc tê (Q5, thêm 27/11 cho B22).** Áp dụng cho tình huống 4, 5, 6: BN có dị ứng thuốc tê (`local_anesthetic`) mà không thủ thuật nào thuộc nhóm `local_anesthesia` (vd lấy cao dưới nướu — Trung chốt chỉ nhổ răng, implant, phẫu thuật nha chu tự kéo theo gây tê; 28/11 thêm rạch/chích/trích/dẫn lưu áp xe và chữa/điều trị/lấy tủy, nội nha) → nối câu Q5, `needs_more = True`, và **không** in ✅. Q5 dặn BS nhắn "có gây tê" *(28/11: "có" trơn không khớp alias thủ thuật nào nên ghép xong vẫn hỏi lại)*; BS nhắn vậy thì bot ghép tin, thủ thuật gây tê được thêm và `CR-010` khớp.
 
 **Cải tiến lượt 2 (28/11, nhóm lỗi "không chỉ rõ phần còn thiếu": B11, B12, B13, B15 ở `eval/run-1.csv`).** Code phát hiện bằng so khớp chữ đã chuẩn hoá, không thêm lần gọi model:
 - **Q7:** tin có "đang nhổ", "trong quá trình nhổ", "trong khi nhổ", "đang chảy máu" hoặc "đang làm thủ thuật" (từ ngay trước là "không/chưa/ko" thì bỏ qua) và có thủ thuật nhóm `invasive_bleeding` → hỏi giai đoạn và chảy máu khó cầm; không in ✅.
 - **Q6:** bệnh nền model trích được nhưng bảng không có → hỏi tên bệnh và tình trạng hiện tại; không in ✅.
-- **ℹ️ cặp thuốc:** có thuốc định kê đã nhận ra mà cả ca không khớp rule DDI nào → nêu tối đa 3 cặp chưa có quy tắc; không in ✅.
+- **ℹ️ cặp thuốc:** có thuốc định kê đã nhận ra mà cả ca không khớp rule DDI nào → nêu tối đa 3 cặp chưa có quy tắc. *(28/11, Trung chọn)* Dòng này **không chặn ✅** nữa: ✅ là kết luận, ℹ️ là dòng phụ ngay dưới (trước 28/11, ca đơn thường gặp như Augmentin + Paracetamol không bao giờ ra ✅ và không có câu kết luận).
 - **ℹ️ tác dụng phụ:** tin có "tác dụng phụ" → nêu giới hạn tra cứu (cả ở tình huống 3).
 
 - Q4 có mục đích chặn trường hợp BS quên ghi thuốc nền mà nhận ✅, rồi yên tâm nhầm. Thiếu một hoặc hai trong ba trường thì không nhắc, để tin trả lời không bị quá nhiều câu nhắc.
@@ -247,13 +248,13 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 **Thứ tự khối** (khối nào rỗng thì bỏ) — *đổi 28/11: kết luận lên đầu, "Đã đối chiếu" xuống cuối, để BS thấy ngay cần làm gì*:
 
 1. P1 — nhắc ẩn danh (nếu `has_pii`); dòng JSON_ERROR (nếu model 1 hỏng)
-2. **Kết luận** — code đếm: "Em rà xong rồi ạ — có {n} nguy cơ cao, {n} cần thận trọng, {n} mục em chưa có dữ liệu." Tình huống 3 dùng câu có điều kiện. Không có rule → bỏ dòng này (✅ đứng đầu)
-3. ✅ — chỉ khi 🔴 🟡 ❔ 🚫 đều rỗng và không hỏi Q5 — code
+2. **Kết luận** — code đếm: "Em rà xong rồi ạ — có {n} nguy cơ cao, {n} cần thận trọng, {n} mục em chưa có dữ liệu." Tình huống 3 dùng câu có điều kiện. Không có rule mà in ✅ → bỏ dòng này (✅ đứng đầu). *(28/11, Trung chọn)* Không có rule mà ✅ bị chặn → vẫn có kết luận: còn câu hỏi Q5 / Q6 / Q7 / Q8 → "Đến giờ bảng tra chưa có cảnh báo nào cho ca này — anh/chị trả lời câu hỏi cuối tin để em rà nốt."; ngược lại (❔ / 🚫) → "Em rà xong rồi ạ — bảng tra không có cảnh báo nào cho ca này[, nhưng có {n} mục em chưa có dữ liệu]." Không câu nào nói "an toàn" hay "không có tương tác"
+3. ✅ — chỉ khi 🔴 🟡 ❔ 🚫 đều rỗng, không có bệnh nền chưa nhận ra và không hỏi Q5 / Q7 / Q8 (ℹ️ không chặn, 28/11) — code
 4. 🔴 Nguy cơ cao — model viết + dòng code nối thêm
 5. 🟡 Cần thận trọng — *(28/11, Trung duyệt)* dòng gọn do code viết, không gọi model 2: mã + cặp + câu đầu của cơ chế (nguyên văn bảng tra) + nguồn; không in hướng xử trí. bản "chi tiết" (`reply.render_detail`) in đủ như 🔴
 6. ❔ Chưa có dữ liệu — code
 7. 🚫 Ngoài phạm vi — code
-8. **Đã đối chiếu:** bệnh nền · dị ứng · thuốc đang dùng · thủ thuật · thuốc định kê (tên hiển thị đầy đủ, in một lần). Nhóm trống ghi "không khai". Thuốc trong `unknown_role_drugs` ghi kèm "(không rõ đang dùng hay định kê — đã kiểm cả hai)". Ở tình huống 3, thuốc ghi chung là "Thuốc đã nêu (chưa rõ đang dùng hay định kê)" — không tự gán vai trò *(28/11, B04–B07)*; chỉ in nhóm BS có ghi (bỏ "không khai") và bỏ nhóm thuốc khi câu Q1_DRUG(S) đã nêu tên; không còn nhóm nào thì bỏ cả mục *(28/11)*.
+8. **Đã đối chiếu:** bệnh nền · dị ứng · thuốc đang dùng · thủ thuật · thuốc định kê (tên hiển thị đầy đủ, in một lần). Nhóm trống ghi "không khai"; BS ghi rõ không có thì "không có" *(28/11, xem §6)*. Thuốc trong `unknown_role_drugs` ghi kèm "(không rõ đang dùng hay định kê — đã kiểm cả hai)". Ở tình huống 3, thuốc ghi chung là "Thuốc đã nêu (chưa rõ đang dùng hay định kê)" — không tự gán vai trò *(28/11, B04–B07)*; chỉ in nhóm BS có ghi (bỏ "không khai") và bỏ nhóm thuốc khi câu Q1_DRUG(S) đã nêu tên; không còn nhóm nào thì bỏ cả mục *(28/11)*.
 9. **Một câu hỏi mỗi lượt** *(Trung chốt 28/11)*: câu mở đầu tiên theo thứ tự Q5 → Q7 → Q6 → Q8 → Q2 → Q3 (`QUESTION_ORDER`), giữ ca chờ trả lời. Mỗi dòng bot ghép "Bổ sung: …" trả lời câu đang hỏi lúc đó: "không" / "ko" / "không có" / "chưa"… trơn đóng câu đó (Q8: không dùng thuốc; Q5: không gây tê; Q2/Q3: không kê / không làm thêm); Q7 còn đóng khi BS nói giai đoạn ("đang chuẩn bị", "chưa nhổ"…); trả lời có chữ khác chỉ đóng câu khi thông tin mới làm câu đó không còn cần (vd nhắn tên thuốc). Q6 chưa tới lượt hoặc đã đóng thì bệnh nền chưa nhận ra hiện ở ❔. Hết câu hỏi mới nhắc Q4 (không giữ ca). Tình huống 3: Q1
 10. Câu chốt — luôn có (trừ tình huống 0 xã giao), code, luôn chứa nguyên văn "BS là người quyết định." (`eval/grade.py` kiểm cụm này)
 
@@ -282,7 +283,8 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | JSON_ERROR | "Em đọc tin này chưa trọn — anh/chị kiểm lại mục Đã đối chiếu giúp em." |
 | Kết luận | "Em rà xong rồi ạ — có {…}." · tình huống 3: "Em chưa rõ thuốc nào đang dùng, thuốc nào định kê — nhưng nếu dùng cùng nhau thì có {…}." · {…} ghép từ "{n} nguy cơ cao", "{n} cần thận trọng", "{n} mục em chưa có dữ liệu" |
 | Tiêu đề | "🔴 Nguy cơ cao:", "🟡 Cần thận trọng:" · tình huống 3: "🔴 Nguy cơ cao nếu dùng cùng nhau:", "🟡 Cần thận trọng nếu dùng cùng nhau:" |
-| ℹ️ cặp thuốc | "ℹ️ Bảng tra chưa có quy tắc cho cặp: {pairs} — anh/chị tự đánh giá lâm sàng." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
+| ℹ️ cặp thuốc | "ℹ️ Bảng tra chưa có quy tắc cho cặp: {pairs}." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11; 28/11 bỏ "— anh/chị tự đánh giá lâm sàng" vì ✅ / câu chốt đã nói)* |
+| Kết luận không có rule | "Em rà xong rồi ạ — bảng tra không có cảnh báo nào cho ca này." (+ ", nhưng có {n} mục em chưa có dữ liệu") · còn câu hỏi: "Đến giờ bảng tra chưa có cảnh báo nào cho ca này — anh/chị trả lời câu hỏi cuối tin để em rà nốt." *(28/11, Trung chọn)* |
 | ℹ️ tác dụng phụ | "ℹ️ Em chỉ rà tương tác và nguy cơ theo ca, không tra tác dụng phụ chung của thuốc — BS xem Dược thư Quốc gia / tờ hướng dẫn sử dụng." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
 | 🚫 `lieu` | "🚫 Em không tư vấn liều dùng / số ngày dùng." |
 | 🚫 `thuoc_thay_the` | "🚫 Em không gợi ý thuốc thay thế cụ thể." |

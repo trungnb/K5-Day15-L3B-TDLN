@@ -137,6 +137,28 @@ _PATIENT_NO = re.compile(r"\b(?:bn|benh nhan|ca)\s*(?:so\s*)?([1-9])"
                          r"(?=\s*[:.)\-]|\s*$|\s+(?!(?:tuoi|tuan|ngay|thang|nam|rang|lan|vien|ben|cai|ham|gio)\b)\w)")
 # BS ghi rõ BN không dùng thuốc → không hỏi Q8.
 _NO_MEDS = re.compile(r"\b(?:khong|ko|k|chua)\s+(?:dung|uong|su dung|co)\s+thuoc\b")
+# BS ghi rõ BN không có cả nhóm → mục "Đã đối chiếu" ghi "không có" thay "không khai", không nhắc Q4 (Trung chọn 28/11).
+# Chỉ khớp khi cụm phủ định đứng cuối một vế (tách theo , . ; ! ? xuống dòng), để "không bệnh tim", "không dị ứng thuốc
+# tê", "không dùng thuốc chống đông" — chỉ loại một bệnh / một nhóm — không bị tính là "không có"; "và / hay / với"
+# cũng tách vế. "Khoẻ mạnh" (không có "không/chưa" ngay trước) chỉ tính cho bệnh nền, không đóng Q8.
+_NEG = r"(?:khong|ko|k|chua)"
+_TAIL = r"(?: (?:gi|nao))?(?: (?:ca|het|nhe|a|dau))*$"
+_NONE_CLAUSE = {
+    "conditions": re.compile(r"(?<!khong )(?<!ko )(?<!k )(?<!chua )\bkhoe manh\b|\b%s (?:co )?(?:tien su )?(?:benh ly|benh nen|benh)%s"
+                             r"|\b(?:benh nen|benh ly) %s(?: co| ghi nhan)?$" % (_NEG, _TAIL, _NEG)),
+    "allergies": re.compile(r"\b%s (?:co )?(?:tien su )?di ung(?: thuoc)?%s|\bdi ung(?: thuoc)? %s(?: co)?$"
+                            % (_NEG, _TAIL, _NEG)),
+    "baseline_drugs": re.compile(r"\b%s (?:dung|uong|su dung|co) thuoc%s|\bthuoc (?:dang )?(?:dung|uong) %s(?: co)?$"
+                                 % (_NEG, _TAIL, _NEG)),
+}
+_CLAUSE_SPLIT = re.compile(r"[,.;!?\n]+")
+_WORD_SPLIT = re.compile(r"\b(?:va|hay|voi)\b")
+
+
+def _declared_none(text: str) -> frozenset:
+    """Nhóm BS ghi rõ là BN không có: "conditions", "allergies", "baseline_drugs"."""
+    clauses = [p.strip() for c in _CLAUSE_SPLIT.split(text or "") for p in _WORD_SPLIT.split(fold(c))]
+    return frozenset(key for key, pattern in _NONE_CLAUSE.items() if any(pattern.search(c) for c in clauses))
 # Câu trả lời "không" trơn cho câu đang hỏi, và câu nói giai đoạn thủ thuật (đóng Q7) — xem _open_questions.
 _BARE_NO = re.compile(r"(?:bn |benh nhan )?(?:khong|ko|k|hong|hok|chua|no)(?: (?:co|dung|uong|su dung|thuoc|gi|nao|het))*")
 _STAGE_REPLY = re.compile(r"\b(?:chuan bi|chua (?:lam|nho)|dang (?:lam|nho)|xong|chay mau|cam mau)\b")
@@ -309,11 +331,12 @@ def _write_rule_lines(rules):
     return lines
 
 
-def _checked_groups(n, said, asking_roles=False, skip_drugs=False):
+def _checked_groups(n, said, asking_roles=False, skip_drugs=False, none=frozenset()):
     """Mục 'Đã đối chiếu' (design §7 khối 2) dạng (nhãn, giá trị): chỉ tên thuốc, bệnh, thủ thuật — không thông tin
     định danh. Nhóm trống: BS không ghi → "không khai"; BS có ghi nhưng không có trong bảng → "chưa nhận ra (xem ❔)".
     asking_roles=True (tình huống 3, đang hỏi lại Q1): không tự gán thuốc là "đang dùng" — ghi "Thuốc đã nêu";
-    chỉ in nhóm BS có ghi (đang hỏi lại nên "không khai" chỉ thêm nhiễu); skip_drugs=True khi câu hỏi đã nêu tên thuốc."""
+    chỉ in nhóm BS có ghi (đang hỏi lại nên "không khai" chỉ thêm nhiễu); skip_drugs=True khi câu hỏi đã nêu tên thuốc.
+    none: nhóm BS ghi rõ là không có (_declared_none) → "không có" thay "không khai" khi nhóm trống."""
     unknown_ids = {e["canonical_id"] for e in n["unknown_role_drugs"] + n["procedure_drugs"]}
     # Bệnh có tên trong bảng mà BS chưa ghi / ghi tình trạng ngoài bảng ("cao huyết áp") → in đúng chữ BS viết.
     conditions = _names(n["conditions"]) + [p for p in n["unmapped"] if known_condition_base(p)]
@@ -334,7 +357,8 @@ def _checked_groups(n, said, asking_roles=False, skip_drugs=False):
         ("Thủ thuật", "planned_procedures", _names(n["procedure_groups"]) + _names(n["procedure_drugs"])),
         ("Thuốc định kê", "planned_drugs", _names(n["planned_drugs"], exclude=unknown_ids)),
     ]
-    parts = [(label, ", ".join(names) if names else TEXT["NOT_RECOGNIZED"] if said[key] else TEXT["NOT_DECLARED"])
+    parts = [(label, ", ".join(names) if names else TEXT["NOT_RECOGNIZED"] if said[key]
+              else TEXT["DECLARED_NONE"] if key in none else TEXT["NOT_DECLARED"])
              for label, key, names in groups]
     if n["unknown_role_drugs"]:
         parts.append(("Thuốc chưa rõ vai",
@@ -498,7 +522,7 @@ def _needs_anticoag(c: _Case) -> bool:
     return (c.bleeding_procedure
             and not ([d for d in c.n["baseline_drugs"] if d not in c.n["procedure_drugs"]]
                      or c.said["baseline_drugs"] or c.n["unknown_role_drugs"])
-            and not _NO_MEDS.search(fold(c.text))
+            and not (_NO_MEDS.search(fold(c.text)) or "baseline_drugs" in _declared_none(c.text))
             and not any(rule_behavior(r["rule_id"])["asks_anticoagulant"] for r in c.rules))
 
 
@@ -514,6 +538,16 @@ FOLLOW_UPS = (
 QUESTION_ORDER = tuple(key for key, _, _ in FOLLOW_UPS)
 # Câu hỏi lâm sàng còn mở thì chưa được nói ✅; Q2/Q3 chỉ hỏi phần còn thiếu nên ✅ vẫn đúng cho phần đã có.
 _BLOCKS_OK = frozenset({"Q5", "Q7", "Q8"})
+# Không rule nào khớp mà còn câu hỏi lâm sàng mở → kết luận "chưa rà xong" (VERDICT_NONE_PENDING).
+_PENDING_VERDICT = _BLOCKS_OK | {"Q6"}
+
+
+def _verdict_none(questions: list, n_unmapped: int) -> str:
+    """Kết luận khi không rule nào khớp mà ✅ bị chặn (28/11): còn câu hỏi mở, hoặc có ❔ / 🚫."""
+    if _PENDING_VERDICT & set(questions):
+        return TEXT["VERDICT_NONE_PENDING"]
+    extra = TEXT["VERDICT_NONE_UNMAPPED"].format(n=n_unmapped) if n_unmapped else ""
+    return TEXT["VERDICT_NONE"] + extra + "."
 
 
 def _questions(case: _Case) -> list:
@@ -594,14 +628,17 @@ def _reply(text: str) -> Reply:
     # Q6 đang là câu hỏi → bệnh nền chưa nhận ra nằm trong câu hỏi; ngược lại hiện ở ❔ để không mất
     # (mục "Đã đối chiếu" ghi "xem ❔").
     unmapped, has_unnamed = _unmapped_blocks(n, extracted, asked=case.bad_conditions if questions[:1] == ["Q6"] else ())
-    nothing_to_report = not (rules or unmapped or flags or no_pair or case.bad_conditions)
-    key, question, needs_more = _reminder(questions, has_background, case.bad_conditions)
+    # ℹ️ cặp chưa có quy tắc không chặn ✅ (Trung chọn 28/11): ✅ là kết luận, cặp đó là dòng phụ ngay dưới.
+    show_ok = not (rules or unmapped or flags or case.bad_conditions or _BLOCKS_OK & set(questions))
+    none = _declared_none(text)
+    key, question, needs_more = _reminder(questions, has_background or bool(none), case.bad_conditions)
+    verdict = (_verdict(rules, len(n["unmapped"])) if rules
+               else "" if show_ok else _verdict_none(questions, len(n["unmapped"])))
 
     # Bước 4 + 5 — kết luận trước, cảnh báo, giới hạn, rồi mới "Đã đối chiếu" và câu nhắc.
-    return Reply(head=head, verdict=_verdict(rules, len(n["unmapped"])),
-                 ok=TEXT["OK"] if nothing_to_report and not _BLOCKS_OK & set(questions) else "",
+    return Reply(head=head, verdict=verdict, ok=TEXT["OK"] if show_ok else "",
                  alerts=_alerts(rules), notes=[_near_note(n)] + unmapped + [no_pair, limit], refusals=refusals,
-                 checked=_checked_groups(n, said), question=question, question_key=key,
+                 checked=_checked_groups(n, said, none=none), question=question, question_key=key,
                  needs_more=needs_more or has_unnamed or _unspecified_drug(n))   # thuốc chưa rõ tên: giữ ca để BS nhắn tên sau khi hỏi BN
 
 

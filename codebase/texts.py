@@ -25,7 +25,8 @@ TEXT = {
     "Q8": "BN có dùng thuốc chống đông hoặc kháng tiểu cầu không? Có thì nhắn tên thuốc để em kiểm.",
     # Trung chọn 28/11 (log VM 14:57, "peniciline"): tên hơi sai chính tả vẫn nhận ra, nói rõ chỗ em đoán.
     "NEAR_MATCH": "🔎 Em hiểu {pairs} — nếu sai, anh/chị nhắn lại tên đúng.",
-    "NO_PAIR_RULE": "ℹ️ Bảng tra chưa có quy tắc cho cặp: {pairs} — anh/chị tự đánh giá lâm sàng.",
+    # 28/11 (Trung chọn): ℹ️ là dòng phụ dưới ✅, không chặn ✅; câu "tự đánh giá lâm sàng" đã nằm ở ✅ / câu chốt.
+    "NO_PAIR_RULE": "ℹ️ Bảng tra chưa có quy tắc cho cặp: {pairs}.",
     "SIDE_EFFECT_LIMIT": "ℹ️ Em chỉ rà tương tác và nguy cơ theo ca, không tra tác dụng phụ chung của thuốc — "
                          "BS xem Dược thư Quốc gia / tờ hướng dẫn sử dụng.",
     "HELLO": "Dạ em đây ạ. Em là trợ lý AI đối chiếu tương tác thuốc và rủi ro thủ thuật RHM theo bảng tra có nguồn — "
@@ -48,6 +49,11 @@ TEXT = {
     "JSON_ERROR": "Em đọc tin này chưa trọn — anh/chị kiểm lại mục Đã đối chiếu giúp em.",
     "FOOTER": "Em chỉ đối chiếu theo bảng tra — BS là người quyết định.",
     "VERDICT": "Em rà xong rồi ạ — có {parts}.",
+    # 28/11 (Trung chọn): không rule nào khớp mà ✅ bị chặn → vẫn có kết luận. Không nói "an toàn" / "không tương tác".
+    "VERDICT_NONE": "Em rà xong rồi ạ — bảng tra không có cảnh báo nào cho ca này",
+    "VERDICT_NONE_UNMAPPED": ", nhưng có {n} mục em chưa có dữ liệu",
+    "VERDICT_NONE_PENDING": "Đến giờ bảng tra chưa có cảnh báo nào cho ca này — anh/chị trả lời câu hỏi cuối tin "
+                            "để em rà nốt.",
     "VERDICT_IF_TOGETHER": "Em chưa rõ thuốc nào đang dùng, thuốc nào định kê — nhưng nếu dùng cùng nhau thì có {parts}.",
     "COUNT_HIGH": "{n} nguy cơ cao",
     "COUNT_MODERATE": "{n} cần thận trọng",
@@ -57,6 +63,7 @@ TEXT = {
     "HIGH_HEADER_IF_TOGETHER": "🔴 Nguy cơ cao nếu dùng cùng nhau:",
     "MODERATE_HEADER_IF_TOGETHER": "🟡 Cần thận trọng nếu dùng cùng nhau:",
     "NOT_DECLARED": "không khai",
+    "DECLARED_NONE": "không có",   # BS ghi "khoẻ mạnh", "không bệnh lý", "không dùng thuốc", "không dị ứng" (28/11)
     "NOT_RECOGNIZED": "chưa nhận ra (xem ❔)",
     "UNKNOWN_ROLE": "{names} (không rõ đang dùng hay định kê — đã kiểm cả hai)",
 }
