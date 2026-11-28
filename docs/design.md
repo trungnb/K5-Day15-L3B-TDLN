@@ -105,7 +105,7 @@ Model chỉ có ở 2 ô xanh. Mọi hình thoi là if/else trong code. Ô đỏ
 
 ```python
 answer(text: str) -> {"output": str, "needs_more": bool}
-answer(text: str, detail=True)   # (28/11) chỉ bot gọi, cho lệnh "chi tiết": in đủ hướng xử trí của 🟡
+answer(text: str, detail=True)   # (28/11) chỉ bot gọi, cho lệnh "chi tiết": in nguyên văn bảng tra (hướng xử trí, cơ chế, nguồn) cho mọi mã, dùng lại kết quả model 1 của tin đầu
 ```
 
 - `output`: tin trả lời hoàn chỉnh, mục tiêu ≤ 1800 ký tự (Zalo giới hạn 2000/tin; bot tự cắt nếu dài hơn).
@@ -300,11 +300,11 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 
 ```
 Model viết:    [DDI-001] Ibuprofen + Acenocoumarol → {hướng xử trí rút gọn, giữ mọi con số}. Nguồn: {source}
-               (28/11, Trung duyệt tin gọn: bản mặc định không in "(Vì: {cơ chế rút gọn})", tối đa 220 ký tự; bản "chi tiết" vẫn có lý do, tối đa 320 ký tự. Model vẫn viết lý do thì code bỏ đi rồi mới kiểm số.)
+               (28/11, Trung duyệt tin gọn: dòng model không có lý do "(Vì: …)", tối đa 260 ký tự, giữ mọi việc cần làm, không viết tắt từ thường; model vẫn viết lý do thì code bỏ đi rồi mới kiểm số. Bản "chi tiết" không qua model: code in nguyên văn `[mã] a + b → {guidance}. (Vì: {mechanism}). Nguồn: {source}` — vì dòng model viết gọn có thể bỏ ý (thử 28/11: CR-001 có lần bỏ "hội chẩn") mà bước kiểm số không bắt được.)
 Khung dự phòng: [DDI-001] Ibuprofen + Acenocoumarol → {guidance NGUYÊN VĂN, không cắt câu}. Nguồn: {source}
 ```
 
-Dòng 🟡 gọn *(28/11, Trung duyệt)*: `[DDI-029] Paracetamol + Warfarin: {câu đầu của mechanism, nguyên văn}. Nguồn: {source}`. Bản "chi tiết" dùng khung như 🔴. **Ngoại lệ** `FULL_MODERATE` (`codebase/agent.py`): rule 🟡 có giá trị nằm ở hành động trong guidance thì vẫn in đủ như 🔴 — hiện chỉ `CR-021` rung nhĩ × thủ thuật chảy máu → hỏi thuốc chống đông *(Trung chốt 28/11)*. Rule MODERATE khác chỉ có hướng xử trí ở bản "chi tiết".
+Dòng 🟡 gọn *(28/11, Trung duyệt)*: `[DDI-029] Paracetamol + Warfarin: {câu đầu của mechanism, nguyên văn}. Nguồn: {source}`. Bản "chi tiết" in nguyên văn bảng tra (khung ở trên). **Ngoại lệ** `FULL_MODERATE` (`codebase/agent.py`): rule 🟡 có giá trị nằm ở hành động trong guidance thì vẫn in đủ như 🔴 — hiện chỉ `CR-021` rung nhĩ × thủ thuật chảy máu → hỏi thuốc chống đông *(Trung chốt 28/11)*. Rule MODERATE khác chỉ có hướng xử trí ở bản "chi tiết".
 
 Khung dự phòng (code nối mã HIGH thiếu, dòng model bị loại, hoặc model 2 lỗi) in nguyên văn guidance: bản cũ chỉ lấy câu đầu và làm mất ngưỡng INR của `CR-001`. Khung dự phòng bỏ phần cơ chế cho tin gọn; cơ chế vẫn tra được qua mã và nguồn.
 
@@ -341,7 +341,7 @@ Khung dự phòng (code nối mã HIGH thiếu, dòng model bị loại, hoặc 
   - **Chào lại:** loại `greet` (`agent.small_talk_kind`) trong 12 giờ kể từ lần chào trước → HELLO_AGAIN; hỏi "làm được gì" luôn nhận HELLO + Q0. Giờ chào giữ trong RAM.
   - **Hỏi lại tăng dần:** `agent.is_no_entity_reply(output)` đúng 2 lần liên tiếp → thay Q1 bằng REPAIR. Có ca nhận ra thực thể hoặc `/moi` → đếm lại.
   - **`/sai <lý do>`:** ghi log `kind = "feedback"` (đã che số định danh), trả "Dạ em ghi nhận, cảm ơn anh/chị. Nhóm sẽ xem lại cảnh báo này." Không gọi agent, không đổi ca.
-  - **Tin gọn + "chi tiết"** *(28/11, Trung duyệt; chỉ ở bot, agent không đổi nên `run.py eval` vẫn chấm bản đủ có nguồn)*: tin có khối 🔴 hoặc 🟡 → tin đầu bỏ phần "Nguồn: …" cuối mỗi dòng cảnh báo; dòng 🟡 gọn (không có "→") chỉ còn "[mã] a + b"; dòng có "→" (🔴, `CR-021`) giữ nguyên hướng xử trí và mọi con số (`bot/zalo_bot.py::short_reply`); cuối tin thêm "(Nhắn "chi tiết" trong 10 phút để xem lý do, hướng xử trí 🟡 và nguồn.)". "chi tiết" → gọi `answer(ca, detail=True)` với ca đang chờ hoặc ca vừa xong trong 10 phút và chỉ gửi các khối 🔴 / 🟡 bản đủ (lý do, hướng xử trí, nguồn) + câu chốt, không gửi lại kết luận và 📋; không đổi trạng thái ca; không có ca → "Em chưa có ca nào trong 10 phút qua để xem chi tiết ạ. Anh/chị gửi lại ca giúp em nhé." Gọi lại model 1 nên trích thực thể có thể khác lần đầu.
+  - **Tin gọn + "chi tiết"** *(28/11, Trung duyệt; chỉ ở bot, agent không đổi nên `run.py eval` vẫn chấm bản đủ có nguồn)*: tin có khối 🔴 hoặc 🟡 → tin đầu bỏ phần "Nguồn: …" cuối mỗi dòng cảnh báo; dòng 🟡 gọn (không có "→") chỉ còn "[mã] a + b"; dòng có "→" (🔴, `CR-021`) giữ nguyên hướng xử trí và mọi con số (`bot/zalo_bot.py::short_reply`); cuối tin thêm "(Nhắn "chi tiết" trong 10 phút để xem lý do, hướng xử trí 🟡 và nguồn.)". "chi tiết" → gọi `answer(ca, detail=True)` với ca đang chờ hoặc ca vừa xong trong 10 phút và chỉ gửi các khối 🔴 / 🟡 bản đủ (lý do, hướng xử trí, nguồn) + câu chốt, không gửi lại kết luận và 📋; không đổi trạng thái ca; không có ca → "Em chưa có ca nào trong 10 phút qua để xem chi tiết ạ. Anh/chị gửi lại ca giúp em nhé." Agent dùng lại kết quả model 1 của cùng tin (RAM, tối đa 64 tin, `_EXTRACT_CACHE`) nên mã trong bản đủ giống tin đầu; bot khởi động lại thì mất, khi đó model 1 trích lại.
   - **Log:** thêm trường `kind` (`case` · `small_talk` · `feedback` · `detail`). `bot/log_stats.py` chỉ in số đếm, gồm chỉ số gần đúng "để nguyên 🔴" (ca có 🔴 mà 10 phút sau không có ca nào ít dòng 🔴 hơn).
 - Tắt bot là mất `pending` (chấp nhận được cho demo). Không ghi `pending` ra đĩa.
 - `run.py eval` không đi qua bot nên không bị ảnh hưởng.
