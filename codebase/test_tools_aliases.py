@@ -21,6 +21,13 @@ class AliasAdditionsTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertIn(("atrial_fibrillation", "cardiovascular"), _ids(text))
 
+    def test_af_abbreviation_and_english_name(self):
+        # Trung duyệt 28/11/2026: "AF", "atrial fibrillation" → rung nhĩ (để CR-021 không bị bỏ sót).
+        for text in ("BN AF, nhổ R48", "BN có atrial fibrillation", "tiền sử af 5 năm"):
+            with self.subTest(text=text):
+                self.assertIn(("atrial_fibrillation", "cardiovascular"), _ids(text))
+        self.assertNotIn(("atrial_fibrillation", "cardiovascular"), _ids("BN uống Alaxan, kê Augmentin"))
+
     def test_af_with_extraction_triggers_anticoagulant_question_rule(self):
         n = normalize_entities({"conditions": ["rung nhĩ"], "allergies": [], "baseline_drugs": [],
                                 "planned_procedures": ["nhổ R18"], "planned_drugs": ["paracetamol"]},
@@ -32,6 +39,57 @@ class AliasAdditionsTests(unittest.TestCase):
         self.assertEqual(len(af), 1)
         self.assertEqual(af[0]["severity"], "MODERATE")
         self.assertIn("chống đông", af[0]["guidance"])
+
+
+class AliasProposals2811Tests(unittest.TestCase):
+    """Rà UX 28/11: viết tắt / cách gọi khác của thực thể ĐÃ có (không thêm quy tắc mới)."""
+
+    def test_short_drug_names(self):
+        self.assertIn(("ibuprofen", "nsaid"), _ids("kê ibu"))
+        self.assertIn(("metronidazole", "nitroimidazole"), _ids("kê metro"))
+
+    def test_other_names_of_known_procedures(self):
+        cases = {"tooth extraction": ("extraction", "invasive_bleeding"), "Chích áp xe": ("abscess_drainage",
+                 "invasive_bleeding"), "dẫn lưu áp xe": ("abscess_drainage", "invasive_bleeding"),
+                 "điều trị tủy R46": ("non_invasive_dental", "non_invasive")}
+        for text, key in cases.items():
+            with self.subTest(text=text):
+                self.assertIn(key, _ids(text))
+
+    def test_abscess_and_pulp_procedures_carry_local_anesthesia(self):
+        # Trung chốt 28/11/2026 (câu hỏi review PR #30 của Nguyên): áp xe và điều trị tủy thường có gây tê.
+        cases = {"chích áp xe": "abscess_drainage", "trích áp xe": "abscess_drainage",
+                 "dẫn lưu áp xe": "abscess_drainage", "rạch áp xe": "abscess_drainage",
+                 "điều trị tủy R46": "non_invasive_dental", "lấy tủy R36": "non_invasive_dental",
+                 "điều trị nội nha": "non_invasive_dental", "chữa tủy": "non_invasive_dental",
+                 "nội nha R26": "non_invasive_dental"}
+        for text, cid in cases.items():
+            with self.subTest(text=text):
+                self.assertIn((cid, "local_anesthesia"), _ids(text))
+        for text in ("trám răng", "khám răng", "lấy cao răng trên nướu"):   # không tự kéo theo gây tê
+            with self.subTest(text=text):
+                self.assertNotIn(("non_invasive_dental", "local_anesthesia"), _ids(text))
+
+    def test_anesthetic_allergy_with_abscess_drainage_warns_directly(self):
+        n = normalize_entities({"conditions": [], "allergies": ["thuốc tê"], "baseline_drugs": [],
+                                "planned_procedures": ["chích áp xe"], "planned_drugs": []},
+                               "BN dị ứng thuốc tê. Chích áp xe")
+        rules = check_clinical_risks(n["conditions"], n["allergies"], n["baseline_drugs"],
+                                     n["planned_drugs"], n["procedure_groups"])
+        self.assertIn("CR-010", {r["rule_id"] for r in rules})
+
+    def test_proposed_rows_do_not_borrow_reviewed_sources(self):
+        import csv
+        from pathlib import Path
+        rows = csv.DictReader((Path(__file__).resolve().parents[1] / "data" / "entity_aliases.csv")
+                              .open(encoding="utf-8-sig"))
+        for row in rows:
+            # Gồm cả dòng local_anesthesia sinh kèm cho "extraction" / "tooth extraction" (review PR #30).
+            if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy", "extraction", "tooth extraction", "af", "atrial fibrillation"}:
+                # Dòng gây tê của áp xe / điều trị tủy ghi "Trung chốt 28/11/2026" (phân nhóm), không mượn nguồn 27/11.
+                expected = "Trung chốt 28/11/2026" if row["drug_class"] == "local_anesthesia" and row["canonical_id"] != "extraction" \
+                    else "Trung duyệt 28/11/2026"
+                self.assertIn(expected, row["source"], row["alias"])
 
 
 if __name__ == "__main__":

@@ -54,10 +54,10 @@ ZALO_ALLOWED_CHAT_IDS=
    ```
 2. Mở Zalo, quét QR chia sẻ hoặc tìm đúng bot vừa tạo, bấm Bắt đầu (`/start`) hoặc nhắn `"Xin chào"`.
 3. Bot sẽ chào bằng tên tài khoản Zalo:
-   `Chào BS <tên>, BS vui lòng nhập mã mời để bắt đầu sử dụng trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần).`
-4. Nhắn đúng mã mời đã đặt ở `ZALO_INVITE_CODE` (hoặc `/join <mã>`). Bot phản hồi xác nhận kích hoạt kèm hướng dẫn dùng 5 ý và tự lưu `chat_id` vào `bot/allowed_chats.json`.
+   `Chào BS <tên> ạ, anh/chị nhập mã mời giúp em để bắt đầu dùng trợ lý AI tra cứu an toàn RHM (chỉ cần nhập 1 lần).`
+4. Nhắn đúng mã mời đã đặt ở `ZALO_INVITE_CODE` (hoặc `/join <mã>`). Bot phản hồi tin kích hoạt ngắn (trợ lý AI, làm gì / không làm gì, ẩn danh, 1 ví dụ; bản đủ ở `/huongdan`) và tự lưu `chat_id` vào `bot/allowed_chats.json`.
 5. Từ tin nhắn tiếp theo trở đi, cứ gửi ca bệnh trực tiếp — không cần nhập lại mã mời (kể cả sau khi khởi động lại bot).
-6. Khi bot hỏi lại (thiếu thuốc định kê, thủ thuật…), BS nhắn bổ sung trong 10 phút: bot ghép vào ca đang hỏi (design §9) và ghi chú đã ghép. Chuyển sang BN khác thì nhắn `/moi`. Quá 10 phút (hoặc ca quá dài) bot không ghép và đặt dòng ⏱️ lên đầu câu trả lời, báo tin được đối chiếu như ca mới. Ca đang chờ chỉ giữ trong RAM, tắt bot là mất.
+6. Khi bot hỏi lại (thiếu thuốc định kê, thủ thuật…), BS nhắn bổ sung trong 10 phút: bot ghép vào ca đang hỏi (design §9) và ghi chú đã ghép. Chuyển sang BN khác thì nhắn `/moi`. Các lệnh khác *(28/11)*: `/huongdan` (cách dùng đủ), "thêm <thuốc / thủ thuật>" (hỏi tiếp ca vừa xong trong 10 phút; "thêm 1 ca …", "thêm BN nữa …" là BN khác nên không ghép), "chi tiết" (hướng xử trí các mục 🟡), `/sai <lý do>` (báo cảnh báo sai, ghi vào log). Quá 10 phút (hoặc ca quá dài) bot không ghép và đặt dòng ⏱️ lên đầu câu trả lời, báo tin được đối chiếu như ca mới. Ca đang chờ chỉ giữ trong RAM, tắt bot là mất.
 
 ---
 
@@ -99,6 +99,8 @@ Ghi output theo từng lượt và kiểm bot có báo đã gửi tin hay đưa 
 - Trong log chỉ lưu hash 10 ký tự đầu của `chat_id`, không lưu token hay mã mời.
 - Bot thay SĐT và dãy 9–12 chữ số (CMND/CCCD/mã hồ sơ) bằng `[số định danh đã ẩn]` **trước khi** gọi model, rồi tự hiện cảnh báo ⚠️ định danh. Họ tên BN không lọc được bằng code, vẫn dựa vào cờ `has_pii` của model.
 - Trước khi ghi log, bot che SĐT, số CCCD/CMND (9–12 chữ số), email, mã hồ sơ / mã BN và mã thẻ BHYT. Nếu agent đã cảnh báo tin có thông tin định danh (câu ⚠️ P1), bot không lưu tin gốc (`input` = `[đã bỏ: tin có thông tin định danh]`, `pii_dropped` = `true`). Regex không bắt được tên BN viết tự do, nên vẫn cần BS chỉ gửi ca đã ẩn danh. Log ghi trước bản sửa này chưa được che: rà hoặc xoá `bot/logs/` trên VM.
+- Gửi trả lời lỗi thì bot thử lại tối đa 3 lần (cách 1 giây); vẫn lỗi thì ghi dòng `kind` = `send_error`. Lỗi bất ngờ trong handler không tắt bot: BS nhận câu báo lỗi, log ghi `kind` = `handler_error` (issue #32). Khi BS báo bot không trả lời, tìm hai loại dòng này đúng giờ đó (log ghi giờ UTC). Ghi log lỗi (đĩa đầy…) chỉ in `[warn] ghi log thất bại`, BS vẫn nhận bản tin. SDK xử lý tin tuần tự, nên trong lúc thử gửi lại, tin của BS khác phải chờ.
+- `getUpdates` của Zalo chỉ có tham số `timeout`, không có `offset`, mỗi lần trả một sự kiện; tài liệu Zalo khuyên production dùng Webhook để tránh bỏ lỡ sự kiện ([getUpdates](https://bot.zapps.me/docs/apis/getUpdates/), cập nhật 22/10/2026). Bot đang dùng long polling, nên vẫn có thể mất tin nếu mạng rớt giữa lúc lấy tin; chuyển Webhook để sau CP4 (issue #32 B).
 - Khi tổng hợp vào `validation/log.md` cho phần Bonus, **chỉ chép đoạn đã viết lại và bỏ tên**, không gắn thông tin nhận diện người thử.
 - Sau khi hoàn tất tổng hợp dữ liệu thử nghiệm, xoá thư mục `bot/logs/` (và `bot/allowed_chats.json` nếu muốn thu hồi quyền dùng thử).
 
@@ -131,3 +133,9 @@ Ghi output theo từng lượt và kiểm bot có báo đã gửi tin hay đưa 
 - Việc gắn `?start=<mã>` trực tiếp vào link/QR Zalo Bot để bỏ qua bước gõ mã mời lần đầu (tự kích hoạt 1 chạm như Telegram): **UNVERIFIED** trên tài liệu `docs.zaloplatforms.com` (`bot/zalo_bot.py` đã hỗ trợ sẵn `/start <mã>` nếu Zalo có truyền xuống, nhưng mặc định quy trình dùng QR chia sẻ chuẩn + nhập mã mời 1 lần).
 - Giới hạn tần suất (rate limit) của API `getUpdates` / `sendMessage` trên Zalo Bot Creator: **UNVERIFIED**.
 - Giới hạn `2000` ký tự mỗi lần gửi `sendMessage`: lấy theo hằng số `MAX_MESSAGE_LEN = 2000` trong code `LAB/zalobot/bot.py` của bài lab trước, chưa kiểm lại trực tiếp trên tài liệu API bản mới nhất.
+
+---
+
+## Số liệu từ log *(28/11)*
+
+Trên VM, từ thư mục repo: `bot/.venv/bin/python bot/log_stats.py bot/logs`. Script chỉ đọc log và chỉ in số đếm (số tin theo `kind`, số ca có 🔴 / 🟡, 🚫 theo mã, số lần "thêm", số câu REPAIR, số lỗi, chỉ số gần đúng "để nguyên 🔴"), không in nội dung tin. Log ghi trước 28/11 không có trường `kind`: script suy loại tin từ input/output.

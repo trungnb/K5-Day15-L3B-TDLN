@@ -7,9 +7,11 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
+import time
 import types
 import unittest
 from unittest.mock import patch
@@ -236,8 +238,8 @@ class ZaloBotInviteTests(unittest.TestCase):
         self.assertEqual(
             upd.message.replies,
             [
-                "Chào BS Nguyễn Bảo Trung, BS vui lòng nhập mã mời để bắt đầu sử dụng "
-                "trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
+                "Chào BS Nguyễn Bảo Trung ạ, anh/chị nhập mã mời giúp em để bắt đầu dùng "
+                "trợ lý AI tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
             ],
         )
         self.assertEqual(self.agent_calls, [])
@@ -253,8 +255,8 @@ class ZaloBotInviteTests(unittest.TestCase):
         self.assertEqual(
             upd.message.replies,
             [
-                "Chào BS Minh, BS vui lòng nhập mã mời để bắt đầu sử dụng "
-                "trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
+                "Chào BS Minh ạ, anh/chị nhập mã mời giúp em để bắt đầu dùng "
+                "trợ lý AI tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
             ],
         )
         self.assertIn("chat_102", bot_mod._prompted_chats)
@@ -266,9 +268,10 @@ class ZaloBotInviteTests(unittest.TestCase):
         asyncio.run(bot_mod.on_text(upd1, _FakeContext()))
         self.assertEqual(len(upd1.message.replies), 1)
         self.assertTrue(
-            upd1.message.replies[0].startswith("Đã kích hoạt thành công! Chào BS Nguyễn Bảo Trung.\n\n")
+            upd1.message.replies[0].startswith("Đã kích hoạt. Chào BS Nguyễn Bảo Trung ạ!\n")
         )
-        self.assertIn(bot_mod.USAGE_TEXT, upd1.message.replies[0])
+        self.assertEqual(upd1.message.replies[0], bot_mod.ACTIVATED_TEXT.format(title="BS Nguyễn Bảo Trung"))
+        self.assertNotIn(bot_mod.USAGE_TEXT, upd1.message.replies[0])   # bản đủ chỉ in khi /huongdan
         self.assertNotIn("Xin chào!", upd1.message.replies[0])
 
         # Verify file persistence, schema, no display_name PII, and 0o600 permissions
@@ -287,18 +290,18 @@ class ZaloBotInviteTests(unittest.TestCase):
         upd1_next = _FakeUpdate("chat_201", "BN uống Sintrom nhổ R48", display_name="Nguyễn Bảo Trung")
         asyncio.run(bot_mod.on_text(upd1_next, _FakeContext()))
         self.assertEqual(self.agent_calls, ["BN uống Sintrom nhổ R48"])
-        self.assertEqual(upd1_next.message.replies, ["fake output"])
+        self.assertEqual(upd1_next.message.replies, ["fake output\n" + bot_mod.FOLLOW_UP_HINT])
 
         # 2) /join RHM2026
         upd2 = _FakeUpdate("chat_202", "/join RHM2026", display_name="Lan")
         asyncio.run(bot_mod.on_join(upd2, _FakeContext(args=["RHM2026"])))
-        self.assertTrue(upd2.message.replies[0].startswith("Đã kích hoạt thành công! Chào BS Lan."))
+        self.assertTrue(upd2.message.replies[0].startswith("Đã kích hoạt. Chào BS Lan ạ!"))
         self.assertIn("chat_202", bot_mod.ALLOWED_CHAT_IDS)
 
         # 3) /start RHM2026
         upd3 = _FakeUpdate("chat_203", "/start RHM2026", display_name="Dr. An")
         asyncio.run(bot_mod.on_start(upd3, _FakeContext(args=["RHM2026"])))
-        self.assertTrue(upd3.message.replies[0].startswith("Đã kích hoạt thành công! Chào Dr. An."))
+        self.assertTrue(upd3.message.replies[0].startswith("Đã kích hoạt. Chào Dr. An ạ!"))
         self.assertIn("chat_203", bot_mod.ALLOWED_CHAT_IDS)
 
     def test_already_authorized_calling_join(self) -> None:
@@ -307,7 +310,7 @@ class ZaloBotInviteTests(unittest.TestCase):
         asyncio.run(bot_mod.on_join(upd, _FakeContext(args=["RHM2026"])))
         self.assertEqual(
             upd.message.replies,
-            ["Tài khoản của BS đã được kích hoạt sẵn rồi. BS có thể gửi ca bệnh ngay ạ."],
+            ["Tài khoản của anh/chị đã được kích hoạt sẵn rồi ạ. Anh/chị gửi ca ngay được nhé."],
         )
         self.assertEqual(self.agent_calls, [])
 
@@ -323,7 +326,7 @@ class ZaloBotInviteTests(unittest.TestCase):
             asyncio.run(bot_mod.on_text(upd_bad, _FakeContext()))
             self.assertEqual(
                 upd_bad.message.replies,
-                ["Mã mời chưa đúng. BS vui lòng kiểm tra lại và gửi đúng mã mời được nhóm cung cấp."],
+                ["Mã mời chưa đúng ạ. Anh/chị kiểm tra lại và gửi đúng mã mời nhóm đã cung cấp giúp em."],
             )
 
         # 6th attempt even with valid code is throttled
@@ -331,7 +334,7 @@ class ZaloBotInviteTests(unittest.TestCase):
         asyncio.run(bot_mod.on_text(upd_throttled, _FakeContext()))
         self.assertEqual(
             upd_throttled.message.replies,
-            ["BS đã nhập sai mã mời quá nhiều lần. Vui lòng thử lại sau ít phút."],
+            ["Anh/chị đã nhập sai mã mời quá nhiều lần. Anh/chị thử lại sau ít phút giúp em nhé."],
         )
         self.assertNotIn(chat_id, bot_mod.ALLOWED_CHAT_IDS)
 
@@ -340,7 +343,7 @@ class ZaloBotInviteTests(unittest.TestCase):
         with patch.object(bot_mod.time, "monotonic", return_value=future):
             upd_ok = _FakeUpdate(chat_id, "RHM2026", display_name="Hùng")
             asyncio.run(bot_mod.on_text(upd_ok, _FakeContext()))
-            self.assertTrue(upd_ok.message.replies[0].startswith("Đã kích hoạt thành công! Chào BS Hùng."))
+            self.assertTrue(upd_ok.message.replies[0].startswith("Đã kích hoạt. Chào BS Hùng ạ!"))
             self.assertIn(chat_id, bot_mod.ALLOWED_CHAT_IDS)
 
     def test_fallback_when_invite_code_empty(self) -> None:
@@ -349,7 +352,7 @@ class ZaloBotInviteTests(unittest.TestCase):
         asyncio.run(bot_mod.on_start(upd, _FakeContext()))
         self.assertEqual(
             upd.message.replies,
-            ["Chat id của bạn là chat_501. Gửi id này cho nhóm để được cấp quyền dùng thử."],
+            ["Chat id của anh/chị là chat_501. Anh/chị gửi id này cho nhóm để được cấp quyền dùng thử."],
         )
 
     def test_atomic_save_and_corrupt_json_resilience(self) -> None:
@@ -388,8 +391,8 @@ class ZaloBotInviteTests(unittest.TestCase):
         self.assertEqual(
             upd_group.message.replies,
             [
-                "Tính năng kích hoạt bằng mã mời chỉ hỗ trợ nhắn riêng 1-1 với bot. "
-                "BS vui lòng mở chat riêng với bot rồi nhập mã mời."
+                "Kích hoạt bằng mã mời chỉ dùng được khi nhắn riêng 1-1 với em. "
+                "Anh/chị mở chat riêng với em rồi nhập mã mời giúp em nhé."
             ],
         )
 
@@ -406,8 +409,8 @@ class ZaloBotInviteTests(unittest.TestCase):
                 self.assertEqual(
                     upd.message.replies,
                     [
-                        "Chào BS Lan, BS vui lòng nhập mã mời để bắt đầu sử dụng "
-                        "trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
+                        "Chào BS Lan ạ, anh/chị nhập mã mời giúp em để bắt đầu dùng "
+                        "trợ lý AI tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
                     ],
                 )
         self.assertNotIn("chat_601", bot_mod.ALLOWED_CHAT_IDS)
@@ -418,7 +421,7 @@ class ZaloBotInviteTests(unittest.TestCase):
         with patch.object(bot_mod, "_save_chat_ids", side_effect=OSError("disk full")):
             upd = _FakeUpdate("chat_701", "rhm-đànẵng", display_name="Tuấn")
             asyncio.run(bot_mod.on_text(upd, _FakeContext()))
-            self.assertTrue(upd.message.replies[0].startswith("Đã kích hoạt thành công! Chào BS Tuấn."))
+            self.assertTrue(upd.message.replies[0].startswith("Đã kích hoạt. Chào BS Tuấn ạ!"))
             self.assertIn("chat_701", bot_mod.ALLOWED_CHAT_IDS)
             self.assertIn("chat_701", bot_mod.SAVED_CHAT_IDS)
 
@@ -449,6 +452,7 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         bot_mod.LOG_DIR = Path(self._tmpdir.name) / "logs"
         bot_mod.ALLOWED_CHAT_IDS = {"chat_a", "chat_b"}
         bot_mod._pending.clear()
+        bot_mod._last_case.clear()
         self.agent_calls: list[str] = []
         self.needs_more = True
 
@@ -464,6 +468,7 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         bot_mod.LOG_DIR = self._orig_log_dir
         bot_mod.ALLOWED_CHAT_IDS = self._orig_allowed
         bot_mod._pending.clear()
+        bot_mod._last_case.clear()
         self._tmpdir.cleanup()
 
     def _send(self, chat_id: str, text: str) -> list[str]:
@@ -536,7 +541,7 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         calls = len(self.agent_calls)
         replies = self._send("chat_a", "/moi")
         self.assertEqual(len(self.agent_calls), calls)
-        self.assertEqual(replies, ["Đã bắt đầu ca mới."])
+        self.assertEqual(replies, [bot_mod.NEW_CASE_TEXT])
         self.assertNotIn("chat_a", bot_mod._pending)
         self._send("chat_a", "Định kê ibuprofen")
         self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
@@ -553,9 +558,241 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         self.assertNotIn("0912", log_text)
         self.assertNotIn("001203004567", log_text)
 
+    def test_thanks_while_case_pending_is_not_merged(self) -> None:
+        # "cảm ơn" từng bị ghép "…\nBổ sung: cảm ơn" → bot gửi lại nguyên ca và câu "Em đã ghép với tin trước".
+        self._send("chat_a", "BN đang uống warfarin. Dự kiến nhổ răng khôn.")
+        calls = len(self.agent_calls)
+        replies = self._send("chat_a", "Dạ em cảm ơn nhiều ạ")
+        self.assertEqual(len(self.agent_calls), calls)
+        self.assertTrue(replies[-1].startswith("Dạ không có gì"))
+        self.assertNotIn("/moi", replies[-1])
+        # Ca đang chờ vẫn còn: tin bổ sung thật vẫn được ghép.
+        self._send("chat_a", "Định kê ibuprofen")
+        self.assertEqual(self.agent_calls[-1],
+                         "BN đang uống warfarin. Dự kiến nhổ răng khôn.\nBổ sung: Định kê ibuprofen")
+
+    def test_photo_or_sticker_gets_type_it_reply_without_agent(self) -> None:
+        upd = _FakeUpdate("chat_a", "")
+        upd.message.text = None
+        upd.message.photo_url = "https://example.invalid/don.jpg"
+        asyncio.run(bot_mod.on_non_text(upd, _FakeContext()))
+        self.assertEqual(self.agent_calls, [])
+        self.assertIn("ảnh", upd.message.replies[-1])
+        self.assertIn("gõ", upd.message.replies[-1])
+        # Chat chưa kích hoạt: không trả lời gì (không lộ bot cho người lạ).
+        upd2 = _FakeUpdate("chat_x", "")
+        upd2.message.text = None
+        asyncio.run(bot_mod.on_non_text(upd2, _FakeContext()))
+        self.assertEqual(upd2.message.replies, [])
+
+    def test_follow_up_with_them_after_finished_case_is_merged(self) -> None:
+        self.needs_more = False
+        replies = self._send("chat_a", "BN uống warfarin. Nhổ R48, kê Augmentin")
+        self.assertIn("thêm", replies[-1])                     # gợi ý cách hỏi tiếp
+        self._send("chat_a", "thêm paracetamol được không")
+        self.assertEqual(self.agent_calls[-1],
+                         "BN uống warfarin. Nhổ R48, kê Augmentin\nBổ sung: thêm paracetamol được không")
+        # Tin không mở đầu bằng "thêm"/"bổ sung" là ca mới.
+        self._send("chat_a", "BN uống aspirin, nhổ R38")
+        self.assertEqual(self.agent_calls[-1], "BN uống aspirin, nhổ R38")
+
+    def test_them_new_patient_is_not_merged(self) -> None:
+        # Review PR #30 (Nguyên): "Thêm 1 ca: …", "Thêm BN nữa …" là BN khác — không ghép vào ca trước / ca đang chờ.
+        for needs_more in (False, True):
+            for text in ("Thêm 1 ca: BN uống aspirin, nhổ R38", "Thêm BN nữa uống warfarin, nhổ R48",
+                         "thêm ca mới: BN có thai, kê ibuprofen", "Bổ sung 1 bệnh nhân: BN uống Sintrom",
+                         "Thêm ca: BN 30t kê Augmentin", "thêm một bệnh nhân uống clopidogrel"):
+                with self.subTest(needs_more=needs_more, text=text):
+                    self.needs_more = needs_more
+                    self._send("chat_a", "/moi")
+                    self._send("chat_a", "BN uống warfarin. Nhổ R48, kê Augmentin")
+                    self._send("chat_a", text)
+                    self.assertEqual(self.agent_calls[-1], text)
+        # Vẫn là bổ sung cho cùng BN: ghép như cũ.
+        for text in ("thêm cả paracetamol", "thêm BN dị ứng penicillin", "thêm: BN có dị ứng penicillin",
+                     "Bổ sung ca này: BN tiểu đường", "bổ sung BN có uống aspirin"):
+            with self.subTest(text=text):
+                self.needs_more = False
+                self._send("chat_a", "/moi")
+                self._send("chat_a", "BN uống warfarin. Nhổ R48, kê Augmentin")
+                self._send("chat_a", text)
+                self.assertEqual(self.agent_calls[-1], "BN uống warfarin. Nhổ R48, kê Augmentin\nBổ sung: " + text)
+
+    def test_merged_follow_up_mentions_moi_once(self) -> None:
+        # Review #30 (Nguyên) ý 5: MERGED_NOTE và FOLLOW_UP_HINT cùng nhắc /moi làm tin dài.
+        self.needs_more = False
+        self._send("chat_a", "BN uống warfarin. Nhổ R48")
+        replies = self._send("chat_a", "thêm ibuprofen")
+        self.assertEqual(replies[-1].count("/moi"), 1, replies[-1])
+
+    def test_on_text_sends_formatted_reply(self) -> None:
+        self.needs_more = False
+        with patch.object(bot_mod, "run_agent",
+                          return_value=("Đã đối chiếu — Bệnh nền: không khai · Thuốc đang dùng: Warfarin", {}, False)):
+            replies = self._send("chat_a", "BN uống warfarin")
+        self.assertIn("• Chưa khai: bệnh nền", replies[-1])
+
+    def test_moi_also_forgets_finished_case(self) -> None:
+        self.needs_more = False
+        self._send("chat_a", "BN uống warfarin. Nhổ R48, kê Augmentin")
+        self._send("chat_a", "/moi")
+        self._send("chat_a", "thêm paracetamol")
+        self.assertEqual(self.agent_calls[-1], "thêm paracetamol")
+
     def test_clinical_numbers_are_not_masked(self) -> None:
         text = "BN INR 2.5, HbA1c 7.2%, aspirin 81mg. Nhổ R48"
         self.assertEqual(bot_mod.mask_identifiers(text), (text, False))
+
+
+class ZaloBotCommunicationTests(unittest.TestCase):
+    """Kế hoạch giao tiếp Trung duyệt 28/11 (A–F): tin kích hoạt ngắn + /huongdan, chào lại ngắn trong 12 giờ,
+    hỏi lại tăng dần, /sai, bản tin gọn 🟡 + "chi tiết"."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._orig_log_dir = bot_mod.LOG_DIR
+        self._orig_allowed = set(bot_mod.ALLOWED_CHAT_IDS)
+        bot_mod.LOG_DIR = Path(self._tmpdir.name) / "logs"
+        bot_mod.ALLOWED_CHAT_IDS = {"chat_a"}
+        for store in (bot_mod._pending, bot_mod._last_case, bot_mod._last_greet, bot_mod._misses):
+            store.clear()
+        self.calls: list[tuple[str, bool]] = []
+        self.output = "fake output"
+        self.needs_more = False
+
+        def _stub_run_agent(text: str, detail: bool = False):
+            self.calls.append((text, detail))
+            out = "full output" if detail else self.output
+            return out, {"models": ["fake"], "tokens_in": 1, "tokens_out": 2}, self.needs_more
+
+        self._patch = patch.object(bot_mod, "run_agent", side_effect=_stub_run_agent)
+        self._patch.start()
+
+    def tearDown(self) -> None:
+        self._patch.stop()
+        bot_mod.LOG_DIR = self._orig_log_dir
+        bot_mod.ALLOWED_CHAT_IDS = self._orig_allowed
+        for store in (bot_mod._pending, bot_mod._last_case, bot_mod._last_greet, bot_mod._misses):
+            store.clear()
+        self._tmpdir.cleanup()
+
+    def _send(self, text: str, chat_id: str = "chat_a") -> list[str]:
+        upd = _FakeUpdate(chat_id, text)
+        asyncio.run(bot_mod.on_text(upd, _FakeContext()))
+        return upd.message.replies
+
+    def _log_records(self) -> list[dict]:
+        return [json.loads(line) for f in sorted(bot_mod.LOG_DIR.glob("*.jsonl"))
+                for line in f.read_text(encoding="utf-8").splitlines()]
+
+    # A
+    def test_activation_text_is_short_and_says_ai(self) -> None:
+        text = bot_mod.ACTIVATED_TEXT.format(title="BS Lan")
+        self.assertLessEqual(len(text.splitlines()), 8)
+        for must in ("trợ lý AI", "BS là người quyết định", "ẩn danh", "Ví dụ:", "/huongdan"):
+            self.assertIn(must, text)
+
+    def test_huongdan_prints_full_usage_in_em_voice(self) -> None:
+        replies = self._send("/huongdan")
+        self.assertEqual(replies, [bot_mod.USAGE_TEXT])
+        self.assertEqual(self.calls, [])
+        self.assertNotRegex(bot_mod.USAGE_TEXT, r"\bBot\b|\bbot sẽ\b")
+        for cmd in ("/moi", "thêm", "chi tiết", "/sai"):
+            self.assertIn(cmd, bot_mod.USAGE_TEXT)
+
+    # B
+    def test_second_greeting_within_12h_is_short(self) -> None:
+        first = self._send("hi")
+        self.assertIn("Ví dụ:", first[-1])
+        second = self._send("chào em")
+        self.assertEqual(second, [bot_mod.AGENT_TEXT["HELLO_AGAIN"]])
+        bot_mod._last_greet["chat_a"] -= bot_mod.GREET_AGAIN_SEC + 1
+        third = self._send("hello")
+        self.assertIn("Ví dụ:", third[-1])
+        self.assertEqual(self.calls, [])
+
+    def test_help_question_always_gets_full_intro(self) -> None:
+        self._send("hi")
+        replies = self._send("em làm được gì")
+        self.assertIn("Ví dụ:", replies[-1])
+
+    def test_bye_gets_goodbye(self) -> None:
+        self.assertEqual(self._send("tạm biệt em"), [bot_mod.AGENT_TEXT["BYE"]])
+
+    # C
+    def test_second_message_without_entities_gets_template(self) -> None:
+        q1 = bot_mod.AGENT_TEXT["Q1"]
+        self.output = q1 + "\n" + bot_mod.AGENT_TEXT["FOOTER"]
+        self.needs_more = True
+        first = self._send("abc")
+        self.assertIn(q1, first[-1])
+        second = self._send("xyz")
+        self.assertIn(bot_mod.AGENT_TEXT["REPAIR"], second[-1])
+        self.assertNotIn(q1, second[-1])
+        # Ca nhận ra thực thể → đếm lại từ đầu.
+        self.output, self.needs_more = "🔴 Nguy cơ cao:\n- [DDI-001] x. Nguồn: y.", False
+        self._send("BN uống warfarin, kê ibuprofen")
+        self.output, self.needs_more = q1 + "\n" + bot_mod.AGENT_TEXT["FOOTER"], True
+        again = self._send("abc")
+        self.assertIn(q1, again[-1])
+
+    # D
+    def test_sai_feedback_is_logged_without_agent(self) -> None:
+        self._send("BN uống warfarin, kê ibuprofen")
+        calls = len(self.calls)
+        replies = self._send("/sai DDI-029 thừa, SĐT 0912 345 678")
+        self.assertEqual(replies, [bot_mod.FEEDBACK_ACK])
+        self.assertEqual(len(self.calls), calls)
+        rec = self._log_records()[-1]
+        self.assertEqual(rec["kind"], "feedback")
+        self.assertNotIn("0912", rec["input"])
+        self.assertIn("chat_a", bot_mod._last_case)          # không đụng ca vừa xong
+
+    def test_sai_from_unknown_chat_gets_invite_flow(self) -> None:
+        bot_mod.ALLOWED_CHAT_IDS = set()
+        with patch.object(bot_mod, "INVITE_CODE", "RHM2026"):
+            replies = self._send("/sai abc", chat_id="chat_z")
+        self.assertIn("mã mời", replies[-1])
+        self.assertFalse(bot_mod.LOG_DIR.exists())
+
+    # F
+    def test_moderate_reply_offers_detail_and_detail_reruns_case(self) -> None:
+        self.output = "Em rà xong rồi ạ — có 1 cần thận trọng.\n🟡 Cần thận trọng:\n- [DDI-029] a. Nguồn: b."
+        replies = self._send("BN uống warfarin, kê paracetamol")
+        self.assertIn(bot_mod.DETAIL_HINT, replies[-1])
+        detail = self._send("chi tiết")
+        self.assertEqual(self.calls[-1], ("BN uống warfarin, kê paracetamol", True))
+        self.assertEqual(detail, ["full output"])
+        self.assertIn("chat_a", bot_mod._last_case)
+        self.assertEqual(self._log_records()[-1]["kind"], "detail")
+
+    def test_no_moderate_no_detail_hint(self) -> None:
+        self.output = "🔴 Nguy cơ cao:\n- [DDI-001] a. Nguồn: b."
+        self.assertNotIn(bot_mod.DETAIL_HINT, self._send("BN uống warfarin, kê ibuprofen")[-1])
+
+    def test_detail_without_recent_case(self) -> None:
+        self.assertEqual(self._send("xem chi tiet"), [bot_mod.NO_DETAIL_TEXT])
+        self.assertEqual(self.calls, [])
+
+    def test_detail_uses_pending_case_without_merging(self) -> None:
+        self.output = "🟡 Cần thận trọng nếu dùng cùng nhau:\n- [DDI-029] a. Nguồn: b."
+        self.needs_more = True
+        self._send("paracetamol, warfarin")
+        self._send("chi tiết")
+        self.assertEqual(self.calls[-1], ("paracetamol, warfarin", True))
+        self.assertEqual(bot_mod._pending["chat_a"][0], "paracetamol, warfarin")
+
+    def test_log_stats_feedback_text_matches_bot(self) -> None:
+        spec = importlib.util.spec_from_file_location("log_stats", Path(__file__).resolve().parent / "log_stats.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.assertEqual(mod.FEEDBACK_ACK, bot_mod.FEEDBACK_ACK)
+
+    def test_log_kind_marks_small_talk_and_case(self) -> None:
+        self._send("cảm ơn em")
+        self._send("BN uống warfarin, kê ibuprofen")
+        kinds = [r["kind"] for r in self._log_records()]
+        self.assertEqual(kinds, ["small_talk", "case"])
 
 
 class ZaloBotLogPrivacyTests(unittest.TestCase):
@@ -613,7 +850,165 @@ class ZaloBotLogPrivacyTests(unittest.TestCase):
         rec = self._records()[0]
         self.assertNotIn("Nguyễn Văn Test", json.dumps(rec, ensure_ascii=False))
         self.assertTrue(rec["pii_dropped"])
-        self.assertEqual(update.message.replies, [flagged])
+        self.assertEqual(update.message.replies, [bot_mod.format_reply(flagged) + "\n" + bot_mod.FOLLOW_UP_HINT])
+
+
+class _FlakyMessage(_FakeMessage):
+    """reply_text lỗi `fails` lần đầu rồi mới gửi được (mô phỏng lỗi mạng / giới hạn tốc độ của Zalo)."""
+
+    def __init__(self, chat_id: str, text: str, fails: int):
+        super().__init__(chat_id, text)
+        self.fails = fails
+        self.attempts = 0
+
+    async def reply_text(self, chunk: str) -> None:
+        self.attempts += 1
+        if self.attempts <= self.fails:
+            raise RuntimeError("network down")
+        self.replies.append(chunk)
+
+
+class ZaloBotDeliveryTests(unittest.TestCase):
+    """Issue #32 (miss tin): gửi lỗi thì thử lại; lỗi bất ngờ trong handler không được tắt vòng polling."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._orig_log_dir = bot_mod.LOG_DIR
+        self._orig_allowed = set(bot_mod.ALLOWED_CHAT_IDS)
+        bot_mod.LOG_DIR = Path(self._tmpdir.name) / "logs"
+        bot_mod.ALLOWED_CHAT_IDS = {"chat_a"}
+        bot_mod._pending.clear()
+        bot_mod._last_case.clear()
+        self._patches = [
+            patch.object(bot_mod, "run_agent", return_value=("fake output", {"models": ["fake"]}, False)),
+            patch.object(bot_mod, "SEND_RETRY_SEC", 0, create=True),
+        ]
+        for p in self._patches:
+            p.start()
+
+    def tearDown(self) -> None:
+        for p in self._patches:
+            p.stop()
+        bot_mod.LOG_DIR = self._orig_log_dir
+        bot_mod.ALLOWED_CHAT_IDS = self._orig_allowed
+        bot_mod._pending.clear()
+        bot_mod._last_case.clear()
+        self._tmpdir.cleanup()
+
+    def _log_records(self) -> list[dict]:
+        return [json.loads(line) for f in sorted(bot_mod.LOG_DIR.glob("*.jsonl"))
+                for line in f.read_text(encoding="utf-8").splitlines()]
+
+    def _send(self, text: str) -> list[str]:
+        upd = _FakeUpdate("chat_a", text)
+        handler = bot_mod.on_feedback if text.startswith("/sai") else bot_mod.on_text
+        asyncio.run(handler(upd, _FakeContext()))
+        return upd.message.replies
+
+    def test_log_failure_still_delivers_high_warning(self) -> None:
+        # Review #33 (Nguyên) ý 1: log_turn đứng trước _reply_chunks; log lỗi thì BS mất cảnh báo đã tính xong.
+        high = "🔴 Nguy cơ cao: - [DDI-001] Ibuprofen + Warfarin"
+        with patch.object(bot_mod, "run_agent", return_value=(high, {"models": ["fake"]}, False)), \
+                patch.object(bot_mod, "log_turn", side_effect=OSError("disk full")):
+            replies = self._send("BN uống warfarin, kê ibuprofen")
+        self.assertTrue(replies and replies[0].startswith(high), replies)
+        self.assertNotIn(bot_mod.ERROR_TEXT, replies)
+
+    def test_log_failure_keeps_dropped_note_on_agent_error(self) -> None:
+        bot_mod._pending["chat_a"] = ("Nhổ R48", time.monotonic() - bot_mod.PENDING_TTL_SEC - 1)
+        with patch.object(bot_mod, "run_agent", side_effect=RuntimeError("model down")), \
+                patch.object(bot_mod, "log_turn", side_effect=OSError("disk full")):
+            replies = self._send("BN uống warfarin")
+        self.assertTrue(replies and replies[0].startswith(bot_mod.DROPPED_NOTE), replies)
+
+    def test_log_failure_still_acks_feedback_and_small_talk(self) -> None:
+        with patch.object(bot_mod, "log_turn", side_effect=OSError("disk full")):
+            self.assertEqual(self._send("/sai thiếu cảnh báo"), [bot_mod.FEEDBACK_ACK])
+            replies = self._send("cảm ơn em")
+        self.assertTrue(replies, replies)
+        self.assertNotIn(bot_mod.ERROR_TEXT, replies)
+
+    def test_send_failure_is_retried(self) -> None:
+        upd = _FakeUpdate("chat_a", "x")
+        upd.message = _FlakyMessage("chat_a", "x", fails=1)
+        asyncio.run(bot_mod._reply_chunks(upd, "Em rà xong rồi ạ."))
+        self.assertEqual(upd.message.replies, ["Em rà xong rồi ạ."])
+
+    def test_send_failure_after_retries_is_logged(self) -> None:
+        upd = _FakeUpdate("chat_a", "x")
+        upd.message = _FlakyMessage("chat_a", "x", fails=99)
+        asyncio.run(bot_mod._reply_chunks(upd, "Em rà xong rồi ạ."))
+        self.assertEqual(upd.message.replies, [])
+        self.assertEqual(upd.message.attempts, bot_mod.SEND_ATTEMPTS)
+        rec = self._log_records()[-1]
+        self.assertEqual(rec["kind"], "send_error")
+        self.assertIn("RuntimeError", rec["error"])
+
+    def test_unexpected_error_in_on_text_does_not_escape_and_doctor_is_told(self) -> None:
+        upd = _FakeUpdate("chat_a", "BN uống warfarin, nhổ R48")
+        with patch.object(bot_mod, "mask_identifiers", side_effect=ValueError("boom")):
+            asyncio.run(bot_mod.on_text(upd, _FakeContext()))   # không được ném lỗi ra vòng polling
+        self.assertEqual(upd.message.replies, [bot_mod.ERROR_TEXT])
+        self.assertEqual(self._log_records()[-1]["kind"], "handler_error")
+
+    def test_every_registered_handler_is_guarded(self) -> None:
+        for fn in (bot_mod.on_start, bot_mod.on_join, bot_mod.on_new_case, bot_mod.on_usage,
+                   bot_mod.on_feedback, bot_mod.on_non_text, bot_mod.on_text):
+            self.assertTrue(getattr(fn, "_guarded", False), fn.__name__)
+
+
+class ZaloBotFormatTests(unittest.TestCase):
+    """Issue #31: định dạng lại bản tin ở lớp bot — chỉ thêm câu dẫn / tách dòng, không bỏ chữ của agent."""
+
+    CHECKED = ("Đã đối chiếu — Bệnh nền: không khai · Dị ứng: không khai · Thuốc đang dùng: Warfarin (kháng vitamin K)"
+               " · Thủ thuật: Nhổ răng / Tiểu phẫu răng khôn · Thuốc định kê: không khai")
+
+    def test_checked_line_becomes_bullets_with_chua_khai(self) -> None:
+        out = bot_mod.format_reply("Em rà xong rồi ạ — có 1 nguy cơ cao.\n" + self.CHECKED + "\n" + bot_mod.AGENT_TEXT["FOOTER"])
+        self.assertIn("📋 Em đã đối chiếu:\n• Thuốc đang dùng: Warfarin (kháng vitamin K)\n"
+                      "• Thủ thuật: Nhổ răng / Tiểu phẫu răng khôn\n• Chưa khai: bệnh nền, dị ứng, thuốc định kê", out)
+        self.assertNotIn("Đã đối chiếu —", out)
+        self.assertTrue(out.endswith(bot_mod.AGENT_TEXT["FOOTER"]))
+
+    def test_unrecognised_checked_line_is_left_as_is(self) -> None:
+        odd = "Đã đối chiếu — Bệnh nền không rõ · Dị ứng: không khai"
+        self.assertEqual(bot_mod.format_reply(odd), odd)
+
+    def test_q1_gets_lead_in_and_moi_hint(self) -> None:
+        q1, footer = bot_mod.AGENT_TEXT["Q1"], bot_mod.AGENT_TEXT["FOOTER"]
+        self.assertEqual(bot_mod.format_reply(f"{q1}\n{footer}"),
+                         f"{bot_mod.ASK_LEAD}\n{q1}\n{bot_mod.ASK_MOI_HINT}\n{footer}")
+
+    def test_refusal_gets_lead_in_but_emergency_line_does_not(self) -> None:
+        dose, q1 = "🚫 Em không tư vấn liều dùng / số ngày dùng.", bot_mod.AGENT_TEXT["Q1"]
+        out = bot_mod.format_reply(f"{dose}\n{q1}")
+        self.assertTrue(out.startswith(f"{bot_mod.REFUSAL_LEAD}\n{dose}\n"), out)
+        self.assertNotIn(bot_mod.ASK_LEAD, out)            # câu dẫn từ chối đã đủ, không chồng thêm
+        er = "🚫 Em không hỗ trợ xử trí cấp cứu. Anh/chị xử trí theo phác đồ cấp cứu của cơ sở, cần thì gọi 115."
+        self.assertTrue(bot_mod.format_reply(f"{er}\nEm rà xong rồi ạ — có 1 nguy cơ cao.").startswith(er))
+
+    def test_formatting_never_drops_agent_text_on_eval_outputs(self) -> None:
+        import csv
+        root = Path(bot_mod.__file__).resolve().parent.parent / "eval"
+        outputs = [row["output"] for name in ("run-1.csv", "run-2.csv")
+                   for row in csv.DictReader(open(root / name, encoding="utf-8-sig")) if row.get("output")]
+        self.assertGreaterEqual(len(outputs), 50)
+        for raw in outputs:
+            out = bot_mod.format_reply(raw)
+            for line in raw.split("\n"):
+                if line.startswith("Đã đối chiếu — "):
+                    for part in line[len("Đã đối chiếu — "):].split(" · "):
+                        value = part.split(": ", 1)[-1]
+                        if value != "không khai":
+                            self.assertIn(value, out)
+                else:
+                    self.assertIn(line, out)
+            self.assertEqual(sorted(re.findall(r"\[(?:DDI|CR)-\d+\]", raw)),
+                             sorted(re.findall(r"\[(?:DDI|CR)-\d+\]", out)))
+
+    def test_format_errors_fall_back_to_raw_output(self) -> None:
+        with patch.object(bot_mod, "_format_checked_line", side_effect=ValueError("boom")):
+            self.assertEqual(bot_mod.format_reply(self.CHECKED), self.CHECKED)
 
 
 if __name__ == "__main__":

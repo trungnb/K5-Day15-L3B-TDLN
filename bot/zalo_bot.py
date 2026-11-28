@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+import functools
 import hashlib
 import hmac
 import json
@@ -30,7 +31,9 @@ if str(CODEBASE_DIR) not in sys.path:
     sys.path.insert(0, str(CODEBASE_DIR))
 
 import tracing  # noqa: E402
-from agent import TEXT as AGENT_TEXT, answer  # noqa: E402  (import agent -> ai.py tự nạp .env ở gốc repo)
+from agent import (  # noqa: E402  (import agent -> ai.py tự nạp .env ở gốc repo)
+    TEXT as AGENT_TEXT, answer, is_no_entity_reply, small_talk_kind, small_talk_reply,
+)
 
 from zalo_bot import Update  # noqa: E402
 from zalo_bot.constants import ChatAction  # noqa: E402
@@ -51,9 +54,32 @@ INVITE_WINDOW_SEC = 600
 
 # Ghép tin bổ sung (docs/design.md §9): giữ ca đang chờ bổ sung trong RAM, không ghi ra đĩa.
 PENDING_TTL_SEC = 600
+SEND_ATTEMPTS = 3        # gửi lỗi thì thử lại (issue #32 A); mốc đề xuất, không có nguồn
+SEND_RETRY_SEC = 1.0
+ERROR_TEXT = "Dạ em xin lỗi, hệ thống tra cứu đang lỗi — anh/chị thử lại sau ít phút giúp em nhé."
 MAX_PENDING_CHARS = 4000
-NEW_CASE_TEXT = "Đã bắt đầu ca mới."
+NEW_CASE_TEXT = "Dạ, em đã chuyển sang BN mới. Anh/chị gửi ca tiếp theo nhé."
+FOLLOW_UP_HINT = "(Hỏi tiếp cho BN này: nhắn \"thêm <tên thuốc / thủ thuật>\" trong 10 phút. BN khác: nhắn /moi.)"
+NON_TEXT_TEXT = ("Em chưa đọc được ảnh, sticker hay tin thoại ạ. Anh/chị gõ tên thuốc, bệnh nền, thủ thuật giúp em — "
+                 "đừng gửi ảnh đơn thuốc thật của BN nhé.")
+FOLLOW_UP_RE = re.compile(r"^\s*(?:thêm|them|bổ sung|bo sung)\b", re.IGNORECASE)
+# "Thêm 1 ca: …", "Thêm BN nữa …", "Thêm ca: …" là BN khác → ca mới, không ghép (review PR #30, Nguyên).
+# So trên chữ có dấu: "thêm cả paracetamol" vẫn là bổ sung; "thêm BN dị ứng …" (không số / không "khác, nữa, mới") cũng vậy.
+NEW_PATIENT_RE = re.compile(
+    r"^\s*(?:thêm|them|bổ sung|bo sung)\s+(?:"
+    r"(?:\d+|một|mot)\s+(?:ca|bn|bệnh nhân|benh nhan)\b"
+    r"|(?:ca|bn|bệnh nhân|benh nhan)\s+(?:khác|khac|nữa|nua|mới|moi)\b"
+    r"|ca\s*:)", re.IGNORECASE)
 MERGED_NOTE = "(Em đã ghép với tin trước của ca này. Nếu là BN khác, nhắn /moi rồi gửi lại.)"
+# Tin đã ghép thì MERGED_NOTE đã nhắc /moi — gợi ý hỏi tiếp bỏ phần /moi cho tin đỡ dài (review PR #30, Nguyên ý 5).
+FOLLOW_UP_HINT_MERGED = "(Hỏi tiếp cho BN này: nhắn \"thêm <tên thuốc / thủ thuật>\" trong 10 phút.)"
+# Kế hoạch giao tiếp Trung duyệt 28/11 (docs/design.md §7, §9).
+GREET_AGAIN_SEC = 12 * 3600   # chào lại trong 12 giờ → câu ngắn HELLO_AGAIN (mốc đề xuất, không có nguồn)
+DETAIL_RE = re.compile(r"^\s*(?:xem\s+|cho\s+(?:em\s+|mình\s+|minh\s+)?xem\s+)?chi\s+ti[eếê]t"
+                       r"(?:\s+(?:đi|di|nhé|nhe|nha|ạ|a))?\s*[.!?]*\s*$", re.IGNORECASE)
+DETAIL_HINT = "(Nhắn \"chi tiết\" trong 10 phút để xem hướng xử trí các mục 🟡.)"
+NO_DETAIL_TEXT = "Em chưa có ca nào trong 10 phút qua để xem chi tiết ạ. Anh/chị gửi lại ca giúp em nhé."
+FEEDBACK_ACK = "Dạ em ghi nhận, cảm ơn anh/chị. Nhóm sẽ xem lại cảnh báo này."
 DROPPED_NOTE = (
     f"⏱️ Ca trước đã quá {PENDING_TTL_SEC // 60} phút (hoặc quá dài) nên em KHÔNG ghép, tin này được đối chiếu như ca mới. "
     "Nếu là cùng BN, anh/chị gửi lại một tin đủ bệnh nền, thuốc đang dùng, thủ thuật và thuốc định kê."
@@ -79,6 +105,10 @@ _allowlist_lock = asyncio.Lock()
 _prompted_chats: set[str] = set()
 _failed_attempts: dict[str, list[float]] = {}
 _pending: dict[str, tuple[str, float]] = {}
+# Ca vừa xong (needs_more=False) — chỉ ghép khi BS mở đầu tin bằng "thêm"/"bổ sung" (design §9, 28/11).
+_last_case: dict[str, tuple[str, float]] = {}
+_last_greet: dict[str, float] = {}   # giờ chào gần nhất theo chat (RAM, mất khi restart)
+_misses: dict[str, int] = {}         # số lần liên tiếp không nhận ra thực thể nào
 
 _DOCTOR_PREFIX_RE = re.compile(
     r"^(?:(?:bs|dr)(?:\.|\s|$)|(?:bác|bac)\s*s[ĩi](?:\s|$))",
@@ -86,18 +116,31 @@ _DOCTOR_PREFIX_RE = re.compile(
 )
 
 USAGE_TEXT = (
-    "Đây là trợ lý tra cứu an toàn trước thủ thuật & kê đơn RHM (bản thử hackathon).\n\n"
+    "Em là trợ lý AI tra cứu an toàn trước thủ thuật & kê đơn RHM (bản thử hackathon).\n\n"
     "Cách dùng: nhắn 1 tin gồm đủ 5 ý (nếu có): bệnh nền, dị ứng, thuốc đang dùng, "
     "thủ thuật dự kiến và thuốc định kê.\n\n"
     "Lưu ý bắt buộc:\n"
     "• Chỉ dùng ca giả lập hoặc đã ẩn danh — KHÔNG gửi họ tên, SĐT, mã hồ sơ hay ảnh đơn thuốc thật của BN.\n"
-    "• Bot chỉ hỗ trợ đối chiếu cảnh báo kèm nguồn; không kê đơn, không tư vấn liều, BS là người quyết định.\n"
-    "• Thiếu ý nào bot sẽ hỏi lại, BS nhắn bổ sung trong 10 phút là bot ghép vào ca đang hỏi. "
-    "Chuyển sang BN khác thì nhắn /moi.\n\n"
+    "• Em chỉ hỗ trợ đối chiếu cảnh báo kèm nguồn; không kê đơn, không tư vấn liều, BS là người quyết định.\n"
+    "• Thiếu ý nào em sẽ hỏi lại; anh/chị nhắn bổ sung trong 10 phút là em ghép vào ca đang hỏi.\n\n"
+    "Lệnh:\n"
+    "• /moi — chuyển sang BN khác.\n"
+    "• \"thêm <thuốc / thủ thuật>\" — hỏi tiếp cho ca vừa xong (trong 10 phút).\n"
+    "• \"chi tiết\" — xem hướng xử trí các mục 🟡 của ca vừa xong.\n"
+    "• /sai <lý do> — báo cảnh báo sai hoặc không hữu ích.\n\n"
     "Ví dụ:\n"
     "BN nam 65t, rung nhĩ uống Sintrom, ĐTĐ type 2 uống metformin. Dự kiến nhổ R48. Định kê Augmentin + Ibuprofen"
 )
-START_TEXT = f"Xin chào! {USAGE_TEXT}"
+START_TEXT = f"Dạ chào anh/chị ạ! {USAGE_TEXT}"
+ACTIVATED_TEXT = (
+    "Đã kích hoạt. Chào {title} ạ!\n"
+    "Em là trợ lý AI tra cứu an toàn trước thủ thuật & kê đơn RHM (bản thử hackathon).\n"
+    "• Em làm: đối chiếu tương tác thuốc và rủi ro thủ thuật theo bảng tra có nguồn.\n"
+    "• Em không làm: kê đơn, tư vấn liều, xử trí cấp cứu. BS là người quyết định.\n"
+    "• Chỉ gửi ca đã ẩn danh — không họ tên, SĐT, mã hồ sơ, ảnh đơn thật.\n"
+    "Ví dụ: BN 65t uống Sintrom, ĐTĐ. Dự kiến nhổ R48. Định kê Augmentin + Ibuprofen.\n"
+    "Nhắn /huongdan để xem đủ cách dùng."
+)
 
 
 def _load_saved_chat_ids(path: Path = ALLOWED_CHATS_FILE) -> set[str]:
@@ -196,7 +239,9 @@ def log_turn(
     summary: dict[str, Any],
     error: str = "",
     drop_input: bool = False,
+    kind: str = "case",
 ) -> None:
+    """kind: "case" · "small_talk" · "feedback" (/sai) · "detail" ("chi tiết") — bot/log_stats.py đếm theo trường này."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
     log_path = LOG_DIR / f"{now.strftime('%Y%m%d')}.jsonl"
@@ -204,6 +249,7 @@ def log_turn(
     record = {
         "ts": now.isoformat(),
         "chat": _chat_hash(chat_id),
+        "kind": kind,
         "input": PII_DROPPED if drop_input else mask_pii(user_input),
         "output": mask_pii(output),
         "pii_dropped": drop_input,
@@ -230,13 +276,18 @@ def _compose_case(chat_id: str, text: str, now: float | None = None) -> tuple[st
     có thể thiếu thuốc nền và mất cảnh báo HIGH (vd warfarin rồi "Định kê ibuprofen").
     """
     ts = time.monotonic() if now is None else now
+    if NEW_PATIENT_RE.match(text or ""):
+        return text, "new"
+    store = _pending
     pending = _pending.get(chat_id)
+    if pending is None and FOLLOW_UP_RE.match(text or ""):
+        store, pending = _last_case, _last_case.get(chat_id)
     if pending is None:
         return text, "new"
     old_text, saved_at = pending
     merged = f"{old_text}\nBổ sung: {text}"
     if ts - saved_at > PENDING_TTL_SEC or len(merged) > MAX_PENDING_CHARS:
-        _pending.pop(chat_id, None)
+        store.pop(chat_id, None)
         return text, "dropped"
     return merged, "merged"
 
@@ -244,15 +295,17 @@ def _compose_case(chat_id: str, text: str, now: float | None = None) -> tuple[st
 def _remember_case(chat_id: str, case_text: str, needs_more: bool) -> None:
     if needs_more:
         _pending[chat_id] = (case_text, time.monotonic())
+        _last_case.pop(chat_id, None)
     else:
         _pending.pop(chat_id, None)
+        _last_case[chat_id] = (case_text, time.monotonic())
 
 
-def run_agent(text: str) -> tuple[str, dict[str, Any], bool]:
+def run_agent(text: str, detail: bool = False) -> tuple[str, dict[str, Any], bool]:
     tracing.begin("zalo")
     needs_more = False
     try:
-        res = answer(text)
+        res = answer(text, detail=True) if detail else answer(text)
         if isinstance(res, dict):
             output = str(res.get("output") or "")
             needs_more = res.get("needs_more") is True
@@ -304,8 +357,8 @@ def _format_doctor_title(display_name: str) -> str:
 def _invite_prompt_text(update: Update) -> str:
     title = _format_doctor_title(_extract_display_name(update))
     return (
-        f"Chào {title}, BS vui lòng nhập mã mời để bắt đầu sử dụng "
-        "trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
+        f"Chào {title} ạ, anh/chị nhập mã mời giúp em để bắt đầu dùng "
+        "trợ lý AI tra cứu an toàn RHM (chỉ cần nhập 1 lần)."
     )
 
 
@@ -383,19 +436,19 @@ async def _handle_unauthorized(
     if not INVITE_CODE:
         await _reply_chunks(
             update,
-            f"Chat id của bạn là {chat_id}. Gửi id này cho nhóm để được cấp quyền dùng thử.",
+            f"Chat id của anh/chị là {chat_id}. Anh/chị gửi id này cho nhóm để được cấp quyền dùng thử.",
         )
         return
 
     if _is_non_private_chat(update):
         await _reply_chunks(
             update,
-            "Tính năng kích hoạt bằng mã mời chỉ hỗ trợ nhắn riêng 1-1 với bot. "
-            "BS vui lòng mở chat riêng với bot rồi nhập mã mời.",
+            "Kích hoạt bằng mã mời chỉ dùng được khi nhắn riêng 1-1 với em. "
+            "Anh/chị mở chat riêng với em rồi nhập mã mời giúp em nhé.",
         )
         return
 
-    if cmd == "/help" or (cmd in ("/start", "/join") and not arg):
+    if cmd in ("/help", "/huongdan") or (cmd in ("/start", "/join") and not arg):
         _prompted_chats.add(chat_id)
         await _reply_chunks(update, _invite_prompt_text(update))
         return
@@ -404,7 +457,7 @@ async def _handle_unauthorized(
     if _is_invite_throttled(chat_id):
         await _reply_chunks(
             update,
-            "BS đã nhập sai mã mời quá nhiều lần. Vui lòng thử lại sau ít phút.",
+            "Anh/chị đã nhập sai mã mời quá nhiều lần. Anh/chị thử lại sau ít phút giúp em nhé.",
         )
         return
 
@@ -413,7 +466,7 @@ async def _handle_unauthorized(
         title = _format_doctor_title(_extract_display_name(update))
         await _reply_chunks(
             update,
-            f"Đã kích hoạt thành công! Chào {title}.\n\n{USAGE_TEXT}",
+            ACTIVATED_TEXT.format(title=title),
         )
         return
 
@@ -426,22 +479,119 @@ async def _handle_unauthorized(
     _prompted_chats.add(chat_id)
     await _reply_chunks(
         update,
-        "Mã mời chưa đúng. BS vui lòng kiểm tra lại và gửi đúng mã mời được nhóm cung cấp.",
+        "Mã mời chưa đúng ạ. Anh/chị kiểm tra lại và gửi đúng mã mời nhóm đã cung cấp giúp em.",
     )
 
 
+# ------------------------------------------------------------------ định dạng bản tin (issue #31)
+# Chỉ tách dòng và thêm câu dẫn; không bỏ, không sửa chữ nào của agent (mã rule, nguồn, câu chân trang).
+# Không nhận ra cấu trúc hoặc lỗi bất kỳ → gửi nguyên output gốc.
+CHECKED_PREFIX = "Đã đối chiếu — "
+CHECKED_HEADER = "📋 Em đã đối chiếu:"
+ASK_LEAD = "Dạ, em chưa đọc ra đủ thông tin để rà ca này."
+ASK_MOI_HINT = "Hoặc nhắn /moi để bắt đầu ca khác."
+REFUSAL_LEAD = "Dạ, phần này nằm ngoài việc em hỗ trợ:"
+EMERGENCY_PREFIX = "🚫 Em không hỗ trợ xử trí cấp cứu."   # dòng cấp cứu giữ đứng đầu tin, không chèn câu dẫn
+
+
+def _format_checked_line(line: str) -> str:
+    parts = line[len(CHECKED_PREFIX):].split(" · ")
+    shown, undeclared = [], []
+    for part in parts:
+        label, sep, value = part.partition(": ")
+        if not sep or not label or not value:
+            return line
+        if value == AGENT_TEXT["NOT_DECLARED"]:
+            undeclared.append(label[:1].lower() + label[1:])
+        else:
+            shown.append(f"• {label}: {value}")
+    if undeclared:
+        shown.append("• Chưa khai: " + ", ".join(undeclared))
+    return "\n".join([CHECKED_HEADER] + shown)
+
+
+def _format_lines(output: str) -> str:
+    lines = output.split("\n")
+    analysed = any(line.startswith(CHECKED_PREFIX) for line in lines)
+    out: list[str] = []
+    refusal_led = False
+    for line in lines:
+        if line.startswith(CHECKED_PREFIX):
+            out.append(_format_checked_line(line))
+        elif line.startswith("🚫") and not line.startswith(EMERGENCY_PREFIX):
+            if not refusal_led:
+                out.append(REFUSAL_LEAD)
+                refusal_led = True
+            out.append(line)
+        elif line == AGENT_TEXT["Q1"] and not analysed:
+            out.extend(([] if refusal_led else [ASK_LEAD]) + [line] + ([] if refusal_led else [ASK_MOI_HINT]))
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def format_reply(output: str) -> str:
+    try:
+        return _format_lines(output or "")
+    except Exception as exc:
+        print(f"[warn] định dạng bản tin thất bại, gửi bản gốc: {redact(f'{type(exc).__name__}: {exc}')}")
+        return output
+
+
+def _log_safely(**kwargs: Any) -> None:
+    """Ghi log nhưng không bao giờ ném lỗi (đĩa đầy, quyền ghi…): handler gọi hàm này trước khi gửi,
+    nên log lỗi không làm BS mất bản tin đã tính xong (review PR #33)."""
+    try:
+        log_turn(**kwargs)
+    except Exception as exc:
+        print(f"[warn] ghi log thất bại: {redact(f'{type(exc).__name__}: {exc}')}")
+
+
 async def _reply_chunks(update: Update, text: str) -> None:
+    """Gửi từng đoạn; lỗi gửi thì thử lại tối đa SEND_ATTEMPTS lần (issue #32 A). Hết lượt thì dừng, ghi
+    kind="send_error" để đối chiếu log khi BS báo miss tin. Lỗi do timeout sau khi Zalo đã nhận có thể làm BS
+    nhận một đoạn hai lần — chấp nhận, vì trùng ít hại hơn mất."""
     msg = update.message
     if msg is None:
         return
     for chunk in split_message(text):
+        for attempt in range(1, SEND_ATTEMPTS + 1):
+            try:
+                await msg.reply_text(chunk)
+                break
+            except Exception as exc:
+                err = redact(f"{type(exc).__name__}: {exc}")
+                print(f"[warn] gửi phản hồi thất bại (lần {attempt}/{SEND_ATTEMPTS}): {err}")
+                if attempt == SEND_ATTEMPTS:
+                    _log_safely(chat_id=str(_extract_chat_id(update) or ""), user_input="", output="",
+                                summary={}, error=err, kind="send_error")
+                    return
+                await asyncio.sleep(SEND_RETRY_SEC)
+
+
+def _guarded(handler):
+    """Bọc handler để lỗi bất ngờ không lọt ra `_polling_loop` của SDK (issue #32): SDK gọi `process_update`
+    ngoài khối try, một lỗi ở đó làm dừng hẳn polling và bot im với mọi tin tới khi khởi động lại."""
+
+    @functools.wraps(handler)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
-            await msg.reply_text(chunk)
+            await handler(update, context)
         except Exception as exc:
-            print(f"[warn] gửi phản hồi thất bại: {redact(f'{type(exc).__name__}: {exc}')}")
-            break
+            err = redact(f"{type(exc).__name__}: {exc}")
+            print(f"[error] handler {handler.__name__}: {err}")
+            _log_safely(chat_id=str(_extract_chat_id(update) or ""), user_input="", output="",
+                        summary={}, error=err, kind="handler_error")
+            try:
+                await _reply_chunks(update, ERROR_TEXT)
+            except Exception:
+                pass
+
+    wrapper._guarded = True
+    return wrapper
 
 
+@_guarded
 async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = _extract_chat_id(update)
     if chat_id is None:
@@ -456,6 +606,7 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _handle_unauthorized(update, chat_id, cmd or "/start", arg, raw_text)
 
 
+@_guarded
 async def on_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = _extract_chat_id(update)
     if chat_id is None:
@@ -463,7 +614,7 @@ async def on_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if chat_id in ALLOWED_CHAT_IDS:
         await _reply_chunks(
             update,
-            "Tài khoản của BS đã được kích hoạt sẵn rồi. BS có thể gửi ca bệnh ngay ạ.",
+            "Tài khoản của anh/chị đã được kích hoạt sẵn rồi ạ. Anh/chị gửi ca ngay được nhé.",
         )
         return
     raw_text = (update.message.text or "").strip() if update.message else ""
@@ -473,6 +624,7 @@ async def on_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _handle_unauthorized(update, chat_id, "/join", arg, raw_text)
 
 
+@_guarded
 async def on_new_case(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = _extract_chat_id(update)
     if chat_id is None:
@@ -482,9 +634,77 @@ async def on_new_case(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _handle_unauthorized(update, chat_id, "", "", raw_text)
         return
     _pending.pop(chat_id, None)
+    _last_case.pop(chat_id, None)
+    _misses.pop(chat_id, None)
     await _reply_chunks(update, NEW_CASE_TEXT)
 
 
+@_guarded
+async def on_usage(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/huongdan: cách dùng đầy đủ (tin kích hoạt chỉ in bản ngắn)."""
+    chat_id = _extract_chat_id(update)
+    if chat_id is None:
+        return
+    if chat_id not in ALLOWED_CHAT_IDS:
+        await _handle_unauthorized(update, chat_id, "/huongdan", "", "")
+        return
+    await _reply_chunks(update, USAGE_TEXT)
+
+
+@_guarded
+async def on_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/sai <lý do>: ghi góp ý vào log (đã che PII), không gọi agent, không đụng ca đang chờ / ca vừa xong."""
+    chat_id = _extract_chat_id(update)
+    if chat_id is None or update.message is None:
+        return
+    raw_text = (update.message.text or "").strip()
+    if chat_id not in ALLOWED_CHAT_IDS:
+        await _handle_unauthorized(update, chat_id, "", "", raw_text)
+        return
+    masked, _ = mask_identifiers(raw_text)
+    _log_safely(chat_id=chat_id, user_input=masked, output=FEEDBACK_ACK, summary={}, kind="feedback")
+    await _reply_chunks(update, FEEDBACK_ACK)
+
+
+def _recent_case(chat_id: str, now: float | None = None) -> str | None:
+    """Ca để xem "chi tiết": ca đang chờ bổ sung, nếu không thì ca vừa xong — chỉ trong PENDING_TTL_SEC."""
+    ts = time.monotonic() if now is None else now
+    for store in (_pending, _last_case):
+        item = store.get(chat_id)
+        if item and ts - item[1] <= PENDING_TTL_SEC:
+            return item[0]
+    return None
+
+
+async def _reply_detail(update: Update, chat_id: str) -> None:
+    case_text = _recent_case(chat_id)
+    if case_text is None:
+        await _reply_chunks(update, NO_DETAIL_TEXT)
+        return
+    try:
+        async with _agent_lock:
+            output, summary, _ = await asyncio.to_thread(run_agent, case_text, True)
+    except Exception as exc:
+        err_msg = redact(f"{type(exc).__name__}: {exc}")
+        print(f"[error] {err_msg}")
+        _log_safely(chat_id=chat_id, user_input="chi tiết", output="", summary={}, error=err_msg, kind="detail")
+        await _reply_chunks(update, ERROR_TEXT)
+        return
+    output = format_reply(output)
+    _log_safely(chat_id=chat_id, user_input="chi tiết", output=output, summary=summary, kind="detail")
+    await _reply_chunks(update, output)
+
+
+@_guarded
+async def on_non_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Ảnh / sticker / tin thoại: bot chỉ đọc chữ — trả một câu hướng dẫn thay vì im lặng. Chat lạ thì bỏ qua."""
+    chat_id = _extract_chat_id(update)
+    if chat_id is None or update.message is None or chat_id not in ALLOWED_CHAT_IDS:
+        return
+    await _reply_chunks(update, NON_TEXT_TEXT)
+
+
+@_guarded
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = _extract_chat_id(update)
     if chat_id is None or update.message is None or not update.message.text:
@@ -501,6 +721,12 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if cmd == "/moi":
         await on_new_case(update, context)
         return
+    if cmd == "/huongdan":
+        await on_usage(update, context)
+        return
+    if cmd == "/sai":
+        await on_feedback(update, context)
+        return
 
     if chat_id not in ALLOWED_CHAT_IDS:
         await _handle_unauthorized(update, chat_id, "", "", text)
@@ -510,6 +736,24 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
     except Exception:
         pass
+
+    # Tin xã giao ("cảm ơn", "chào em"): đáp ngay, không ghép vào ca đang chờ, không đụng tới pending.
+    # Chào lại trong GREET_AGAIN_SEC → câu ngắn; hỏi "làm được gì" luôn nhận bản giới thiệu đủ.
+    small_talk = small_talk_reply(text)
+    if small_talk:
+        if small_talk_kind(text) == "greet":
+            now = time.monotonic()
+            last = _last_greet.get(chat_id)
+            if last is not None and now - last <= GREET_AGAIN_SEC:
+                small_talk = AGENT_TEXT["HELLO_AGAIN"]
+            _last_greet[chat_id] = now
+        _log_safely(chat_id=chat_id, user_input=text, output=small_talk, summary={}, error="", kind="small_talk")
+        await _reply_chunks(update, small_talk)
+        return
+
+    if DETAIL_RE.match(text):
+        await _reply_detail(update, chat_id)
+        return
 
     masked, had_ids = mask_identifiers(text)
     output = ""
@@ -521,11 +765,22 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             case_text, case_status = _compose_case(chat_id, masked)
             output, summary, needs_more = await asyncio.to_thread(run_agent, case_text)
             _remember_case(chat_id, case_text, needs_more)
+            if is_no_entity_reply(output):
+                _misses[chat_id] = _misses.get(chat_id, 0) + 1
+                if _misses[chat_id] >= 2:   # lần thứ 2 liên tiếp: đưa câu mẫu thay cho Q1 (design §9)
+                    output = output.replace(AGENT_TEXT["Q1"], AGENT_TEXT["REPAIR"])
+            else:
+                _misses.pop(chat_id, None)
+            if AGENT_TEXT["MODERATE_HEADER"].split(":")[0] in output:   # có khối 🟡 gọn → mời xem chi tiết
+                output = f"{output}\n{DETAIL_HINT}"
+            output = format_reply(output)
+            if not needs_more:
+                output = f"{output}\n{FOLLOW_UP_HINT_MERGED if case_status == 'merged' else FOLLOW_UP_HINT}"
     except Exception as exc:
         err_msg = redact(f"{type(exc).__name__}: {exc}")
         print(f"[error] {err_msg}")
-        log_turn(chat_id=chat_id, user_input=masked, output="", summary=summary, error=err_msg)
-        error_text = "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút."
+        _log_safely(chat_id=chat_id, user_input=masked, output="", summary=summary, error=err_msg)
+        error_text = ERROR_TEXT
         if case_status == "dropped":
             # Ca chờ đã bị xoá trong _compose_case: BS gửi lại tin bổ sung sẽ thành ca mới,
             # nên phải báo ngay ở đây, không thì lần sau ra ✅ mà không có dòng ⏱️.
@@ -540,7 +795,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     elif case_status == "dropped":
         # Đặt lên đầu: BS phải thấy trước khi đọc dòng ✅ của ca thiếu dữ kiện.
         output = f"{DROPPED_NOTE}\n{output}"
-    log_turn(chat_id=chat_id, user_input=masked, output=output, summary=summary, error="",
+    _log_safely(chat_id=chat_id, user_input=masked, output=output, summary=summary, error="",
              drop_input=PII_WARNING in output)
     await _reply_chunks(update, output)
 
@@ -557,7 +812,10 @@ def main() -> None:
     app.add_handler(CommandHandler("help", on_start))
     app.add_handler(CommandHandler("join", on_join))
     app.add_handler(CommandHandler("moi", on_new_case))
+    app.add_handler(CommandHandler("huongdan", on_usage))
+    app.add_handler(CommandHandler("sai", on_feedback))
     app.add_handler(MessageHandler(filters.TEXT, on_text))
+    app.add_handler(MessageHandler(~filters.TEXT, on_non_text))
 
     provider = (os.environ.get("MODEL_PROVIDER") or "fake").strip()
     model_name = (os.environ.get("MODEL_NAME") or "—").strip()
