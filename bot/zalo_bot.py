@@ -97,6 +97,8 @@ NEW_PATIENT_RE = re.compile(
     r"|(?:ca|bn|bệnh nhân|benh nhan)\s+(?:khác|khac|nữa|nua|mới|moi)\b"
     r"|ca\s*:)", re.IGNORECASE)
 MERGED_NOTE = "(Em đã ghép với tin trước của ca này. Nếu là BN khác, nhắn /moi rồi gửi lại.)"
+# Ca đang chờ mà tin mới tả BN khác (followups.new_patient; log VM 28/11 15:35) → ca mới, báo cách ghép nếu cùng BN.
+SPLIT_NOTE = "(Tin này tả BN khác nên em đối chiếu như ca mới. Nếu vẫn là BN trước, nhắn \"thêm\" kèm nội dung.)"
 # Tin đã ghép thì MERGED_NOTE đã nhắc /moi — gợi ý hỏi tiếp bỏ phần /moi cho tin đỡ dài (review PR #30, Nguyên ý 5).
 FOLLOW_UP_HINT_MERGED = "(Hỏi tiếp cho BN này: nhắn \"thêm <tên thuốc / thủ thuật>\" trong 10 phút.)"
 # Kế hoạch giao tiếp Trung duyệt 28/11 (docs/design.md §7, §9).
@@ -159,11 +161,15 @@ class Conversation:
 
     def compose(self, text: str, now: float) -> tuple[str, str]:
         """Chữ gửi agent cho tin mới, và trạng thái: "new" không ghép · "merged" đã ghép vào ca ·
+        "split" ca đang chờ nhưng tin tả BN khác (followups.new_patient) nên không ghép ·
         "dropped" có ca để ghép nhưng quá hạn / quá dài nên bỏ — phải báo BS, vì tin bổ sung đứng một mình
         có thể thiếu thuốc nền và mất cảnh báo HIGH (vd warfarin rồi "Định kê ibuprofen")."""
         case = self.case
         if NEW_PATIENT_RE.match(text or "") or case is None or not (case.waiting or FOLLOW_UP_RE.match(text or "")):
             return text, "new"
+        if not FOLLOW_UP_RE.match(text or "") and followups.new_patient(case.reply.checked, text):
+            self.case = None
+            return text, "split"
         merged = followups.merge(case.text, text)
         if now - case.at > PENDING_TTL_SEC or len(merged) > MAX_PENDING_CHARS:
             self.case = None
@@ -366,7 +372,7 @@ def compose_reply(reply: Reply, *, repeat_miss: bool, case_status: str, had_ids:
     """Tin gửi BS cho một ca: bản tin agent (dạng chat) + các câu của lớp hội thoại, đúng thứ tự đọc:
     ⏱️ ca quá hạn và ⚠️ định danh lên đầu (BS phải thấy trước dòng ✅), gợi ý hỏi tiếp / ghi chú đã ghép xuống cuối."""
     text = render_chat(reply, repeat_miss=repeat_miss)
-    if not reply.needs_more:
+    if not reply.needs_more and not reply.head_only:   # chỉ dòng cấp cứu: không có ca để hỏi tiếp
         text += "\n" + (FOLLOW_UP_HINT_MERGED if case_status == "merged" else FOLLOW_UP_HINT)
     if had_ids and not text.startswith(PII_WARNING):
         text = f"{PII_WARNING}\n{text}"
@@ -374,6 +380,8 @@ def compose_reply(reply: Reply, *, repeat_miss: bool, case_status: str, had_ids:
         text += "\n" + MERGED_NOTE
     elif case_status == "dropped":
         text = f"{DROPPED_NOTE}\n{text}"
+    elif case_status == "split":
+        text += "\n" + SPLIT_NOTE
     return text
 
 

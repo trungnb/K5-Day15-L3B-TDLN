@@ -173,6 +173,14 @@ class SmallTalk(unittest.TestCase):
             self.assertNotIn("Em đọc tin này chưa trọn", out, text)
             self.assertFalse(res["needs_more"], text)
 
+    def test_role_questions_get_intro(self):
+        # Log VM 28/11 03:08 "Xin chào, bạn làm được những gì?" và 08:25 "nhiệm vụ của bạn là gì" → 🚫 ngoài phạm vi.
+        for text in ("Xin chào, bạn làm được những gì?", "nhiệm vụ của bạn là gì", "bạn là ai", "chức năng của em là gì",
+                     "bạn làm gì?", "chào bạn, bạn là ai vậy"):
+            self.assertEqual(agent.small_talk_kind(text), "help", text)
+        for text in ("làm gì khi BN chảy máu", "BN là ai", "nhổ răng làm gì"):
+            self.assertIsNone(agent.small_talk_kind(text), text)
+
     def test_thanks_gets_short_ack(self):
         for text in ("cảm ơn em", "Dạ em cảm ơn nhiều ạ!", "cam on", "ok em", "thanks"):
             res = run(text, {})
@@ -500,6 +508,14 @@ class ExtractPrompt(unittest.TestCase):
         self.assertTrue(out.startswith("🚫 Em không hỗ trợ xử trí cấp cứu"))
         self.assertNotIn("✅", out)
 
+    def test_emergency_with_nothing_recognised_is_only_the_emergency_line(self):
+        # Log VM 28/11 15:30: "tiêm thuốc tê … BN không phản ứng gì thì thế nào?" → dòng 🚫 cấp cứu rồi ❔, 📋, câu hỏi.
+        # Không nhận ra gì để đối chiếu thì chỉ gửi dòng cấp cứu: không hỏi, không giữ ca.
+        res = run("tôi tiêm thuốc tê cho bệnh nhân mà giờ bệnh nhân không phản ứng gì thì thế nào?",
+                  _x(baseline_drugs=["thuốc tê"], planned_procedures=["tiêm thuốc tê"], out_of_scope=["cap_cuu", "khac"]))
+        self.assertEqual(res["output"], agent.OUT_OF_SCOPE["cap_cuu"])
+        self.assertFalse(res["needs_more"])
+
     def test_emergency_does_not_also_print_generic_out_of_scope(self):
         # Gemini thật 28/11 trả cả "cap_cuu" lẫn "khac" cho "chảy máu không cầm … làm sao?" → 2 dòng 🚫 chồng nhau.
         out = run("BN uống Sintrom, nhổ R48 xong chảy máu không cầm, làm sao?",
@@ -714,6 +730,65 @@ class NearMatchSpelling2811(unittest.TestCase):
             self.assertNotIn("🔎", out, word)
 
 
+class ClassNameAndAmpicillin2811(unittest.TestCase):
+    """Log VM 28/11 15:34: BN mang thai + "kê NSAID được không" → ❔ "chưa có dữ liệu cho: NSAID", trượt 🔴 CR-013.
+    Log 15:31: "dị ứng ampicilin" không nhận ra (bảng chỉ có amoxicillin). Trung duyệt alias 28/11."""
+
+    def test_nsaid_class_name_fires_class_rules(self):
+        res = run("BN mang thai, kê NSAID được không", _x(conditions=["mang thai"], planned_drugs=["NSAID"]))
+        self.assertEqual(section_of(res["output"], "CR-013"), "HIGH")
+        self.assertNotIn("chưa có dữ liệu cho: NSAID", res["output"])
+        # Rule riêng từng thuốc (vd DDI-004 ibuprofen + aspirin) cần tên: nói rõ em mới kiểm theo nhóm.
+        self.assertIn("em mới kiểm theo nhóm", res["output"])
+
+    def test_named_nsaid_replaces_the_class_name(self):
+        n = tools.normalize_entities(_x(planned_drugs=["NSAID ibuprofen"]), "kê NSAID ibuprofen")
+        self.assertEqual([d["canonical_id"] for d in n["planned_drugs"]], ["ibuprofen"])
+
+    def test_negated_nsaid_in_text_is_not_added(self):
+        n = tools.normalize_entities(_x(planned_drugs=["paracetamol"]), "không dùng NSAID, kê paracetamol")
+        self.assertNotIn("nsaid_unspecified", [d["canonical_id"] for d in n["planned_drugs"] + n["baseline_drugs"]])
+
+    def test_ampicillin_allergy_and_drug(self):
+        out = run("BN dị ứng ampicilin, nhổ R48, kê augmentin",
+                  _x(allergies=["ampicilin"], planned_procedures=["nhổ R48"], planned_drugs=["augmentin"]))["output"]
+        self.assertEqual(section_of(out, "CR-008"), "HIGH")
+        out = run("BN dị ứng penicillin, nhổ R48, kê ampicillin",
+                  _x(allergies=["penicillin"], planned_procedures=["nhổ R48"], planned_drugs=["ampicillin"]))["output"]
+        self.assertEqual(section_of(out, "CR-008"), "HIGH")
+
+
+class DeniedGroups2811(unittest.TestCase):
+    """Log VM 28/11 15:37: BS ghi "không có bệnh nền, không dị ứng thuốc" mà mục 📋 vẫn ghi "Chưa khai: bệnh nền, dị ứng".
+    BS phủ nhận cả nhóm thì ghi "không có"; phủ nhận MỘT thuốc / một dị ứng cụ thể thì không tính."""
+
+    def test_denied_groups(self):
+        cases = {
+            "BN nam 58 tuổi, không có bệnh nền, không dị ứng thuốc. Đang dùng warfarin.": {"conditions", "allergies"},
+            "giờ bệnh nhân không có bệnh lý gì, nhổ răng": {"conditions"},
+            "BN khỏe mạnh, ko dị ứng gì, không dùng thuốc gì. Nhổ R48": {"conditions", "allergies", "baseline_drugs"},
+            "không dị ứng penicillin, nhổ R48": set(),
+            "không dùng thuốc chống đông, nhổ R48": set(),
+            "không có bệnh nền gì ngoài tăng huyết áp": set(),
+        }
+        for text, want in cases.items():
+            self.assertEqual(tools.declared_none(text), want, text)
+
+    def test_checked_line_says_none_for_denied_groups(self):
+        text = ("BN nam 58 tuổi, không có bệnh nền, không dị ứng thuốc. Đang dùng warfarin. Chuẩn bị nhổ 1 răng hàm dưới, "
+                "định kê amoxicillin và paracetamol.")
+        out = run(text, _x(baseline_drugs=["warfarin"], planned_procedures=["nhổ 1 răng hàm dưới"],
+                           planned_drugs=["amoxicillin", "paracetamol"]))["output"]
+        self.assertIn("Bệnh nền: không có", out)
+        self.assertIn("Dị ứng: không có", out)
+        self.assertNotIn("Bệnh nền: không khai", out)
+
+    def test_named_entity_wins_over_denial(self):
+        out = run("BN không có bệnh nền gì, tăng huyết áp ổn định, nhổ R48",
+                  _x(conditions=["tăng huyết áp ổn định"], planned_procedures=["nhổ R48"]))["output"]
+        self.assertNotIn("Bệnh nền: không có", out)
+
+
 class UnnamedAnticoagulant2811(unittest.TestCase):
     """Log VM 28/11 14:59: "Bn uống chống đông nhổ răng được ko" → chỉ ❔ "chưa có dữ liệu cho: chống đông".
     Trung chọn 28/11: tên nhóm thuốc chưa rõ tên → 🔴 CR-022 (chống đông) / 🟡 CR-023 (kháng tiểu cầu) × thủ thuật
@@ -738,6 +813,16 @@ class UnnamedAnticoagulant2811(unittest.TestCase):
                   _x(baseline_drugs=["chống đông warfarin"], planned_procedures=["nhổ R48"]))["output"]
         self.assertEqual(section_of(out, "CR-001"), "HIGH")
         self.assertNotIn("CR-022", out)
+
+    def test_any_named_antithrombotic_answers_the_name_question(self):
+        # Log VM 28/11 15:29: BS hỏi tên xong nhắn "đang uống aspirin" → vẫn còn 🔴 CR-022 cạnh CR-005.
+        # BS hay gọi chung aspirin / clopidogrel là "chống đông": có tên thuốc chống huyết khối nào thì bỏ dòng chưa rõ tên.
+        for named, code in (("aspirin", "CR-005"), ("clopidogrel", "CR-004"), ("warfarin", "CR-001")):
+            for unnamed, rule in (("chống đông", "CR-022"), ("thuốc kháng tiểu cầu", "CR-023")):
+                out = run("BN uống %s, %s. Nhổ R48" % (unnamed, named),
+                          _x(baseline_drugs=[unnamed, named], planned_procedures=["nhổ R48"]))["output"]
+                self.assertIn(code, out, (unnamed, named))
+                self.assertNotIn(rule, out, (unnamed, named))
 
     def test_negated_mention_in_text_does_not_fire(self):
         out = run("BN không dùng thuốc chống đông, nhổ R48, kê augmentin",

@@ -20,8 +20,8 @@ import followups
 from ai import call_model
 from reply import Alert, Reply, render_text
 from texts import OUT_OF_SCOPE, TEXT  # noqa: F401  (bot và test đọc agent.TEXT)
-from tools import (check_clinical_risks, check_drug_interactions, fold, known_condition_base,
-                   known_condition_with_status, normalize_entities, normalize_text, rule_behavior,
+from tools import (check_clinical_risks, check_drug_interactions, declared_none as _declared_none, fold,
+                   known_condition_base, known_condition_with_status, normalize_entities, normalize_text, rule_behavior,
                    UNSPECIFIED_DRUG_CLASSES)
 from tracing import note
 
@@ -89,11 +89,17 @@ NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 # "có", "không" trơn KHÔNG là xã giao: đó có thể là câu trả lời Q5 mà bot đang ghép vào ca.
 _FILLER = {"da", "vang", "a", "u", "uh", "em", "anh", "chi", "minh", "bot", "ban", "nhe", "nha", "nhieu",
            "oi", "m", "may", "mi", "vay", "the", "rat", "ha", "nhi", "ne", "dr", "bs", "bac", "si"}
+_GREET = (r"(?:xin )?chao|hi|hello|helo|hey|alo|a lo|test|"
+          r"(?:con|co) (?:onl|online|do|o do|o day)(?: (?:khong|ko|k|hong|hok))?")
+# Hỏi bot là ai / làm gì, có thể mở đầu bằng lời chào (log VM 28/11 03:08 "Xin chào, bạn làm được những gì?",
+# 08:25 "nhiệm vụ của bạn là gì" từng nhận 🚫 ngoài phạm vi).
+_HELP = (r"(?:lam|giup|ho tro) (?:duoc|dc|đc) (?:gi|nhung gi|viec gi)|huong dan|cach dung|"
+         r"dung (?:sao|the nao|nhu the nao)|"
+         r"(?:nhiem vu|chuc nang|cong viec|viec)(?: cua)?(?: (?:la|lam))? gi|la ai|lam (?:nhung |viec )?gi|"
+         r"co the lam (?:duoc )?(?:nhung )?gi")
 _SMALL_TALK = (
-    ("greet", re.compile(r"(?:xin )?chao|hi|hello|helo|hey|alo|a lo|test|"
-                         r"(?:con|co) (?:onl|online|do|o do|o day)(?: (?:khong|ko|k|hong|hok))?")),
-    ("help", re.compile(r"(?:lam|giup|ho tro) (?:duoc|dc|đc) (?:gi|nhung gi|viec gi)|huong dan|cach dung|"
-                        r"dung (?:sao|the nao|nhu the nao)")),
+    ("greet", re.compile(_GREET)),
+    ("help", re.compile(r"(?:(?:{g}) )?(?:{h})".format(g=_GREET, h=_HELP))),
     ("bye", re.compile(r"(?:tam biet|bye|bai|goodbye|good bye|hen gap lai)(?: (?:bye|nhe|nha))*")),
     ("thanks", re.compile(r"(?:{t})(?: (?:{t}))*".format(
         t=r"cam on|cam ou|lam|thanks?|thank you|tks|thx|ok|oke|okie|okay|okela|(?:duoc|ro|hieu) roi|tot qua|tuyet"))),
@@ -137,28 +143,6 @@ _PATIENT_NO = re.compile(r"\b(?:bn|benh nhan|ca)\s*(?:so\s*)?([1-9])"
                          r"(?=\s*[:.)\-]|\s*$|\s+(?!(?:tuoi|tuan|ngay|thang|nam|rang|lan|vien|ben|cai|ham|gio)\b)\w)")
 # BS ghi rõ BN không dùng thuốc → không hỏi Q8.
 _NO_MEDS = re.compile(r"\b(?:khong|ko|k|chua)\s+(?:dung|uong|su dung|co)\s+thuoc\b")
-# BS ghi rõ BN không có cả nhóm → mục "Đã đối chiếu" ghi "không có" thay "không khai", không nhắc Q4 (Trung chọn 28/11).
-# Chỉ khớp khi cụm phủ định đứng cuối một vế (tách theo , . ; ! ? xuống dòng), để "không bệnh tim", "không dị ứng thuốc
-# tê", "không dùng thuốc chống đông" — chỉ loại một bệnh / một nhóm — không bị tính là "không có"; "và / hay / với"
-# cũng tách vế. "Khoẻ mạnh" (không có "không/chưa" ngay trước) chỉ tính cho bệnh nền, không đóng Q8.
-_NEG = r"(?:khong|ko|k|chua)"
-_TAIL = r"(?: (?:gi|nao))?(?: (?:ca|het|nhe|a|dau))*$"
-_NONE_CLAUSE = {
-    "conditions": re.compile(r"(?<!khong )(?<!ko )(?<!k )(?<!chua )\bkhoe manh\b|\b%s (?:co )?(?:tien su )?(?:benh ly|benh nen|benh)%s"
-                             r"|\b(?:benh nen|benh ly) %s(?: co| ghi nhan)?$" % (_NEG, _TAIL, _NEG)),
-    "allergies": re.compile(r"\b%s (?:co )?(?:tien su )?di ung(?: thuoc)?%s|\bdi ung(?: thuoc)? %s(?: co)?$"
-                            % (_NEG, _TAIL, _NEG)),
-    "baseline_drugs": re.compile(r"\b%s (?:dung|uong|su dung|co) thuoc%s|\bthuoc (?:dang )?(?:dung|uong) %s(?: co)?$"
-                                 % (_NEG, _TAIL, _NEG)),
-}
-_CLAUSE_SPLIT = re.compile(r"[,.;!?\n]+")
-_WORD_SPLIT = re.compile(r"\b(?:va|hay|voi)\b")
-
-
-def _declared_none(text: str) -> frozenset:
-    """Nhóm BS ghi rõ là BN không có: "conditions", "allergies", "baseline_drugs"."""
-    clauses = [p.strip() for c in _CLAUSE_SPLIT.split(text or "") for p in _WORD_SPLIT.split(fold(c))]
-    return frozenset(key for key, pattern in _NONE_CLAUSE.items() if any(pattern.search(c) for c in clauses))
 # Câu trả lời "không" trơn cho câu đang hỏi, và câu nói giai đoạn thủ thuật (đóng Q7) — xem _open_questions.
 _BARE_NO = re.compile(r"(?:bn |benh nhan )?(?:khong|ko|k|hong|hok|chua|no)(?: (?:co|dung|uong|su dung|thuoc|gi|nao|het))*")
 _STAGE_REPLY = re.compile(r"\b(?:chuan bi|chua (?:lam|nho)|dang (?:lam|nho)|xong|chay mau|cam mau)\b")
@@ -348,8 +332,8 @@ def _checked_groups(n, said, asking_roles=False, skip_drugs=False, none=frozense
         ]
         if skip_drugs:
             groups = groups[:2]
-        return [(label, ", ".join(names) if names else TEXT["NOT_RECOGNIZED"])
-                for label, key, names in groups if names or said[key]]
+        return [(label, ", ".join(names) if names else TEXT["NOT_RECOGNIZED"] if said[key] else TEXT["DECLARED_NONE"])
+                for label, key, names in groups if names or said[key] or key in none]
     groups = [
         ("Bệnh nền", "conditions", conditions),
         ("Dị ứng", "allergies", _names(n["allergies"])),
@@ -454,8 +438,17 @@ def _sort(rules: list) -> list:
 
 
 def _unspecified_drug(n: dict) -> bool:
-    """BS mới nêu tên nhóm ("chống đông") → giữ ca để BS nhắn tên thuốc (CR-022 / CR-023 nhờ hỏi tên)."""
-    return any(d["drug_class"] in UNSPECIFIED_DRUG_CLASSES for d in n["baseline_drugs"] + n["planned_drugs"])
+    """BS mới nêu tên nhóm chống đông / kháng tiểu cầu → giữ ca để BS nhắn tên thuốc (CR-022 / CR-023 nhờ hỏi tên).
+    "NSAID" chưa rõ tên là thuốc BS định kê, không cần hỏi BN, nên không giữ ca."""
+    return any(d["canonical_id"] in UNSPECIFIED_DRUG_CLASSES and d["drug_class"] != "nsaid"
+               for d in n["baseline_drugs"] + n["planned_drugs"])
+
+
+def _class_only_note(n: dict) -> str:
+    """❔ thuốc định kê chỉ có tên nhóm ("NSAID"): rule theo nhóm đã chạy, rule riêng từng thuốc cần tên."""
+    names = _names([d for d in n["planned_drugs"] if d["canonical_id"] in UNSPECIFIED_DRUG_CLASSES
+                    and d["drug_class"] == "nsaid"])
+    return TEXT["CLASS_ONLY"].format(names=", ".join(names)) if names else ""
 
 
 def _near_note(n: dict) -> str:
@@ -475,9 +468,9 @@ def _roles_unknown(head, n, said, unmapped, refusals, text=""):
     key = ("Q1_DRUG" if len(names) == 1 else "Q1_DRUGS") if names else "Q1"
     limit = TEXT["SIDE_EFFECT_LIMIT"] if _mentions(text, SIDE_EFFECT_WORDS) else ""
     return Reply(head=head, verdict=_verdict(rules, 0, together=True), alerts=_alerts(rules), together=True,
-                 notes=[_near_note(n), unmapped, limit], refusals=refusals,
+                 notes=[_near_note(n), unmapped, _class_only_note(n), limit], refusals=refusals,
                  # tên đã có trong câu hỏi thì mục "Đã đối chiếu" không lặp lại
-                 checked=_checked_groups(n, said, asking_roles=True, skip_drugs=bool(names)),
+                 checked=_checked_groups(n, said, asking_roles=True, skip_drugs=bool(names), none=_declared_none(text)),
                  question=TEXT[key].format(names=", ".join(names)), question_key=key, needs_more=True)
 
 
@@ -607,6 +600,11 @@ def _reply(text: str) -> Reply:
     case = _Case(text, n, said, [], _unmapped_conditions(extracted, n))
 
     # Bảng quyết định §6.
+    # Cấp cứu mà không nhận ra gì để đối chiếu (log VM 28/11 15:30) → chỉ dòng cấp cứu: không ❔, không hỏi, không giữ ca.
+    if "cap_cuu" in flags and not any(n[k] for k in ("conditions", "allergies", "baseline_drugs", "planned_drugs",
+                                                       "procedure_groups")):
+        note("cấp cứu, không nhận ra thực thể: chỉ gửi dòng cấp cứu")
+        return Reply(head=head, footer=False)
     if not (case.has_procedure or case.has_planned or has_background or n["baseline_drugs"] or n["unmapped"]):
         note("tình huống %d: không có thực thể" % (2 if flags else 1))   # tình huống 1 (không cờ) / 2 (có cờ)
         return Reply(head=head, refusals=refusals, question=TEXT["Q1"], question_key="Q1", needs_more=not flags)
@@ -637,7 +635,7 @@ def _reply(text: str) -> Reply:
 
     # Bước 4 + 5 — kết luận trước, cảnh báo, giới hạn, rồi mới "Đã đối chiếu" và câu nhắc.
     return Reply(head=head, verdict=verdict, ok=TEXT["OK"] if show_ok else "",
-                 alerts=_alerts(rules), notes=[_near_note(n)] + unmapped + [no_pair, limit], refusals=refusals,
+                 alerts=_alerts(rules), notes=[_near_note(n)] + unmapped + [_class_only_note(n), no_pair, limit], refusals=refusals,
                  checked=_checked_groups(n, said, none=none), question=question, question_key=key,
                  needs_more=needs_more or has_unnamed or _unspecified_drug(n))   # thuốc chưa rõ tên: giữ ca để BS nhắn tên sau khi hỏi BN
 
