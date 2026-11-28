@@ -22,7 +22,7 @@ from reply import Alert, Reply, render_text
 from texts import OUT_OF_SCOPE, TEXT  # noqa: F401  (bot và test đọc agent.TEXT)
 from tools import (check_clinical_risks, check_drug_interactions, declared_none as _declared_none, fold,
                    known_condition_base, known_condition_with_status, normalize_entities, normalize_text, rule_behavior,
-                   UNSPECIFIED_DRUG_CLASSES)
+                   ASK_NAME_CLASSES, UNSPECIFIED_DRUG_CLASSES)
 from tracing import note
 
 # Cải tiến lượt 2 (nhóm lỗi "không chỉ rõ phần còn thiếu", B11–B13, B15): phát hiện bằng so khớp chữ đã chuẩn hoá.
@@ -439,15 +439,14 @@ def _sort(rules: list) -> list:
 
 def _unspecified_drug(n: dict) -> bool:
     """BS mới nêu tên nhóm chống đông / kháng tiểu cầu → giữ ca để BS nhắn tên thuốc (CR-022 / CR-023 nhờ hỏi tên).
-    "NSAID" chưa rõ tên là thuốc BS định kê, không cần hỏi BN, nên không giữ ca."""
-    return any(d["canonical_id"] in UNSPECIFIED_DRUG_CLASSES and d["drug_class"] != "nsaid"
-               for d in n["baseline_drugs"] + n["planned_drugs"])
+    "NSAID", "cephalosporin" chưa rõ tên là thuốc BS định kê, không cần hỏi BN, nên không giữ ca."""
+    return any(d["canonical_id"] in ASK_NAME_CLASSES for d in n["baseline_drugs"] + n["planned_drugs"])
 
 
 def _class_only_note(n: dict) -> str:
-    """❔ thuốc định kê chỉ có tên nhóm ("NSAID"): rule theo nhóm đã chạy, rule riêng từng thuốc cần tên."""
+    """❔ thuốc định kê chỉ có tên nhóm ("NSAID", "cephalosporin"): rule theo nhóm đã chạy, rule riêng từng thuốc cần tên."""
     names = _names([d for d in n["planned_drugs"] if d["canonical_id"] in UNSPECIFIED_DRUG_CLASSES
-                    and d["drug_class"] == "nsaid"])
+                    and d["canonical_id"] not in ASK_NAME_CLASSES])
     return TEXT["CLASS_ONLY"].format(names=", ".join(names)) if names else ""
 
 

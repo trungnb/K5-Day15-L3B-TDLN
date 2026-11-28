@@ -25,7 +25,8 @@ TEXT = {
     "Q8": "BN có dùng thuốc chống đông hoặc kháng tiểu cầu không? Có thì nhắn tên thuốc để em kiểm.",
     # Trung chọn 28/11 (log VM 14:57, "peniciline"): tên hơi sai chính tả vẫn nhận ra, nói rõ chỗ em đoán.
     "NEAR_MATCH": "🔎 Em hiểu {pairs} — nếu sai, anh/chị nhắn lại tên đúng.",
-    # tên nhóm "NSAID" chưa rõ thuốc (log VM 28/11 15:34): rule riêng từng thuốc (vd DDI-004) cần tên thuốc
+    # tên nhóm thuốc định kê chưa rõ thuốc ("NSAID" log VM 28/11 15:34, "cephalosporin" 16:09): rule riêng từng thuốc
+    # (vd DDI-004, DDI-040) cần tên thuốc
     "CLASS_ONLY": "❔ {names}: em mới kiểm theo nhóm. Định kê thuốc nào thì nhắn thêm tên để em kiểm tương tác riêng.",
     # 28/11 (Trung chọn): ℹ️ là dòng phụ dưới ✅, không chặn ✅; câu "tự đánh giá lâm sàng" đã nằm ở ✅ / câu chốt.
     "NO_PAIR_RULE": "ℹ️ Bảng tra chưa có quy tắc cho cặp: {pairs}.",
