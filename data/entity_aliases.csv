@@ -209,6 +209,7 @@ tha chua kiem soat,uncontrolled_hypertension,Tăng huyết áp chưa kiểm soá
 huyet ap chua on dinh,uncontrolled_hypertension,Tăng huyết áp chưa kiểm soát,condition,cardiovascular,,Từ điển thực thể RHM nhóm TDLN (BS RHM duyệt 27/11/2026)
 ha chua kiem soat,uncontrolled_hypertension,Tăng huyết áp chưa kiểm soát,condition,cardiovascular,,Từ điển thực thể RHM nhóm TDLN (BS RHM duyệt 27/11/2026)
 con tang huyet ap,uncontrolled_hypertension,Tăng huyết áp chưa kiểm soát,condition,cardiovascular,,Từ điển thực thể RHM nhóm TDLN (BS RHM duyệt 27/11/2026)
+rung nhi,atrial_fibrillation,Rung nhĩ,condition,cardiovascular,,Từ điển thực thể RHM nhóm TDLN (BS RHM Nguyễn Bảo Trung duyệt 28/11/2026)
 dai thao duong,diabetes,Đái tháo đường,condition,metabolic,,Từ điển thực thể RHM nhóm TDLN (BS RHM duyệt 27/11/2026)
 tieu duong,diabetes,Đái tháo đường,condition,metabolic,,Từ điển thực thể RHM nhóm TDLN (BS RHM duyệt 27/11/2026)
 dtd,diabetes,Đái tháo đường,condition,metabolic,,Từ điển thực thể RHM nhóm TDLN (BS RHM duyệt 27/11/2026)
@@ -228,6 +229,10 @@ nho r48,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,invasive_bl
 nho r48,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)
 nho r38,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
 nho r38,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)
+nho r18,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
+nho r18,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)
+nho r28,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
+nho r28,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)
 nho rang khon,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
 nho rang khon,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)
 tieu phau,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"

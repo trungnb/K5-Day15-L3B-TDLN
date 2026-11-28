@@ -613,6 +613,15 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             ],
         ),
         (
+            "atrial_fibrillation",
+            "Rung nhĩ",
+            "condition",
+            "cardiovascular",
+            None,
+            "Từ điển thực thể RHM nhóm TDLN (BS RHM Nguyễn Bảo Trung duyệt 28/11/2026)",
+            ["rung nhi"],
+        ),
+        (
             "diabetes",
             "Đái tháo đường",
             "condition",
@@ -638,7 +647,8 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             "invasive_bleeding",
             None,
             "SDCEP QRG (2022), Table 1 p. 3",
-            ["nho rang", "nho r", "nho r8", "nho r48", "nho r38", "nho rang khon", "tieu phau"],
+            ["nho rang", "nho r", "nho r8", "nho r48", "nho r38", "nho r18", "nho r28", "nho rang khon",
+             "tieu phau"],
         ),
         (
             "implant_surgery",
