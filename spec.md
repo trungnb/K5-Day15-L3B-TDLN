@@ -131,13 +131,13 @@ flowchart TD
 - Data card: data/DATA_CARD.md. Benchmark chốt CP2: 27 câu (thuong 2 · kho 18 · tu_choi 7), 5 metric trong eval/metric_spec.yaml.
 - **Chuẩn đạt CP2:** ≥80% câu qua (ít nhất 22/27 với bộ 27 câu) **và đồng thời đạt cả 5 ngưỡng:** cảnh báo HIGH bắt buộc 100%; đúng mã, mức và nguồn 100%; từ chối đúng 100%; hỏi lại đúng ≥80%; báo mục chưa có dữ liệu 100%. So ngưỡng theo tỷ lệ chưa làm tròn.
 - Chấm từng câu theo pass_criterion và các metric áp dụng. Output lỗi hoặc trống trượt. Với metric không có mẫu áp dụng, ghi N/A và chưa xác nhận đạt toàn bộ. Mẫu CP2 cho từng metric nằm trong eval/README.md.
-- Kết quả: lượt 1 23/27 (85%) · lượt 2 __/__ (__%) — run ID: `run-1@20261128-085926` / __. Lượt 1 **chưa đạt chuẩn**: hỏi lại đúng 4/6 (67%) < 80%; các ngưỡng khác đạt (HIGH 9/9, từ chối 7/7) → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
+- Kết quả: lượt 1 23/27 (85%) · lượt 2 26/27 (96%) — run ID: `run-1@20261128-085926` / `run-2@20261128-091840`. Lượt 1 **chưa đạt chuẩn**: hỏi lại đúng 4/6 (67%) < 80%; các ngưỡng khác đạt (HIGH 9/9, từ chối 7/7). Lượt 2 **đạt chuẩn**: hỏi lại đúng 6/6, HIGH 9/9, từ chối 7/7 → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
 
 ## §8. Chi phí khi dùng thật *(guide 4.2)*
-- Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-__.csv` (__ phiên)
-- Chi phí / task thành công: __ (model __) · __ (model __)
-- Chi phí / tháng ở quy mô thật: thấp __ · cơ sở __ · cao __ → chi tiết `cost/cost-estimate.md`
-- So với impact / người / tháng (§2): đáng làm không, vì sao:
+- Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-1.csv` (50 phiên, seed 42, tỉ lệ đạt từ `run-2`)
+- Chi phí / task thành công: $0.0027 (model `gemini-3.8-flash`) · $0.00049 (model `gemini-3.1-flash-lite`) · $0.0072 (model `gemini-4-argon`)
+- Chi phí / tháng ở quy mô thật (`gemini-3.8-flash`): thấp $1.93 (300 BS) · cơ sở $6.44 (999 BS) · cao $19.33 (3.000 BS) → chi tiết `cost/cost-estimate.md`
+- So với impact / người / tháng (§2): chi phí model ~$0.006 / BS / tháng không phải rào cản; đáng làm hay không phụ thuộc impact §2 còn UNKNOWN (chưa đo số phút tra thuốc tiết kiệm mỗi ca).
 
 ## §9. Rủi ro & an toàn
 - Dữ liệu: đã ẩn danh gì, không thu gì, không đưa gì vào model gói miễn phí:
@@ -169,6 +169,7 @@ flowchart TD
 | 28/11 (trước CP3) | Thay bản tạm CP2 bằng luồng 5 bước gọi `gemini-3.8-flash` (PR #16). | CP3 yêu cầu lời gọi AI thật; chạy thử 27 câu tìm ra lỗi câu phủ định (B22), từ đệm (B01), tự gán vai trò (B04–B07), từ chối chung chung (B23, B25, B26). |
 | 28/11 (trước CP3) | Thêm alias `azithro` → azithromycin và `methylpred` → methylprednisolone vào `data/entity_aliases.csv`. | Chạy thử thấy hai viết tắt này chưa nhận ra ở B13, B15. Chốt trước `run-1`, không sửa `data/*.csv` sau đó. |
 | 28/11 (sau CP3, trước `run-2`) | Một cải tiến cho lượt 2 trong `codebase/agent.py`: hỏi lại giai đoạn thủ thuật khi đang chảy máu (Q7), hỏi lại bệnh nền chưa nhận ra (Q6), nêu cặp thuốc chưa có quy tắc và giới hạn tra tác dụng phụ (ℹ️). Không đổi `data/*.csv`, `eval/benchmark.csv`, chuẩn "đạt". | Nhóm lỗi "không chỉ rõ phần còn thiếu" ở `run-1`: B11, B12, B13, B15; metric hỏi lại đúng 4/6 (67%) dưới ngưỡng 80%. |
+| 28/11 (trước CP4) | Thêm mức giá `gemini-4-argon` (tầng Lớn) vào `cost/personas.yaml`; chạy `simulate` 50 phiên theo tỉ lệ đạt `run-2`, điền `cost/cost-estimate.md` và §8. | Guide 4.2 cần ≥2 mức model rẻ và mạnh; bảng cũ chỉ có tầng Nhỏ và Vừa. |
 
 **Sau CP4 (đến 23:59 Thứ Bảy 28/11)** (sửa theo góp ý — không sửa chuẩn "đạt", câu thử, số bằng chứng, kết quả các lượt đã chạy)
 
