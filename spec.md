@@ -131,7 +131,7 @@ flowchart TD
 - Data card: data/DATA_CARD.md. Benchmark chốt CP2: 27 câu (thuong 2 · kho 18 · tu_choi 7), 5 metric trong eval/metric_spec.yaml.
 - **Chuẩn đạt CP2:** ≥80% câu qua (ít nhất 22/27 với bộ 27 câu) **và đồng thời đạt cả 5 ngưỡng:** cảnh báo HIGH bắt buộc 100%; đúng mã, mức và nguồn 100%; từ chối đúng 100%; hỏi lại đúng ≥80%; báo mục chưa có dữ liệu 100%. So ngưỡng theo tỷ lệ chưa làm tròn.
 - Chấm từng câu theo pass_criterion và các metric áp dụng. Output lỗi hoặc trống trượt. Với metric không có mẫu áp dụng, ghi N/A và chưa xác nhận đạt toàn bộ. Mẫu CP2 cho từng metric nằm trong eval/README.md.
-- Kết quả: lượt 1 __/__ (__%) · lượt 2 __/__ (__%) — run ID: __ / __ → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
+- Kết quả: lượt 1 23/27 (85%) · lượt 2 __/__ (__%) — run ID: `run-1@20261128-085926` / __. Lượt 1 **chưa đạt chuẩn**: hỏi lại đúng 4/6 (67%) < 80%; các ngưỡng khác đạt (HIGH 9/9, từ chối 7/7) → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
 
 ## §8. Chi phí khi dùng thật *(guide 4.2)*
 - Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-__.csv` (__ phiên)
