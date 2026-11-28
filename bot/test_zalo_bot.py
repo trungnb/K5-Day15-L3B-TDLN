@@ -493,6 +493,31 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         self._send("chat_a", "Định kê ibuprofen")
         self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
 
+    def test_expired_pending_warns_doctor_before_output(self) -> None:
+        self._send("chat_a", "BN đang uống warfarin. Dự kiến nhổ răng khôn.")
+        text, ts = bot_mod._pending["chat_a"]
+        bot_mod._pending["chat_a"] = (text, ts - bot_mod.PENDING_TTL_SEC - 1)
+        self.needs_more = False
+        replies = self._send("chat_a", "Định kê ibuprofen")
+        self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
+        self.assertTrue(replies[0].startswith(bot_mod.DROPPED_NOTE))
+        self.assertNotIn(bot_mod.MERGED_NOTE, replies[-1])
+        # Tin sau không có ca chờ → không báo lại.
+        replies = self._send("chat_a", "BN uống aspirin, nhổ R38")
+        self.assertNotIn(bot_mod.DROPPED_NOTE, "".join(replies))
+
+    def test_too_long_pending_is_dropped_with_warning(self) -> None:
+        self._send("chat_a", "BN đang uống warfarin. " + "x" * bot_mod.MAX_PENDING_CHARS)
+        replies = self._send("chat_a", "Định kê ibuprofen")
+        self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
+        self.assertTrue(replies[0].startswith(bot_mod.DROPPED_NOTE))
+
+    def test_fresh_case_has_no_case_note(self) -> None:
+        self.needs_more = False
+        replies = "".join(self._send("chat_a", "BN uống aspirin, nhổ R38"))
+        self.assertNotIn(bot_mod.DROPPED_NOTE, replies)
+        self.assertNotIn(bot_mod.MERGED_NOTE, replies)
+
     def test_moi_command_clears_pending_without_calling_agent(self) -> None:
         self._send("chat_a", "BN đang uống warfarin.")
         calls = len(self.agent_calls)
