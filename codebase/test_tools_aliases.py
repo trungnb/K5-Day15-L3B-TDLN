@@ -21,6 +21,13 @@ class AliasAdditionsTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertIn(("atrial_fibrillation", "cardiovascular"), _ids(text))
 
+    def test_af_abbreviation_and_english_name(self):
+        # Trung duyệt 28/11/2026: "AF", "atrial fibrillation" → rung nhĩ (để CR-021 không bị bỏ sót).
+        for text in ("BN AF, nhổ R48", "BN có atrial fibrillation", "tiền sử af 5 năm"):
+            with self.subTest(text=text):
+                self.assertIn(("atrial_fibrillation", "cardiovascular"), _ids(text))
+        self.assertNotIn(("atrial_fibrillation", "cardiovascular"), _ids("BN uống Alaxan, kê Augmentin"))
+
     def test_af_with_extraction_triggers_anticoagulant_question_rule(self):
         n = normalize_entities({"conditions": ["rung nhĩ"], "allergies": [], "baseline_drugs": [],
                                 "planned_procedures": ["nhổ R18"], "planned_drugs": ["paracetamol"]},
@@ -56,7 +63,7 @@ class AliasProposals2811Tests(unittest.TestCase):
                               .open(encoding="utf-8-sig"))
         for row in rows:
             # Gồm cả dòng local_anesthesia sinh kèm cho "extraction" / "tooth extraction" (review PR #30).
-            if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy", "extraction", "tooth extraction"}:
+            if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy", "extraction", "tooth extraction", "af", "atrial fibrillation"}:
                 self.assertIn("Trung duyệt 28/11/2026", row["source"], row["alias"])
 
 
