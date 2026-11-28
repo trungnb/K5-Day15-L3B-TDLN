@@ -24,7 +24,7 @@ Khung chỉ dùng thư viện chuẩn của Python. Thêm thư viện thì ghi v
 
 | File | Ai sửa | Hợp đồng |
 |---|---|---|
-| `codebase/agent.py` | nhóm | `answer(text) -> {"output": str, "needs_more": bool}` — luồng chính, đúng hình dạng ở `spec.md` §4; chi tiết `docs/design.md` |
+| `codebase/agent.py` | nhóm | `answer(text) -> {"output": str, "needs_more": bool, "reply": Reply}` — luồng chính (eval đọc `output`; bot in `reply` qua `codebase/reply.py`), đúng hình dạng ở `spec.md` §4; chi tiết `docs/design.md` |
 | `codebase/ai.py` | nhóm | `call_model(system, user) -> {"text", "model", "tokens_in", "tokens_out"}`, giữ `@model_call`. Token lấy từ `usage` của API, không ước lượng |
 | `codebase/tools.py` | nhóm | mỗi công cụ một hàm có `@tool`, docstring: tên · input · output · có tác động ra ngoài không |
 | `codebase/tracing.py`, `eval/run_eval.py`, `cost/simulate.py`, `run.py` | **khung — không sửa** | ghi trace, chạy bộ câu thử, mô phỏng chi phí |

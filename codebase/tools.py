@@ -30,12 +30,18 @@ FILLER_WORDS = {"mot", "1", "cai", "chiec", "cac", "nhung", "vai"}
 TOOTH_NUMBER = re.compile(r"^r\d{1,2}$")
 
 
-def normalize_text(text):
-    """Viết thường, bỏ dấu tiếng Việt, đổi ký tự không phải chữ/số thành dấu cách, bỏ từ đệm, gộp khoảng trắng.
-    Áp dụng giống nhau cho alias và tin nhắn để so khớp theo ranh giới từ."""
+def fold(text):
+    """Viết thường, bỏ dấu tiếng Việt, đổi ký tự không phải chữ/số thành dấu cách, gộp khoảng trắng.
+    Bộ chuẩn hoá chữ duy nhất của codebase: mọi so khớp chữ (alias, câu trả lời BS, tin xã giao) đi qua hàm này."""
     folded = unicodedata.normalize("NFD", (text or "").lower().replace("đ", "d"))
     plain = "".join(c for c in folded if not unicodedata.combining(c))
-    words = (TOOTH_NUMBER.sub("r", w) for w in re.sub(r"[^a-z0-9]+", " ", plain).split())
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", plain).split())
+
+
+def normalize_text(text):
+    """fold() + đổi số răng thành "r" + bỏ từ đệm FILLER_WORDS — dạng dùng để so khớp alias theo ranh giới từ.
+    Áp dụng giống nhau cho alias và tin nhắn."""
+    words = (TOOTH_NUMBER.sub("r", w) for w in fold(text).split())
     return " ".join(w for w in words if w not in FILLER_WORDS)
 
 
@@ -205,6 +211,22 @@ def _merge(found, rule, a, b):
         item["a"].append(a)
     if b not in item["b"]:
         item["b"].append(b)
+
+
+BEHAVIOR_FLAGS = ("show_full_guidance", "asks_anticoagulant")
+
+
+@lru_cache(maxsize=1)
+def _behaviors():
+    return {row["rule_id"]: row for row in _rows("rule_behavior.csv")}
+
+
+def rule_behavior(rule_id):
+    """Cách agent in / dùng một rule, theo data/rule_behavior.csv (rule không có dòng → mọi cờ False):
+    show_full_guidance — 🟡 vẫn in đủ hướng xử trí (dòng gọn sẽ mất hành động);
+    asks_anticoagulant — hướng xử trí đã hỏi thuốc chống đông, nên không hỏi lại Q8."""
+    row = _behaviors().get(rule_id, {})
+    return {flag: (row.get(flag) or "").strip().lower() == "yes" for flag in BEHAVIOR_FLAGS}
 
 
 def _finish(found):
