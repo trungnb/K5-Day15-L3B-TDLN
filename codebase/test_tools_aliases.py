@@ -2,7 +2,7 @@
 Chạy: cd codebase && python3 -m unittest test_tools_aliases   (không gọi model)."""
 import unittest
 
-from tools import check_clinical_risks, find_aliases, normalize_entities, normalize_text
+from tools import check_clinical_risks, check_drug_interactions, find_aliases, normalize_entities, normalize_text
 
 
 def _ids(text):
@@ -115,6 +115,40 @@ class ToothNumberTests(unittest.TestCase):
     def test_numbers_in_drug_aliases_still_match(self):
         self.assertIn(("aspirin", normalize_entities({"baseline_drugs": ["aspirin 81"]}, "aspirin 81")
                        ["baseline_drugs"][0]["drug_class"]), _ids("BN uống aspirin 81"))
+
+
+class OutsideTesterAliasTests(unittest.TestCase):
+    """BS ngoài nhóm 28/11/2026 (validation/log.md): "vigentin", "amlodipin", "cao huyết áp" chưa nhận ra.
+    Trung (BS RHM) yêu cầu thêm 28/11/2026."""
+
+    def test_vigentin_is_amoxicillin(self):
+        for text in ("kê vigentin", "Kê đơn: Vigentin 625"):
+            with self.subTest(text=text):
+                self.assertIn(("amoxicillin", "penicillin"), _ids(text))
+
+    def test_amlodipine_spellings_are_a_drug(self):
+        for text in ("Bn sử dụng amlodipin", "đang uống amlodipine 5mg", "uống Amlor"):
+            with self.subTest(text=text):
+                self.assertIn(("amlodipine", "ccb"), _ids(text))
+
+    def test_cao_huyet_ap_chua_kiem_soat_is_uncontrolled_hypertension(self):
+        self.assertIn(("uncontrolled_hypertension", "cardiovascular"), _ids("BN cao huyết áp chưa kiểm soát"))
+
+    def test_outside_case_now_maps_all_drugs(self):
+        text = "Bn 65t sử dụng amlodipin  cao huyết áp. Dự kiến điều trị tuỷ r16 gây tê bằng lidocain. Kê đơn: vigentin + paracetamol"
+        n = normalize_entities({"conditions": [], "allergies": [], "baseline_drugs": ["amlodipin"],
+                                "planned_procedures": ["điều trị tuỷ r16"],
+                                "planned_drugs": ["lidocain", "vigentin", "paracetamol"]}, text)
+        self.assertEqual({d["canonical_id"] for d in n["baseline_drugs"]}, {"amlodipine"})
+        self.assertIn("amoxicillin", {d["canonical_id"] for d in n["planned_drugs"]})
+
+    def test_amlodipine_with_nsaid_or_macrolide_is_moderate(self):
+        for drug in ("ibuprofen", "clarithromycin"):
+            with self.subTest(drug=drug):
+                n = normalize_entities({"baseline_drugs": ["amlodipin"], "planned_drugs": [drug]},
+                                       f"uống amlodipin, kê {drug}")
+                hits = check_drug_interactions(n["baseline_drugs"], n["planned_drugs"])
+                self.assertEqual([r["severity"] for r in hits], ["MODERATE"])
 
 
 if __name__ == "__main__":
