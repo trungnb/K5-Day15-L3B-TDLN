@@ -8,7 +8,7 @@
 
 | Lượt | Run ID | Đạt / tổng | % | thuong | kho | tu_choi | So với chuẩn "đạt" |
 |---|---|---|---|---|---|---|---|
-| 1 | | __/__ | | __/__ | __/__ | __/__ | đạt / chưa |
+| 1 | `run-1@20261128-085926` | 23/27 | 85% | 2/2 | 14/18 | 7/7 | chưa (hỏi lại đúng 4/6 = 67% < 80%) |
 | 2 | | __/__ | | __/__ | __/__ | __/__ | đạt / chưa |
 
 Kết quả từng câu: `eval/run-1.csv`, `eval/run-2.csv`. Trace: `traces/run-1.jsonl`, `traces/run-2.jsonl`.
@@ -17,17 +17,17 @@ Kết quả từng câu: `eval/run-1.csv`, `eval/run-2.csv`. Trace: `traces/run-
 
 | Nhóm lỗi | Số câu | Câu |
 |---|---|---|
-| vd: bịa nguồn *(ví dụ)* | | |
-| vd: đoán khi thiếu thông tin *(ví dụ)* | | |
-| | | |
+| Không hỏi lại dữ kiện còn thiếu dù đã nhận đủ thực thể | 3 | B11, B12, B15 |
+| Không nói rõ bảng chưa có quy tắc cho cặp thuốc đã nhận ra | 1 | B13 |
 
 **≥3 lỗi cụ thể:**
 
 | Câu | Input | Output | Vì sao sai |
 |---|---|---|---|
-| | | | |
-| | | | |
-| | | | |
+| B11 | "Bn rối loạn đông máu trong quá trình nhổ răng" | Có `[CR-016]` HIGH, rồi nhắc thiếu thuốc định kê | Không hỏi ca đang nhổ hay đang chuẩn bị, có chảy máu khó cầm không |
+| B12 | "Bn th áp đang điều trị cần nhổ răng" | `❔ Chưa có dữ liệu cho: th áp đang điều trị` | Không hỏi mức kiểm soát nếu là tăng huyết áp |
+| B13 | Viêm mô tế bào, para + azithro | Nhận ra paracetamol, azithromycin; `❔` cho "viêm mô tế bào má phải" | Không nói bảng chưa có quy tắc cho cặp này, không hướng BS đánh giá sớm |
+| B15 | "Tac dung phu/ chong chi dinh Methylpred 16, metronidazol 500, amox 500" | Hỏi Q1 vai trò thuốc | Không nêu giới hạn với câu hỏi tác dụng phụ chung |
 
 ## 3. Một lần cải tiến
 

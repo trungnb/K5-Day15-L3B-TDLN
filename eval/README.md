@@ -37,7 +37,7 @@ Chấm tay cả năm metric vì cần đối chiếu ngữ cảnh, nguồn hoặ
 
 | Lượt | Run ID | Model | Cấu hình (prompt / công cụ / thay đổi) | Đạt / tổng | % | Đạt chuẩn? |
 |---|---|---|---|---|---|---|
-| 1 | | | | __/__ | | |
+| 1 | `run-1@20261128-085926` | gemini-3.8-flash (thinking low) | luồng 5 bước, commit `1f6f34f` (data sau PR #22, #23) | 23/27 | 85% | Chưa — hỏi lại đúng 4/6 (67%) < 80% |
 | 2 | | | | __/__ | | |
 
 Lượt chạy lại vì lỗi kỹ thuật, lượt sau CP4: ghi thêm dòng, không sửa dòng cũ.
