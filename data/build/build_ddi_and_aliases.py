@@ -126,6 +126,15 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             ],
         ),
         (
+            "amoxicillin",
+            "Amoxicillin (kể cả phối hợp clavulanate)",
+            "drug",
+            "penicillin",
+            "amoxicillin",
+            "DDInter; biệt dược amoxicillin + clavulanate thấy ở log BS ngoài nhóm (BS RHM yêu cầu thêm 28/11/2026)",
+            ["vigentin"],
+        ),
+        (
             "metronidazole",
             "Metronidazole",
             "drug",
@@ -532,6 +541,15 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             ["losartan", "cozaar", "fortzaar", "lozar"],
         ),
         (
+            "amlodipine",
+            "Amlodipine (chẹn kênh canxi)",
+            "drug",
+            "ccb",
+            "amlodipine",
+            "DDInter; tên thấy ở log BS ngoài nhóm (BS RHM yêu cầu thêm 28/11/2026)",
+            ["amlodipine", "amlodipin", "amlor", "norvasc"],
+        ),
+        (
             "metformin",
             "Metformin (Glucophage — ĐTĐ type 2)",
             "drug",
@@ -605,6 +623,7 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
             "Từ điển thực thể RHM nhóm TDLN (BS RHM duyệt 27/11/2026)",
             [
                 "tang huyet ap chua kiem soat",
+                "cao huyet ap chua kiem soat",
                 "huyet ap cao chua kiem soat",
                 "tha chua kiem soat",
                 "huyet ap chua on dinh",
@@ -1192,6 +1211,32 @@ def build_ddi_rows(ddinter_pairs: dict[tuple[str, str], str]) -> list[dict[str, 
             "clinical_guidance": "Thận trọng khi phối hợp celecoxib với methotrexate (đặc biệt ở người cao tuổi hoặc suy thận); để BS cân nhắc giảm đau khác hoặc theo dõi chức năng thận và công thức máu.",
             "source": "DDInter (Moderate: Celecoxib + Methotrexate)",
             "ddinter_checks": [("celecoxib", "methotrexate", "Moderate")],
+        },
+        {
+            "rule_id": "DDI-037",
+            "drug_a": "class:nsaid",
+            "drug_b": "amlodipine",
+            "severity": "MODERATE",
+            "mechanism": "NSAID giữ muối nước và có thể làm giảm tác dụng hạ áp của thuốc chẹn kênh canxi (amlodipine).",
+            "clinical_guidance": "Thận trọng, dùng NSAID ngắn ngày nhất có thể hoặc cân nhắc giảm đau ngoài nhóm NSAID; theo dõi huyết áp.",
+            "source": "DDInter (Moderate: Amlodipine + Ibuprofen/Diclofenac) (BS RHM yêu cầu thêm 28/11/2026)",
+            "ddinter_checks": [
+                ("amlodipine", "ibuprofen", "Moderate"),
+                ("amlodipine", "diclofenac", "Moderate"),
+            ],
+        },
+        {
+            "rule_id": "DDI-038",
+            "drug_a": "class:macrolide_cyp3a4",
+            "drug_b": "amlodipine",
+            "severity": "MODERATE",
+            "mechanism": "Clarithromycin và erythromycin ức chế CYP3A4 làm tăng nồng độ amlodipine trong máu, có thể gây tụt huyết áp, phù ngoại vi.",
+            "clinical_guidance": "Thận trọng / cân nhắc kháng sinh không ức chế CYP3A4 nếu phù hợp; dặn BN báo khi chóng mặt, choáng váng.",
+            "source": "DDInter (Moderate: Amlodipine + Clarithromycin/Erythromycin) (BS RHM yêu cầu thêm 28/11/2026)",
+            "ddinter_checks": [
+                ("amlodipine", "clarithromycin", "Moderate"),
+                ("amlodipine", "erythromycin", "Moderate"),
+            ],
         },
     ]
 
