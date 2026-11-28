@@ -195,7 +195,10 @@ def is_no_entity_reply(output: str) -> bool:
             and not any(mark in out for mark in ("❔", "🔴", "🟡")))
 
 
-_PATIENT_NO = re.compile(r"\b(?:bn|benh nhan|ca)\s*(?:so\s*)?([1-9])\b")
+# Số thứ tự BN: số đứng ngay sau bn/ca, sau số là ":" "." ")" "-", hết tin, hoặc một từ không phải đơn vị
+# ("BN 7 tuổi", "ca 2 răng", "BN 1 tuần", "cả 2 bên" là tuổi / số đếm — review PR #30).
+_PATIENT_NO = re.compile(r"\b(?:bn|benh nhan|ca)\s*(?:so\s*)?([1-9])"
+                         r"(?=\s*[:.)\-]|\s*$|\s+(?!(?:tuoi|tuan|ngay|thang|nam|rang|lan|vien|ben|cai|ham|gio)\b)\w)")
 _UNNAMED = re.compile(r"^thuoc\b|\b(?:khong|ko|k|chua) (?:nho|ro|biet)(?: ten)?\b|\bquen ten\b")
 
 

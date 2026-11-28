@@ -257,9 +257,9 @@ chua tuy,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấ
 lay cao rang tren nuou,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,non_invasive,,"SDCEP QRG (2022), Table 1 p. 3"
 kham rang,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,non_invasive,,"SDCEP QRG (2022), Table 1 p. 3"
 extraction,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,invasive_bleeding,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
-extraction,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)
+extraction,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,local_anesthesia,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
 tooth extraction,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,invasive_bleeding,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
-tooth extraction,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)
+tooth extraction,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,local_anesthesia,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
 chich ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,invasive_bleeding,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
 trich ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,invasive_bleeding,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
 dan luu ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,invasive_bleeding,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026

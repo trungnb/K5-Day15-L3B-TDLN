@@ -55,7 +55,8 @@ class AliasProposals2811Tests(unittest.TestCase):
         rows = csv.DictReader((Path(__file__).resolve().parents[1] / "data" / "entity_aliases.csv")
                               .open(encoding="utf-8-sig"))
         for row in rows:
-            if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy"}:
+            # Gồm cả dòng local_anesthesia sinh kèm cho "extraction" / "tooth extraction" (review PR #30).
+            if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy", "extraction", "tooth extraction"}:
                 self.assertIn("Trung duyệt 28/11/2026", row["source"], row["alias"])
 
 
