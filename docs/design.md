@@ -300,12 +300,12 @@ Tin: *"BN nam 65t, rung nhĩ uống Sintrom, ĐTĐ type 2 uống metformin. Dự
 | Bước | Kết quả |
 |---|---|
 | 1 | JSON như §4.2, `out_of_scope = []`, `has_pii = false` |
-| 2 | Bệnh nền: `diabetes`; `rung nhĩ` → `unmapped`. Thuốc đang dùng: `acenocoumarol` (vka), `metformin`. Thủ thuật: `invasive_bleeding` + `local_anesthesia` (Trung đã chốt nhổ răng kéo theo gây tê). Thuốc định kê: `amoxicillin`, `ibuprofen` |
+| 2 | Bệnh nền: `diabetes`, `atrial_fibrillation` (thêm 28/11). Thuốc đang dùng: `acenocoumarol` (vka), `metformin`. Thủ thuật: `invasive_bleeding` + `local_anesthesia` (Trung đã chốt nhổ răng kéo theo gây tê). Thuốc định kê: `amoxicillin`, `ibuprofen` |
 | §6 | Có cả thủ thuật và thuốc định kê → tình huống 6, `needs_more = False` |
-| 3 | `DDI-001` ibuprofen + vka (HIGH) · `CR-001` vka + thủ thuật chảy máu (HIGH) · `DDI-027` amoxicillin + vka (MODERATE) · `CR-015` ĐTĐ + thủ thuật chảy máu (MODERATE) |
+| 3 | `DDI-001` ibuprofen + vka (HIGH) · `CR-001` vka + thủ thuật chảy máu (HIGH) · `DDI-027` amoxicillin + vka (MODERATE) · `CR-015` ĐTĐ + thủ thuật chảy máu (MODERATE) · `CR-021` rung nhĩ + thủ thuật chảy máu (MODERATE) |
 | 4 | Model viết 🔴 (DDI-001, CR-001) và 🟡 (DDI-027, CR-015) |
 | Kiểm HIGH | Có đủ `[DDI-001]`, `[CR-001]` → không nối thêm |
-| 5 | Đã đối chiếu → 🔴 → 🟡 → ❔ "rung nhĩ" → "BS là người quyết định." |
+| 5 | Đã đối chiếu → 🔴 → 🟡 (thêm `CR-021` rung nhĩ × thủ thuật chảy máu) → "BS là người quyết định." |
 
 Mã quy tắc trên lấy từ CSV v1.1 hiện tại; kết quả thật phụ thuộc bảng alias (vd `dtd type 2` có trong bảng).
 
@@ -314,7 +314,7 @@ Mã quy tắc trên lấy từ CSV v1.1 hiện tại; kết quả thật phụ t
 ## 11. Để sau (đã thống nhất, chưa làm ở bản này)
 
 - **3 lớp bảo hiểm thêm bằng code:** regex bắt SĐT/CCCD/mã hồ sơ; danh sách từ khoá vượt quyền gộp với cờ của model; kiểm output không chứa liều (vd `500mg`, `2 viên/ngày`).
-- **Nội dung chuyên môn (Trung):** thủ thuật nào kéo theo gây tê; bổ sung bệnh nền hay gặp mà bảng chưa có (vd rung nhĩ — hiện ra ❔); bổ sung alias.
+- **Nội dung chuyên môn (Trung):** thủ thuật nào kéo theo gây tê; bổ sung bệnh nền hay gặp mà bảng chưa có (rung nhĩ đã thêm 28/11 kèm `CR-021`, nguồn còn UNVERIFIED); bổ sung alias.
 
 ---
 
