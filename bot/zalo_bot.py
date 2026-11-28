@@ -63,6 +63,13 @@ FOLLOW_UP_HINT = "(Hỏi tiếp cho BN này: nhắn \"thêm <tên thuốc / th�
 NON_TEXT_TEXT = ("Em chưa đọc được ảnh, sticker hay tin thoại ạ. Anh/chị gõ tên thuốc, bệnh nền, thủ thuật giúp em — "
                  "đừng gửi ảnh đơn thuốc thật của BN nhé.")
 FOLLOW_UP_RE = re.compile(r"^\s*(?:thêm|them|bổ sung|bo sung)\b", re.IGNORECASE)
+# "Thêm 1 ca: …", "Thêm BN nữa …", "Thêm ca: …" là BN khác → ca mới, không ghép (review PR #30, Nguyên).
+# So trên chữ có dấu: "thêm cả paracetamol" vẫn là bổ sung; "thêm BN dị ứng …" (không số / không "khác, nữa, mới") cũng vậy.
+NEW_PATIENT_RE = re.compile(
+    r"^\s*(?:thêm|them|bổ sung|bo sung)\s+(?:"
+    r"(?:\d+|một|mot)\s+(?:ca|bn|bệnh nhân|benh nhan)\b"
+    r"|(?:ca|bn|bệnh nhân|benh nhan)\s+(?:khác|khac|nữa|nua|mới|moi)\b"
+    r"|ca\s*:)", re.IGNORECASE)
 MERGED_NOTE = "(Em đã ghép với tin trước của ca này. Nếu là BN khác, nhắn /moi rồi gửi lại.)"
 # Kế hoạch giao tiếp Trung duyệt 28/11 (docs/design.md §7, §9).
 GREET_AGAIN_SEC = 12 * 3600   # chào lại trong 12 giờ → câu ngắn HELLO_AGAIN (mốc đề xuất, không có nguồn)
@@ -267,6 +274,8 @@ def _compose_case(chat_id: str, text: str, now: float | None = None) -> tuple[st
     có thể thiếu thuốc nền và mất cảnh báo HIGH (vd warfarin rồi "Định kê ibuprofen").
     """
     ts = time.monotonic() if now is None else now
+    if NEW_PATIENT_RE.match(text or ""):
+        return text, "new"
     store = _pending
     pending = _pending.get(chat_id)
     if pending is None and FOLLOW_UP_RE.match(text or ""):

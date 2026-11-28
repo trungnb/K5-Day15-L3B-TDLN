@@ -56,6 +56,28 @@ class AliasProposals2811Tests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertIn(key, _ids(text))
 
+    def test_abscess_and_pulp_procedures_carry_local_anesthesia(self):
+        # Trung chốt 28/11/2026 (câu hỏi review PR #30 của Nguyên): áp xe và điều trị tủy thường có gây tê.
+        cases = {"chích áp xe": "abscess_drainage", "trích áp xe": "abscess_drainage",
+                 "dẫn lưu áp xe": "abscess_drainage", "rạch áp xe": "abscess_drainage",
+                 "điều trị tủy R46": "non_invasive_dental", "lấy tủy R36": "non_invasive_dental",
+                 "điều trị nội nha": "non_invasive_dental", "chữa tủy": "non_invasive_dental",
+                 "nội nha R26": "non_invasive_dental"}
+        for text, cid in cases.items():
+            with self.subTest(text=text):
+                self.assertIn((cid, "local_anesthesia"), _ids(text))
+        for text in ("trám răng", "khám răng", "lấy cao răng trên nướu"):   # không tự kéo theo gây tê
+            with self.subTest(text=text):
+                self.assertNotIn(("non_invasive_dental", "local_anesthesia"), _ids(text))
+
+    def test_anesthetic_allergy_with_abscess_drainage_warns_directly(self):
+        n = normalize_entities({"conditions": [], "allergies": ["thuốc tê"], "baseline_drugs": [],
+                                "planned_procedures": ["chích áp xe"], "planned_drugs": []},
+                               "BN dị ứng thuốc tê. Chích áp xe")
+        rules = check_clinical_risks(n["conditions"], n["allergies"], n["baseline_drugs"],
+                                     n["planned_drugs"], n["procedure_groups"])
+        self.assertIn("CR-010", {r["rule_id"] for r in rules})
+
     def test_proposed_rows_do_not_borrow_reviewed_sources(self):
         import csv
         from pathlib import Path
@@ -64,7 +86,10 @@ class AliasProposals2811Tests(unittest.TestCase):
         for row in rows:
             # Gồm cả dòng local_anesthesia sinh kèm cho "extraction" / "tooth extraction" (review PR #30).
             if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy", "extraction", "tooth extraction", "af", "atrial fibrillation"}:
-                self.assertIn("Trung duyệt 28/11/2026", row["source"], row["alias"])
+                # Dòng gây tê của áp xe / điều trị tủy ghi "Trung chốt 28/11/2026" (phân nhóm), không mượn nguồn 27/11.
+                expected = "Trung chốt 28/11/2026" if row["drug_class"] == "local_anesthesia" and row["canonical_id"] != "extraction" \
+                    else "Trung duyệt 28/11/2026"
+                self.assertIn(expected, row["source"], row["alias"])
 
 
 if __name__ == "__main__":

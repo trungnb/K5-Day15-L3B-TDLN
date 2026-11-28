@@ -594,6 +594,27 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         self._send("chat_a", "BN uống aspirin, nhổ R38")
         self.assertEqual(self.agent_calls[-1], "BN uống aspirin, nhổ R38")
 
+    def test_them_new_patient_is_not_merged(self) -> None:
+        # Review PR #30 (Nguyên): "Thêm 1 ca: …", "Thêm BN nữa …" là BN khác — không ghép vào ca trước / ca đang chờ.
+        for needs_more in (False, True):
+            for text in ("Thêm 1 ca: BN uống aspirin, nhổ R38", "Thêm BN nữa uống warfarin, nhổ R48",
+                         "thêm ca mới: BN có thai, kê ibuprofen", "Bổ sung 1 bệnh nhân: BN uống Sintrom",
+                         "Thêm ca: BN 30t kê Augmentin"):
+                with self.subTest(needs_more=needs_more, text=text):
+                    self.needs_more = needs_more
+                    self._send("chat_a", "/moi")
+                    self._send("chat_a", "BN uống warfarin. Nhổ R48, kê Augmentin")
+                    self._send("chat_a", text)
+                    self.assertEqual(self.agent_calls[-1], text)
+        # Vẫn là bổ sung cho cùng BN: ghép như cũ.
+        for text in ("thêm cả paracetamol", "thêm BN dị ứng penicillin", "thêm: BN có dị ứng penicillin"):
+            with self.subTest(text=text):
+                self.needs_more = False
+                self._send("chat_a", "/moi")
+                self._send("chat_a", "BN uống warfarin. Nhổ R48, kê Augmentin")
+                self._send("chat_a", text)
+                self.assertEqual(self.agent_calls[-1], "BN uống warfarin. Nhổ R48, kê Augmentin\nBổ sung: " + text)
+
     def test_moi_also_forgets_finished_case(self) -> None:
         self.needs_more = False
         self._send("chat_a", "BN uống warfarin. Nhổ R48, kê Augmentin")

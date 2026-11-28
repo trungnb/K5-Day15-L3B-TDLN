@@ -249,13 +249,16 @@ phau thuat nha chu,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu 
 tao vat,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
 tao vat,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)
 rach ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
+rach ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)
 lay cao duoi nuou,subgingival_scaling,Lấy cao dưới nướu,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3"
 gay te,local_anesthesia_proc,Gây tê nha khoa (có thuốc co mạch),procedure,local_anesthesia,,"SDCEP QRG (2022), Table 1 p. 3; thực hành RHM (BS RHM duyệt 27/11/2026)"
 gay te vung,local_anesthesia_proc,Gây tê nha khoa (có thuốc co mạch),procedure,local_anesthesia,,"SDCEP QRG (2022), Table 1 p. 3; thực hành RHM (BS RHM duyệt 27/11/2026)"
 tiem te,local_anesthesia_proc,Gây tê nha khoa (có thuốc co mạch),procedure,local_anesthesia,,"SDCEP QRG (2022), Table 1 p. 3; thực hành RHM (BS RHM duyệt 27/11/2026)"
 tram rang,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,non_invasive,,"SDCEP QRG (2022), Table 1 p. 3"
 noi nha,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,non_invasive,,"SDCEP QRG (2022), Table 1 p. 3"
+noi nha,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)
 chua tuy,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,non_invasive,,"SDCEP QRG (2022), Table 1 p. 3"
+chua tuy,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)
 lay cao rang tren nuou,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,non_invasive,,"SDCEP QRG (2022), Table 1 p. 3"
 kham rang,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,non_invasive,,"SDCEP QRG (2022), Table 1 p. 3"
 extraction,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,invasive_bleeding,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
@@ -263,8 +266,14 @@ extraction,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,local_an
 tooth extraction,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,invasive_bleeding,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
 tooth extraction,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,local_anesthesia,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
 chich ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,invasive_bleeding,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+chich ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)
 trich ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,invasive_bleeding,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+trich ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)
 dan luu ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,invasive_bleeding,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+dan luu ap xe,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)
 dieu tri tuy,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,non_invasive,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+dieu tri tuy,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)
 lay tuy,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,non_invasive,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+lay tuy,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)
 dieu tri noi nha,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,non_invasive,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+dieu tri noi nha,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)
