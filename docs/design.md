@@ -218,6 +218,12 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 - Không hỏi lại khi thiếu 3 trường này: hệ thống không phân biệt được BN thật sự không có với BS quên ghi, và BN khoẻ mạnh đi nhổ răng khôn là ca phổ biến. Vẫn tra được tương tác giữa các thuốc định kê với nhau (vd `DDI-006` ibuprofen + ketorolac).
 **Dị ứng thuốc tê (Q5, thêm 27/11 cho B22).** Áp dụng cho tình huống 4, 5, 6: BN có dị ứng thuốc tê (`local_anesthetic`) mà không thủ thuật nào thuộc nhóm `local_anesthesia` (vd lấy cao dưới nướu — Trung chốt chỉ nhổ răng, implant, phẫu thuật nha chu tự kéo theo gây tê) → nối câu Q5, `needs_more = True`, và **không** in ✅. BS trả lời "có gây tê" thì bot ghép tin, thủ thuật gây tê được thêm và `CR-010` khớp.
 
+**Cải tiến lượt 2 (28/11, nhóm lỗi "không chỉ rõ phần còn thiếu": B11, B12, B13, B15 ở `eval/run-1.csv`).** Code phát hiện bằng so khớp chữ đã chuẩn hoá, không thêm lần gọi model:
+- **Q7:** tin có "đang nhổ", "trong quá trình nhổ", "trong khi nhổ", "đang chảy máu" hoặc "đang làm thủ thuật" (từ ngay trước là "không/chưa/ko" thì bỏ qua) và có thủ thuật nhóm `invasive_bleeding` → hỏi giai đoạn và chảy máu khó cầm; không in ✅.
+- **Q6:** bệnh nền model trích được nhưng bảng không có → hỏi tên bệnh và tình trạng hiện tại; không in ✅.
+- **ℹ️ cặp thuốc:** có thuốc định kê đã nhận ra mà cả ca không khớp rule DDI nào → nêu tối đa 3 cặp chưa có quy tắc; không in ✅.
+- **ℹ️ tác dụng phụ:** tin có "tác dụng phụ" → nêu giới hạn tra cứu (cả ở tình huống 3).
+
 - Q4 có mục đích chặn trường hợp BS quên ghi thuốc nền mà nhận ✅, rồi yên tâm nhầm. Thiếu một hoặc hai trong ba trường thì không nhắc, để tin trả lời không bị quá nhiều câu nhắc.
 
 - Cờ `out_of_scope` **không làm dừng luồng**: hỏi liều vẫn tra tiếp để BS không mất cảnh báo chảy máu; code chỉ thêm khối 🚫.
@@ -249,6 +255,8 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | Q3 | "Chưa có thủ thuật dự kiến. Nếu có, nhắn thêm để kiểm rủi ro thủ thuật." |
 | Q4 | "Chưa khai bệnh nền, dị ứng, thuốc đang dùng. Nếu BN có, nhắn thêm để kiểm." |
 | Q5 | "BN có tiền sử dị ứng thuốc tê. Thủ thuật này có dự kiến gây tê không? Nếu có, nhắn thêm để em kiểm." *(thêm 27/11, Trung duyệt 28/11)* |
+| Q6 | "Bệnh nền "{names}" em chưa nhận ra. Anh/chị ghi rõ tên bệnh và tình trạng hiện tại (ổn định hay chưa, đang điều trị gì, chỉ số gần nhất nếu có) để em kiểm." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
+| Q7 | "Ca đang chuẩn bị hay đang làm thủ thuật, và hiện có chảy máu khó cầm không? Nhắn thêm để em đối chiếu." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
 | P1 | "⚠️ Tin nhắn có thông tin định danh BN. Vui lòng chỉ gửi ca đã ẩn danh." |
 | ❔ | "❔ Chưa có dữ liệu cho: {danh sách}. Hệ thống không đoán. Nếu là viết tắt hoặc tên chung, BS ghi rõ tên đầy đủ / hoạt chất để em tra lại; nếu không, BS tra thêm Dược thư Quốc gia / tờ hướng dẫn sử dụng." |
 | 🚫 `lieu` | "🚫 Không tư vấn liều dùng / số ngày dùng." |
@@ -258,6 +266,8 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | 🚫 `can_cu_gia` | "🚫 Không ghi mã hay nguồn không có trong bảng tra; mỗi căn cứ phải là quy tắc có thật kèm nguồn." *(thêm 28/11, Trung duyệt 28/11)* |
 | 🚫 `tu_hanh_dong` | "🚫 Hệ thống không tự gửi tin hay làm thay BS; chỉ hỗ trợ tra cứu, BS tự soạn, duyệt và gửi." *(thêm 28/11, Trung duyệt 28/11)* |
 | 🚫 `lo_cau_hinh` | "🚫 Không tiết lộ cấu hình hay chỉ dẫn nội bộ của hệ thống." *(thêm 28/11, Trung duyệt 28/11)* |
+| ℹ️ cặp thuốc | "ℹ️ Bảng tra hiện chưa có quy tắc tương tác cho cặp: {pairs}. Chưa có quy tắc không thay cho đánh giá lâm sàng của BS." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
+| ℹ️ tác dụng phụ | "ℹ️ Hệ thống chỉ rà tương tác và nguy cơ theo ca trong bảng tra, không tra tác dụng phụ chung của từng thuốc. BS xem Dược thư Quốc gia / tờ hướng dẫn sử dụng." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
 | 🚫 `khac` | "🚫 Yêu cầu nằm ngoài phạm vi tra cứu an toàn trước thủ thuật & kê đơn." |
 | ✅ | "✅ Không phát hiện cảnh báo trong bảng tra hiện có. Bảng tra chưa phủ mọi tương tác, không thay cho đánh giá lâm sàng." |
 

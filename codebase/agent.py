@@ -14,7 +14,7 @@ import json
 import re
 
 from ai import call_model
-from tools import check_clinical_risks, check_drug_interactions, normalize_entities
+from tools import check_clinical_risks, check_drug_interactions, normalize_entities, normalize_text
 from tracing import note
 
 # ------------------------------------------------------------------ câu chữ cố định (design §7)
@@ -29,10 +29,17 @@ TEXT = {
     "Q3": "Chưa có thủ thuật dự kiến. Nếu có, nhắn thêm để kiểm rủi ro thủ thuật.",
     "Q4": "Chưa khai bệnh nền, dị ứng, thuốc đang dùng. Nếu BN có, nhắn thêm để kiểm.",
     "Q5": "BN có tiền sử dị ứng thuốc tê. Thủ thuật này có dự kiến gây tê không? Nếu có, nhắn thêm để em kiểm.",
+    "Q6": "Bệnh nền \"{names}\" em chưa nhận ra. Anh/chị ghi rõ tên bệnh và tình trạng hiện tại "
+          "(ổn định hay chưa, đang điều trị gì, chỉ số gần nhất nếu có) để em kiểm.",
+    "Q7": "Ca đang chuẩn bị hay đang làm thủ thuật, và hiện có chảy máu khó cầm không? Nhắn thêm để em đối chiếu.",
     "P1": "⚠️ Tin nhắn có thông tin định danh BN. Vui lòng chỉ gửi ca đã ẩn danh.",
     "UNMAPPED": "❔ Chưa có dữ liệu cho: {names}. Hệ thống không đoán. Nếu là viết tắt hoặc tên chung, "
                 "BS ghi rõ tên đầy đủ / hoạt chất để em tra lại; nếu không, BS tra thêm Dược thư Quốc gia / "
                 "tờ hướng dẫn sử dụng.",
+    "NO_PAIR_RULE": "ℹ️ Bảng tra hiện chưa có quy tắc tương tác cho cặp: {pairs}. "
+                    "Chưa có quy tắc không thay cho đánh giá lâm sàng của BS.",
+    "SIDE_EFFECT_LIMIT": "ℹ️ Hệ thống chỉ rà tương tác và nguy cơ theo ca trong bảng tra, không tra tác dụng phụ "
+                         "chung của từng thuốc. BS xem Dược thư Quốc gia / tờ hướng dẫn sử dụng.",
     "OK": "✅ Không phát hiện cảnh báo trong bảng tra hiện có. Bảng tra chưa phủ mọi tương tác, "
           "không thay cho đánh giá lâm sàng.",
     "JSON_ERROR": "Hệ thống đọc tin nhắn chưa đầy đủ — BS kiểm tra lại mục Đã đối chiếu.",
@@ -53,6 +60,10 @@ OUT_OF_SCOPE = {
     "lo_cau_hinh": "🚫 Không tiết lộ cấu hình hay chỉ dẫn nội bộ của hệ thống.",
     "khac": "🚫 Yêu cầu nằm ngoài phạm vi tra cứu an toàn trước thủ thuật & kê đơn.",
 }
+# Cải tiến lượt 2 (nhóm lỗi "không chỉ rõ phần còn thiếu", B11–B13, B15): phát hiện bằng so khớp chữ đã chuẩn hoá.
+IN_PROGRESS_WORDS = ("trong qua trinh nho", "trong khi nho", "dang nho", "dang chay mau", "dang lam thu thuat")
+NEGATION_WORDS = {"khong", "chua", "ko"}
+SIDE_EFFECT_WORDS = ("tac dung phu",)
 LIST_KEYS = ("conditions", "allergies", "baseline_drugs", "planned_procedures", "planned_drugs")
 
 # ------------------------------------------------------------------ prompt
@@ -227,6 +238,44 @@ def _checked_line(n, said, asking_roles=False):
     return "Đã đối chiếu — " + " · ".join(parts)
 
 
+def _mentions(text: str, phrases: tuple) -> bool:
+    """True nếu tin gốc (đã bỏ dấu, viết thường) chứa trọn một cụm trong phrases theo ranh giới từ,
+    và từ ngay trước cụm không phải từ phủ định ("không chảy máu" không tính)."""
+    words = normalize_text(text).split()
+    for phrase in phrases:
+        target = normalize_text(phrase).split()
+        for i in range(len(words) - len(target) + 1):
+            if words[i:i + len(target)] == target and (i == 0 or words[i - 1] not in NEGATION_WORDS):
+                return True
+    return False
+
+
+def _unmapped_conditions(extracted: dict | None, n: dict) -> list:
+    """Bệnh nền model đọc được nhưng không có trong bảng → cần hỏi lại tên và mức kiểm soát (Q6)."""
+    if not extracted:
+        return []
+    return list(dict.fromkeys(p.strip() for p in extracted["conditions"] if p.strip() in n["unmapped"]))
+
+
+def _pairs_without_rule(n: dict, rules: list, limit: int = 3) -> list:
+    """Cặp (thuốc định kê × thuốc khác) đã nhận ra khi cả ca không khớp rule DDI nào.
+    Ca đã có cảnh báo DDI thì không liệt kê cặp khác (tránh nhiễu, B10). Trả tối đa `limit` cặp."""
+    if any(r["rule_id"].startswith("DDI-") for r in rules):
+        return []
+    planned = n["planned_drugs"]
+    others = list(planned) + [d for d in n["baseline_drugs"] if d not in planned]
+    pairs, seen = [], set()
+    for p in planned:
+        for q in others:
+            a, b = p["display_name"], q["display_name"]
+            key = frozenset((a, b))
+            if p["canonical_id"] == q["canonical_id"] or key in seen:
+                continue
+            seen.add(key)
+            pairs.append("%s + %s" % (a, b))
+    return pairs[:limit]
+
+
 def _finish(blocks, needs_more):
     blocks.append(TEXT["FOOTER"])
     return {"output": "\n".join(b for b in blocks if b), "needs_more": needs_more}
@@ -265,7 +314,9 @@ def answer(text: str) -> dict:
         return _finish(head + [TEXT["Q1"]], True)
     if not has_procedure and not has_planned:   # tình huống 3
         note("tình huống 3: thiếu cả thủ thuật lẫn thuốc định kê")
-        return _finish(head + [_checked_line(n, said, asking_roles=True), unmapped] + refusals + [TEXT["Q1"]], True)
+        limit = TEXT["SIDE_EFFECT_LIMIT"] if _mentions(text, SIDE_EFFECT_WORDS) else ""
+        return _finish(head + [_checked_line(n, said, asking_roles=True), unmapped, limit] + refusals
+                       + [TEXT["Q1"]], True)
 
     # Bước 3 — tra bảng.
     rules = check_drug_interactions(n["baseline_drugs"], n["planned_drugs"]) + check_clinical_risks(
@@ -291,10 +342,27 @@ def answer(text: str) -> dict:
                       and not any(p["drug_class"] == "local_anesthesia" for p in n["procedure_groups"]))
     if ask_anesthesia:
         note("dị ứng thuốc tê, thủ thuật chưa có gây tê: hỏi Q5")
-    blocks += [unmapped] + refusals
-    if not rules and not unmapped and not refusals and not ask_anesthesia:
+    missing_pairs = _pairs_without_rule(n, rules)
+    no_pair = TEXT["NO_PAIR_RULE"].format(pairs="; ".join(missing_pairs)) if missing_pairs else ""
+    limit = TEXT["SIDE_EFFECT_LIMIT"] if _mentions(text, SIDE_EFFECT_WORDS) else ""
+    bad_conditions = _unmapped_conditions(extracted, n)
+    ask_stage = (_mentions(text, IN_PROGRESS_WORDS)
+                 and any(p["drug_class"] == "invasive_bleeding" for p in n["procedure_groups"]))
+    if missing_pairs:
+        note("cặp thuốc chưa có rule: %s" % "; ".join(missing_pairs))
+    if bad_conditions:
+        note("bệnh nền chưa nhận ra: hỏi Q6")
+    if ask_stage:
+        note("thủ thuật chảy máu, tin nói đang làm: hỏi Q7")
+    blocks += [unmapped, no_pair, limit] + refusals
+    if not rules and not unmapped and not refusals and not ask_anesthesia and not no_pair and not bad_conditions \
+            and not ask_stage:
         blocks.append(TEXT["OK"])
     reminders = [TEXT["Q5"]] if ask_anesthesia else []
+    if ask_stage:
+        reminders.append(TEXT["Q7"])
+    if bad_conditions:
+        reminders.append(TEXT["Q6"].format(names=", ".join(bad_conditions)))
     if has_procedure and not has_planned:
         reminders.append(TEXT["Q2"])
     if has_planned and not has_procedure:
