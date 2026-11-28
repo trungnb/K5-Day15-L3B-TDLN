@@ -15,19 +15,19 @@ users:
 personas:
   - name: dung_it
     share: 0.60
-    uses_per_month: 1
+    uses_per_month: 30   # 1 lần / ngày × 30 ngày
     turns_per_session: 1
-    source: "3/5 BS phỏng vấn (P1: BS phẫu thuật RHM 6 năm KN, P4: BS nha khoa tổng quát 6 năm KN, P5: BS chỉnh nha 6 năm KN) đều báo 1 ca/tháng trong evidence/summary.md; 1 lượt/phiên: (tự ước tính)."
+    source: "3/5 BS phỏng vấn (P1: BS phẫu thuật RHM 6 năm KN, P4: BS nha khoa tổng quát 6 năm KN, P5: BS chỉnh nha 6 năm KN) đều báo 1 ca/tháng trong evidence/summary.md. Tần suất dùng bot 1 lần/ngày (30 ngày/tháng): (tự ước tính) — Trung chốt 28/11/2026, cao hơn ~30 lần số ca phỏng vấn báo; 1 lượt/phiên: (tự ước tính)."
   - name: dung_vua
     share: 0.20
-    uses_per_month: 2
+    uses_per_month: 60   # 2 lần / ngày × 30 ngày
     turns_per_session: 2
-    source: "1/5 BS phỏng vấn (P2: BS chuyên RTE 6 năm KN) báo 2 lần/tháng trong evidence/summary.md; 2 lượt/phiên (gồm trường hợp nhắn bổ sung): (tự ước tính)."
+    source: "1/5 BS phỏng vấn (P2: BS chuyên RTE 6 năm KN) báo 2 lần/tháng trong evidence/summary.md. Tần suất dùng bot 2 lần/ngày (30 ngày/tháng): (tự ước tính) — Trung chốt 28/11/2026; 2 lượt/phiên (gồm trường hợp nhắn bổ sung): (tự ước tính)."
   - name: dung_nhieu
     share: 0.20
-    uses_per_month: 5
+    uses_per_month: 150  # 5 lần / ngày × 30 ngày
     turns_per_session: 2
-    source: "1/5 BS phỏng vấn (P3: BS RHM 1 năm KN — nhóm mới ra trường) báo khoảng 5 lần/tháng trong evidence/summary.md; 2 lượt/phiên (gồm trường hợp nhắn bổ sung): (tự ước tính)."
+    source: "1/5 BS phỏng vấn (P3: BS RHM 1 năm KN — nhóm mới ra trường) báo khoảng 5 lần/tháng trong evidence/summary.md. Tần suất dùng bot 5 lần/ngày (30 ngày/tháng): (tự ước tính) — Trung chốt 28/11/2026; 2 lượt/phiên (gồm trường hợp nhắn bổ sung): (tự ước tính)."
 
 prices:
   - model: gemini-3.8-flash
