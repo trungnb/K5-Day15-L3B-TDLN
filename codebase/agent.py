@@ -21,7 +21,8 @@ from ai import call_model
 from reply import Alert, Reply, render_text
 from texts import OUT_OF_SCOPE, TEXT  # noqa: F401  (bot và test đọc agent.TEXT)
 from tools import (check_clinical_risks, check_drug_interactions, fold, known_condition_base,
-                   known_condition_with_status, normalize_entities, normalize_text, rule_behavior)
+                   known_condition_with_status, normalize_entities, normalize_text, rule_behavior,
+                   UNSPECIFIED_DRUG_CLASSES)
 from tracing import note
 
 # Cải tiến lượt 2 (nhóm lỗi "không chỉ rõ phần còn thiếu", B11–B13, B15): phát hiện bằng so khớp chữ đã chuẩn hoá.
@@ -428,6 +429,11 @@ def _sort(rules: list) -> list:
     return sorted(rules, key=lambda r: (0 if r["severity"] == "HIGH" else 1, r["rule_id"]))
 
 
+def _unspecified_drug(n: dict) -> bool:
+    """BS mới nêu tên nhóm ("chống đông") → giữ ca để BS nhắn tên thuốc (CR-022 / CR-023 nhờ hỏi tên)."""
+    return any(d["drug_class"] in UNSPECIFIED_DRUG_CLASSES for d in n["baseline_drugs"] + n["planned_drugs"])
+
+
 def _near_note(n: dict) -> str:
     """🔎 chữ BS viết khớp gần đúng tên trong bảng (tools.near_match) — để BS thấy chỗ em đoán."""
     pairs = ['"%s" là %s' % (said, name) for said, name in n["near_matches"]]
@@ -596,7 +602,7 @@ def _reply(text: str) -> Reply:
                  ok=TEXT["OK"] if nothing_to_report and not _BLOCKS_OK & set(questions) else "",
                  alerts=_alerts(rules), notes=[_near_note(n)] + unmapped + [no_pair, limit], refusals=refusals,
                  checked=_checked_groups(n, said), question=question, question_key=key,
-                 needs_more=needs_more or has_unnamed)   # thuốc chưa rõ tên: giữ ca để BS nhắn tên sau khi hỏi BN
+                 needs_more=needs_more or has_unnamed or _unspecified_drug(n))   # thuốc chưa rõ tên: giữ ca để BS nhắn tên sau khi hỏi BN
 
 
 def answer(text: str) -> dict:

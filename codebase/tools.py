@@ -74,6 +74,10 @@ def _alias_index():
 # soát" và "tăng huyết áp đang ổn định" cùng gốc "tang huyet ap". Dùng để biết BS đã ghi tên bệnh ĐÃ CÓ trong bảng
 # kèm tình trạng, chỉ là bảng chưa có quy tắc cho tình trạng đó — khi ấy không hỏi lại Q6 (agent.py).
 PROCEDURE_DRUG_CLASSES = frozenset({"local_anesthetic", "vasoconstrictor"})
+# Tên NHÓM thuốc khi chưa biết tên thuốc ("uống chống đông", "thuốc kháng tiểu cầu"; log VM 28/11 14:59) → nhóm thuốc
+# cụ thể thay thế nó: có tên thuốc cụ thể thì bỏ thực thể nhóm (CR-022 / CR-023 chỉ dành cho lúc chưa rõ tên).
+UNSPECIFIED_DRUG_CLASSES = {"anticoagulant_unspecified": frozenset({"vka", "doac", "lmwh"}),
+                            "antiplatelet_unspecified": frozenset({"antiplatelet", "p2y12_antiplatelet"})}
 STATUS_MARK = re.compile(r"\b(?:on dinh|kiem soat|dieu tri)\b")
 _STATUS_WORDS = re.compile(r"\b(?:on dinh|kiem soat|dieu tri|tot|kem|dang|da|chua|khong)\b")
 
@@ -247,6 +251,9 @@ def normalize_entities(extracted, raw_text):
     for _, entities in find_aliases(normalize_text(raw_text)):
         for entity in entities:
             if entity["entity_type"] == "drug":
+                # Tên nhóm chỉ nhận khi model xếp vào danh sách thuốc: quét chữ không hiểu "không dùng chống đông".
+                if entity["drug_class"] in UNSPECIFIED_DRUG_CLASSES:
+                    continue
                 if entity["canonical_id"] not in known_drug_ids:
                     _add(out["unknown_role_drugs"], entity)
                     known_drug_ids.add(entity["canonical_id"])
@@ -255,6 +262,9 @@ def normalize_entities(extracted, raw_text):
 
     # Thuốc tê / co mạch không rõ vai (thường nằm trong cụm thủ thuật, vd "gây tê bằng lidocain") là thuốc dùng
     # trong thủ thuật, không phải thuốc BN đang dùng hay thuốc kê (log VM 28/11). Vẫn kiểm ở cả hai phía (DDI-020).
+    named = {e["drug_class"] for k in ("baseline_drugs", "planned_drugs", "unknown_role_drugs") for e in out[k]}
+    for k in ("baseline_drugs", "planned_drugs", "unknown_role_drugs"):
+        out[k] = [e for e in out[k] if not UNSPECIFIED_DRUG_CLASSES.get(e["drug_class"], frozenset()) & named]
     out["procedure_drugs"] = [e for e in out["unknown_role_drugs"] if e["drug_class"] in PROCEDURE_DRUG_CLASSES]
     out["unknown_role_drugs"] = [e for e in out["unknown_role_drugs"] if e not in out["procedure_drugs"]]
     # Thuốc không rõ vai được kiểm ở cả hai phía để không sót tương tác.

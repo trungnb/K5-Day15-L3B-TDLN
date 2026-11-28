@@ -238,9 +238,10 @@ class UnmappedWording(unittest.TestCase):
         res = run("BN uống thuốc chống đông không nhớ tên. Nhổ R48, kê Augmentin",
                   _x(baseline_drugs=["thuốc chống đông không nhớ tên"], planned_procedures=["nhổ R48"],
                      planned_drugs=["Augmentin"]))
-        line = next(l for l in res["output"].splitlines() if "không nhớ tên" in l and l.startswith("❔"))
+        # 28/11 (log VM 14:59): "chống đông" là tên nhóm → 🔴 CR-022, hướng xử trí nhờ hỏi tên thuốc (vỏ hộp, đơn).
+        self.assertEqual(section_of(res["output"], "CR-022"), "HIGH")
+        line = next(l for l in res["output"].splitlines() if "[CR-022]" in l)
         self.assertIn("vỏ hộp", line)
-        self.assertNotIn("hoạt chất", line)
         self.assertTrue(res["needs_more"])   # bot giữ ca để BS nhắn tên thuốc sau khi hỏi BN
 
 
@@ -709,3 +710,34 @@ class NearMatchSpelling2811(unittest.TestCase):
             out = run("BN uống %s, nhổ R48, kê augmentin" % word,
                       _x(baseline_drugs=[word], planned_procedures=["nhổ R48"], planned_drugs=["augmentin"]))["output"]
             self.assertNotIn("🔎", out, word)
+
+
+class UnnamedAnticoagulant2811(unittest.TestCase):
+    """Log VM 28/11 14:59: "Bn uống chống đông nhổ răng được ko" → chỉ ❔ "chưa có dữ liệu cho: chống đông".
+    Trung chọn 28/11: tên nhóm thuốc chưa rõ tên → 🔴 CR-022 (chống đông) / 🟡 CR-023 (kháng tiểu cầu) × thủ thuật
+    chảy máu, hướng xử trí theo SDCEP 2022, và giữ ca để BS nhắn tên thuốc."""
+
+    def test_unnamed_anticoagulant_before_extraction_is_high(self):
+        res = run("Bn uống chống đông nhổ răng được ko", _x(baseline_drugs=["chống đông"], planned_procedures=["nhổ răng"]))
+        out = res["output"]
+        self.assertEqual(section_of(out, "CR-022"), "HIGH")
+        self.assertNotIn("Em chưa có dữ liệu cho: chống đông", out)
+        self.assertTrue(res["needs_more"])
+
+    def test_unnamed_antiplatelet_is_moderate_with_action(self):
+        res = run("BN uống thuốc kháng tiểu cầu, nhổ R48",
+                  _x(baseline_drugs=["thuốc kháng tiểu cầu"], planned_procedures=["nhổ R48"]))
+        self.assertEqual(section_of(res["output"], "CR-023"), "MODERATE")
+        self.assertIn("→", next(l for l in res["output"].splitlines() if "[CR-023]" in l))
+        self.assertTrue(res["needs_more"])
+
+    def test_named_drug_replaces_the_unnamed_rule(self):
+        out = run("BN uống chống đông warfarin, nhổ R48",
+                  _x(baseline_drugs=["chống đông warfarin"], planned_procedures=["nhổ R48"]))["output"]
+        self.assertEqual(section_of(out, "CR-001"), "HIGH")
+        self.assertNotIn("CR-022", out)
+
+    def test_negated_mention_in_text_does_not_fire(self):
+        out = run("BN không dùng thuốc chống đông, nhổ R48, kê augmentin",
+                  _x(planned_procedures=["nhổ R48"], planned_drugs=["augmentin"]))["output"]
+        self.assertNotIn("CR-022", out)
