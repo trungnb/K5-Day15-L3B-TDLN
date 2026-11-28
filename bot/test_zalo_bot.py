@@ -506,6 +506,19 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         replies = self._send("chat_a", "BN uống aspirin, nhổ R38")
         self.assertNotIn(bot_mod.DROPPED_NOTE, "".join(replies))
 
+    def test_expired_pending_warns_even_when_agent_errors(self) -> None:
+        self._send("chat_a", "BN đang uống warfarin. Dự kiến nhổ răng khôn.")
+        text, ts = bot_mod._pending["chat_a"]
+        bot_mod._pending["chat_a"] = (text, ts - bot_mod.PENDING_TTL_SEC - 1)
+        with patch.object(bot_mod, "run_agent", side_effect=RuntimeError("api down")):
+            replies = self._send("chat_a", "Định kê ibuprofen")
+        self.assertTrue(replies[0].startswith(bot_mod.DROPPED_NOTE))
+        self.assertIn("hệ thống tra cứu đang lỗi", replies[-1])
+        self.assertNotIn("chat_a", bot_mod._pending)
+
+    def test_dropped_note_follows_ttl_constant(self) -> None:
+        self.assertIn(f"{bot_mod.PENDING_TTL_SEC // 60} phút", bot_mod.DROPPED_NOTE)
+
     def test_too_long_pending_is_dropped_with_warning(self) -> None:
         self._send("chat_a", "BN đang uống warfarin. " + "x" * bot_mod.MAX_PENDING_CHARS)
         replies = self._send("chat_a", "Định kê ibuprofen")

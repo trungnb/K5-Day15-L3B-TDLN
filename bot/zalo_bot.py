@@ -55,7 +55,7 @@ MAX_PENDING_CHARS = 4000
 NEW_CASE_TEXT = "Đã bắt đầu ca mới."
 MERGED_NOTE = "(Em đã ghép với tin trước của ca này. Nếu là BN khác, nhắn /moi rồi gửi lại.)"
 DROPPED_NOTE = (
-    "⏱️ Ca trước đã quá 10 phút (hoặc quá dài) nên em KHÔNG ghép, tin này được đối chiếu như ca mới. "
+    f"⏱️ Ca trước đã quá {PENDING_TTL_SEC // 60} phút (hoặc quá dài) nên em KHÔNG ghép, tin này được đối chiếu như ca mới. "
     "Nếu là cùng BN, anh/chị gửi lại một tin đủ bệnh nền, thuốc đang dùng, thủ thuật và thuốc định kê."
 )
 
@@ -525,7 +525,12 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         err_msg = redact(f"{type(exc).__name__}: {exc}")
         print(f"[error] {err_msg}")
         log_turn(chat_id=chat_id, user_input=masked, output="", summary=summary, error=err_msg)
-        await _reply_chunks(update, "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút.")
+        error_text = "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút."
+        if case_status == "dropped":
+            # Ca chờ đã bị xoá trong _compose_case: BS gửi lại tin bổ sung sẽ thành ca mới,
+            # nên phải báo ngay ở đây, không thì lần sau ra ✅ mà không có dòng ⏱️.
+            error_text = f"{DROPPED_NOTE}\n{error_text}"
+        await _reply_chunks(update, error_text)
         return
 
     if had_ids and not output.startswith(PII_WARNING):
