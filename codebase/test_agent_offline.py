@@ -714,6 +714,34 @@ class NearMatchSpelling2811(unittest.TestCase):
             self.assertNotIn("🔎", out, word)
 
 
+class ClassNameAndAmpicillin2811(unittest.TestCase):
+    """Log VM 28/11 15:34: BN mang thai + "kê NSAID được không" → ❔ "chưa có dữ liệu cho: NSAID", trượt 🔴 CR-013.
+    Log 15:31: "dị ứng ampicilin" không nhận ra (bảng chỉ có amoxicillin). Trung duyệt alias 28/11."""
+
+    def test_nsaid_class_name_fires_class_rules(self):
+        res = run("BN mang thai, kê NSAID được không", _x(conditions=["mang thai"], planned_drugs=["NSAID"]))
+        self.assertEqual(section_of(res["output"], "CR-013"), "HIGH")
+        self.assertNotIn("chưa có dữ liệu cho: NSAID", res["output"])
+        # Rule riêng từng thuốc (vd DDI-004 ibuprofen + aspirin) cần tên: nói rõ em mới kiểm theo nhóm.
+        self.assertIn("em mới kiểm theo nhóm", res["output"])
+
+    def test_named_nsaid_replaces_the_class_name(self):
+        n = tools.normalize_entities(_x(planned_drugs=["NSAID ibuprofen"]), "kê NSAID ibuprofen")
+        self.assertEqual([d["canonical_id"] for d in n["planned_drugs"]], ["ibuprofen"])
+
+    def test_negated_nsaid_in_text_is_not_added(self):
+        n = tools.normalize_entities(_x(planned_drugs=["paracetamol"]), "không dùng NSAID, kê paracetamol")
+        self.assertNotIn("nsaid_unspecified", [d["canonical_id"] for d in n["planned_drugs"] + n["baseline_drugs"]])
+
+    def test_ampicillin_allergy_and_drug(self):
+        out = run("BN dị ứng ampicilin, nhổ R48, kê augmentin",
+                  _x(allergies=["ampicilin"], planned_procedures=["nhổ R48"], planned_drugs=["augmentin"]))["output"]
+        self.assertEqual(section_of(out, "CR-008"), "HIGH")
+        out = run("BN dị ứng penicillin, nhổ R48, kê ampicillin",
+                  _x(allergies=["penicillin"], planned_procedures=["nhổ R48"], planned_drugs=["ampicillin"]))["output"]
+        self.assertEqual(section_of(out, "CR-008"), "HIGH")
+
+
 class UnnamedAnticoagulant2811(unittest.TestCase):
     """Log VM 28/11 14:59: "Bn uống chống đông nhổ răng được ko" → chỉ ❔ "chưa có dữ liệu cho: chống đông".
     Trung chọn 28/11: tên nhóm thuốc chưa rõ tên → 🔴 CR-022 (chống đông) / 🟡 CR-023 (kháng tiểu cầu) × thủ thuật

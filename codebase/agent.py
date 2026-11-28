@@ -454,8 +454,17 @@ def _sort(rules: list) -> list:
 
 
 def _unspecified_drug(n: dict) -> bool:
-    """BS mới nêu tên nhóm ("chống đông") → giữ ca để BS nhắn tên thuốc (CR-022 / CR-023 nhờ hỏi tên)."""
-    return any(d["drug_class"] in UNSPECIFIED_DRUG_CLASSES for d in n["baseline_drugs"] + n["planned_drugs"])
+    """BS mới nêu tên nhóm chống đông / kháng tiểu cầu → giữ ca để BS nhắn tên thuốc (CR-022 / CR-023 nhờ hỏi tên).
+    "NSAID" chưa rõ tên là thuốc BS định kê, không cần hỏi BN, nên không giữ ca."""
+    return any(d["canonical_id"] in UNSPECIFIED_DRUG_CLASSES and d["drug_class"] != "nsaid"
+               for d in n["baseline_drugs"] + n["planned_drugs"])
+
+
+def _class_only_note(n: dict) -> str:
+    """❔ thuốc định kê chỉ có tên nhóm ("NSAID"): rule theo nhóm đã chạy, rule riêng từng thuốc cần tên."""
+    names = _names([d for d in n["planned_drugs"] if d["canonical_id"] in UNSPECIFIED_DRUG_CLASSES
+                    and d["drug_class"] == "nsaid"])
+    return TEXT["CLASS_ONLY"].format(names=", ".join(names)) if names else ""
 
 
 def _near_note(n: dict) -> str:
@@ -475,7 +484,7 @@ def _roles_unknown(head, n, said, unmapped, refusals, text=""):
     key = ("Q1_DRUG" if len(names) == 1 else "Q1_DRUGS") if names else "Q1"
     limit = TEXT["SIDE_EFFECT_LIMIT"] if _mentions(text, SIDE_EFFECT_WORDS) else ""
     return Reply(head=head, verdict=_verdict(rules, 0, together=True), alerts=_alerts(rules), together=True,
-                 notes=[_near_note(n), unmapped, limit], refusals=refusals,
+                 notes=[_near_note(n), unmapped, _class_only_note(n), limit], refusals=refusals,
                  # tên đã có trong câu hỏi thì mục "Đã đối chiếu" không lặp lại
                  checked=_checked_groups(n, said, asking_roles=True, skip_drugs=bool(names)),
                  question=TEXT[key].format(names=", ".join(names)), question_key=key, needs_more=True)
@@ -637,7 +646,7 @@ def _reply(text: str) -> Reply:
 
     # Bước 4 + 5 — kết luận trước, cảnh báo, giới hạn, rồi mới "Đã đối chiếu" và câu nhắc.
     return Reply(head=head, verdict=verdict, ok=TEXT["OK"] if show_ok else "",
-                 alerts=_alerts(rules), notes=[_near_note(n)] + unmapped + [no_pair, limit], refusals=refusals,
+                 alerts=_alerts(rules), notes=[_near_note(n)] + unmapped + [_class_only_note(n), no_pair, limit], refusals=refusals,
                  checked=_checked_groups(n, said, none=none), question=question, question_key=key,
                  needs_more=needs_more or has_unnamed or _unspecified_drug(n))   # thuốc chưa rõ tên: giữ ca để BS nhắn tên sau khi hỏi BN
 
