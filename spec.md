@@ -220,4 +220,4 @@ flowchart TD
 
 | Thời điểm | Đổi gì | Vì sao |
 |---|---|---|
-|  |  |  |
+| 28/11 sau CP4 (chờ merge) | Tái cấu trúc, **không đổi output**: `answer()` trả thêm `reply` có cấu trúc (`codebase/reply.py`), eval / Zalo / "chi tiết" in từ cùng một bản tin, bot thôi đọc ngược chuỗi; trạng thái hội thoại gom vào `Conversation`; bảng câu hỏi tiếp trong `answer()`; cách in riêng của rule ra `data/rule_behavior.csv`; danh mục bí danh ra `data/build/alias_specs.csv`; một bộ chuẩn hoá chữ (`tools.fold`). | Review chất lượng code `main` (Nguyên): bot đọc ngược output bằng regex nên đổi câu chữ là vỡ âm thầm. Golden 62 ca (replay `traces/run-1`, `run-2` + 8 ca dựng) khớp từng byte cả output eval, tin chat và "chi tiết"; `entity_aliases.csv` sinh lại y hệt. |

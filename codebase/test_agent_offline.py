@@ -17,6 +17,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import agent  # noqa: E402
+import tools  # noqa: E402
+from reply import render_detail  # noqa: E402
+
+# 🟡 in đủ hướng xử trí (data/rule_behavior.csv)
+FULL_MODERATE = {rid for rid in tools._behaviors() if tools.rule_behavior(rid)["show_full_guidance"]}
 
 SAFE_PHRASES = ("tra cứu an toàn trước thủ thuật", "kiểm tra an toàn")
 
@@ -35,7 +40,7 @@ HEALTHY_X = {"conditions": [], "allergies": [], "baseline_drugs": [], "planned_p
 
 def run(text, extracted, model2=None, detail=False):
     """Chạy answer() với model giả: lần 1 trả `extracted`, lần 2 trả `model2` (None → lỗi → khung dự phòng).
-    detail=True gọi answer(text, detail=True) (bản tin đủ cho lệnh "chi tiết" của bot)."""
+    detail=True trả bản "chi tiết" của cùng Reply (reply.render_detail) ở khoá output."""
     def fake(system, user, json_mode=False):
         if system == agent.SYSTEM_EXTRACT:
             return {"text": json.dumps(extracted, ensure_ascii=False), "model": "stub", "tokens_in": 0, "tokens_out": 0}
@@ -45,9 +50,9 @@ def run(text, extracted, model2=None, detail=False):
                 "model": "stub", "tokens_in": 0, "tokens_out": 0}
     old_call, old_note = agent.call_model, agent.note
     agent.call_model, agent.note = fake, (lambda *a, **k: None)
-    agent._EXTRACT_CACHE.clear()   # mỗi lần chạy dùng đúng `extracted` của test đó
     try:
-        return agent.answer(text, detail=True) if detail else agent.answer(text)
+        res = agent.answer(text)
+        return dict(res, output=render_detail(res["reply"])) if detail else res
     finally:
         agent.call_model, agent.note = old_call, old_note
 
@@ -526,7 +531,7 @@ def moderate_lines(output):
 
 class Communication2811(unittest.TestCase):
     """Kế hoạch giao tiếp Trung duyệt 28/11: câu chào nói rõ AI, chào tạm biệt, nhận ra tin không có thực thể,
-    bản tin gọn cho 🟡 (🔴 giữ nguyên), bản đủ khi bot gọi answer(text, detail=True)."""
+    bản tin gọn cho 🟡 (🔴 giữ nguyên), bản đủ cho lệnh "chi tiết" (reply.render_detail)."""
 
     def test_hello_says_it_is_ai(self):
         self.assertIn("trợ lý AI", agent.TEXT["HELLO"])
@@ -558,9 +563,9 @@ class Communication2811(unittest.TestCase):
         self.assertIn("thuốc chống đông hay kháng tiểu cầu", line)
 
     def test_no_entity_reply_is_detectable(self):
-        self.assertTrue(agent.is_no_entity_reply(run("abc xyz", EMPTY_X)["output"]))
-        self.assertFalse(agent.is_no_entity_reply(run(EXAMPLE, EXAMPLE_X)["output"]))
-        self.assertFalse(agent.is_no_entity_reply(run(LIST_ONLY, LIST_ONLY_X)["output"]))
+        self.assertTrue(run("abc xyz", EMPTY_X)["reply"].is_no_entity)
+        self.assertFalse(run(EXAMPLE, EXAMPLE_X)["reply"].is_no_entity)
+        self.assertFalse(run(LIST_ONLY, LIST_ONLY_X)["reply"].is_no_entity)
 
     def test_moderate_lines_are_compact_and_skip_model_2(self):
         sent = []
@@ -573,13 +578,13 @@ class Communication2811(unittest.TestCase):
         for line in mods:
             self.assertRegex(line, r"^- \[(?:DDI|CR)-\d+\] ")
             self.assertIn("Nguồn:", line)
-            if not any("[%s]" % rid in line for rid in agent.FULL_MODERATE):
+            if not any("[%s]" % rid in line for rid in FULL_MODERATE):
                 self.assertNotIn("→", line)        # không in hướng xử trí (trừ CR-021, in đủ)
         self.assertTrue(sent)
         self.assertTrue(all(item["rule_id"] in out for item in sent))
         mod_ids = {re.search(r"\[((?:DDI|CR)-\d+)\]", l).group(1) for l in mods}
         # model 2 chỉ viết dòng HIGH và dòng 🟡 in đủ (CR-021)
-        self.assertEqual(mod_ids & {item["rule_id"] for item in sent}, mod_ids & agent.FULL_MODERATE)
+        self.assertEqual(mod_ids & {item["rule_id"] for item in sent}, mod_ids & FULL_MODERATE)
         self.assertEqual(section_of(out, "CR-001"), "HIGH")
         self.assertIn("INR", out)                  # 🔴 vẫn đủ hướng xử trí
 
@@ -595,7 +600,9 @@ class Communication2811(unittest.TestCase):
             self.assertIn("→", line)
             self.assertIn("(Vì: ", line)
             self.assertIn("Nguồn:", line)
-        self.assertEqual(sent, [])                 # bản đủ in nguyên văn bảng tra bằng code, không gọi model 2
+        # bản đủ in nguyên văn bảng tra bằng code: model 2 chỉ được gọi cho tin đầu (HIGH + CR-021), không cho 🟡 gọn
+        self.assertEqual({item["rule_id"] for item in sent} & {re.search(r"\[((?:DDI|CR)-\d+)\]", l).group(1)
+                                                              for l in mods}, FULL_MODERATE & {"CR-021"})
 
     def test_conditional_moderate_only_case_needs_no_model_2(self):
         calls = []
@@ -648,30 +655,29 @@ class ConciseReply2811(unittest.TestCase):
             self.assertFalse(agent.TEXT[key].startswith("Ca này chưa"), key)
 
 
-class DetailReusesExtraction2811(unittest.TestCase):
-    """ "chi tiết" dùng lại kết quả model 1 của lần đầu (cùng tin) — không trích lại, để mã cảnh báo không đổi giữa hai tin."""
+class DetailFromSameReply2811(unittest.TestCase):
+    """ "chi tiết" in lại CHÍNH bản tin đã trả (reply.render_detail) — không gọi lại model, nên mã cảnh báo không đổi
+    giữa hai tin (trước 28/11 bot gọi lại answer(text, detail=True) và phải nhớ kết quả model 1 để giữ được điều này)."""
 
-    def test_detail_uses_first_extraction(self):
+    def test_detail_has_same_codes_without_new_model_call(self):
         calls = []
 
         def fake(system, user, json_mode=False):
             calls.append(system)
             if system == agent.SYSTEM_EXTRACT:
-                x = EXAMPLE_X if len(calls) == 1 else dict(EXAMPLE_X, baseline_drugs=[], conditions=[])
-                return {"text": json.dumps(x, ensure_ascii=False), "model": "stub", "tokens_in": 0, "tokens_out": 0}
+                return {"text": json.dumps(EXAMPLE_X, ensure_ascii=False), "model": "stub", "tokens_in": 0, "tokens_out": 0}
             raise RuntimeError("model 2 giả lỗi")
         old_call, old_note = agent.call_model, agent.note
         agent.call_model, agent.note = fake, (lambda *a, **k: None)
-        agent._EXTRACT_CACHE.clear()
         try:
-            first = agent.answer(EXAMPLE)["output"]
-            detail = agent.answer(EXAMPLE, detail=True)["output"]
+            res = agent.answer(EXAMPLE)
+            n_calls = len(calls)
+            detail = render_detail(res["reply"])
         finally:
             agent.call_model, agent.note = old_call, old_note
-            agent._EXTRACT_CACHE.clear()
-        self.assertEqual(calls.count(agent.SYSTEM_EXTRACT), 1)
+        self.assertEqual(len(calls), n_calls)
         codes = lambda o: sorted(set(re.findall(r"\[(?:DDI|CR)-\d+\]", o)))
-        self.assertEqual(codes(first), codes(detail))
+        self.assertEqual(codes(res["output"]), codes(detail))
 
 
 if __name__ == "__main__":
