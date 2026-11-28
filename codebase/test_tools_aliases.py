@@ -96,5 +96,26 @@ class AliasProposals2811Tests(unittest.TestCase):
                 self.assertIn(expected, row["source"], row["alias"])
 
 
+class ToothNumberTests(unittest.TestCase):
+    def test_any_tooth_number_after_nho_maps_to_extraction(self):
+        # Tự thử 28/11/2026: "nhổ R36" không khớp alias nào (chỉ có R8/R18–R48) → mất CR-001 khi BN uống warfarin.
+        for text in ("Nhổ R36", "nhổ R46 viêm", "Dự kiến nhổ r11", "nho R 36", "Nhổ R48"):
+            with self.subTest(text=text):
+                self.assertIn(("extraction", "invasive_bleeding"), _ids(text))
+
+    def test_tooth_number_phrase_from_model_is_mapped_and_triggers_cr001(self):
+        n = normalize_entities({"conditions": [], "allergies": [], "baseline_drugs": ["warfarin"],
+                                "planned_procedures": ["nhổ R36"], "planned_drugs": []},
+                               "BN uống warfarin, nhổ R36")
+        self.assertEqual(n["unmapped"], [])
+        rules = check_clinical_risks(n["conditions"], n["allergies"], n["baseline_drugs"],
+                                     n["planned_drugs"], n["procedure_groups"])
+        self.assertIn("CR-001", {r["rule_id"] for r in rules})
+
+    def test_numbers_in_drug_aliases_still_match(self):
+        self.assertIn(("aspirin", normalize_entities({"baseline_drugs": ["aspirin 81"]}, "aspirin 81")
+                       ["baseline_drugs"][0]["drug_class"]), _ids("BN uống aspirin 81"))
+
+
 if __name__ == "__main__":
     unittest.main()
