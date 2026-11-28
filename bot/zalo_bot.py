@@ -49,6 +49,18 @@ ALLOWED_CHATS_FILE = ROOT / "bot" / "allowed_chats.json"
 MAX_INVITE_FAILS = 5
 INVITE_WINDOW_SEC = 600
 
+# Ghép tin bổ sung (docs/design.md §9): giữ ca đang chờ bổ sung trong RAM, không ghi ra đĩa.
+PENDING_TTL_SEC = 600
+MAX_PENDING_CHARS = 4000
+NEW_CASE_TEXT = "Đã bắt đầu ca mới."
+MERGED_NOTE = "(Em đã ghép với tin trước của ca này. Nếu là BN khác, nhắn /moi rồi gửi lại.)"
+
+# Lọc số định danh bằng code trước khi gọi model và ghi log (design §11). Chỉ bắt SĐT và dãy 9–12 chữ số
+# (CMND/CCCD/mã hồ sơ); số lâm sàng như INR 2.5, HbA1c 7.2%, 81mg, R48 không bị đụng tới.
+_PHONE_RE = re.compile(r"(?<![\w.,])(?:\+?84|0)(?:[\s.-]?\d){8,10}(?!\w|[.,]\d)")
+_LONG_ID_RE = re.compile(r"(?<![\w.,])\d{9,12}(?!\w|[.,]\d)")
+ID_MASK = "[số định danh đã ẩn]"
+
 TOKEN = os.environ.get("ZALO_BOT_TOKEN", "").strip()
 INVITE_CODE = (os.environ.get("ZALO_INVITE_CODE") or "").strip()
 ENV_ALLOWED_CHAT_IDS = {
@@ -62,6 +74,7 @@ _agent_lock = asyncio.Lock()
 _allowlist_lock = asyncio.Lock()
 _prompted_chats: set[str] = set()
 _failed_attempts: dict[str, list[float]] = {}
+_pending: dict[str, tuple[str, float]] = {}
 
 _DOCTOR_PREFIX_RE = re.compile(
     r"^(?:(?:bs|dr)(?:\.|\s|$)|(?:bác|bac)\s*s[ĩi](?:\s|$))",
@@ -74,7 +87,9 @@ USAGE_TEXT = (
     "thủ thuật dự kiến và thuốc định kê.\n\n"
     "Lưu ý bắt buộc:\n"
     "• Chỉ dùng ca giả lập hoặc đã ẩn danh — KHÔNG gửi họ tên, SĐT, mã hồ sơ hay ảnh đơn thuốc thật của BN.\n"
-    "• Bot chỉ hỗ trợ đối chiếu cảnh báo kèm nguồn; không kê đơn, không tư vấn liều, BS là người quyết định.\n\n"
+    "• Bot chỉ hỗ trợ đối chiếu cảnh báo kèm nguồn; không kê đơn, không tư vấn liều, BS là người quyết định.\n"
+    "• Thiếu ý nào bot sẽ hỏi lại, BS nhắn bổ sung trong 10 phút là bot ghép vào ca đang hỏi. "
+    "Chuyển sang BN khác thì nhắn /moi.\n\n"
     "Ví dụ:\n"
     "BN nam 65t, rung nhĩ uống Sintrom, ĐTĐ type 2 uống metformin. Dự kiến nhổ R48. Định kê Augmentin + Ibuprofen"
 )
@@ -197,17 +212,46 @@ def log_turn(
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
-def run_agent(text: str) -> tuple[str, dict[str, Any]]:
+def mask_identifiers(text: str) -> tuple[str, bool]:
+    """Thay SĐT và dãy số giấy tờ bằng ID_MASK. Trả (chữ đã lọc, có thay gì không)."""
+    masked = _LONG_ID_RE.sub(ID_MASK, _PHONE_RE.sub(ID_MASK, text or ""))
+    return masked, masked != (text or "")
+
+
+def _compose_case(chat_id: str, text: str, now: float | None = None) -> tuple[str, bool]:
+    """Ghép tin mới vào ca đang chờ bổ sung của đúng chat nếu chưa quá PENDING_TTL_SEC (design §9)."""
+    ts = time.monotonic() if now is None else now
+    pending = _pending.get(chat_id)
+    if pending is None:
+        return text, False
+    old_text, saved_at = pending
+    merged = f"{old_text}\nBổ sung: {text}"
+    if ts - saved_at > PENDING_TTL_SEC or len(merged) > MAX_PENDING_CHARS:
+        _pending.pop(chat_id, None)
+        return text, False
+    return merged, True
+
+
+def _remember_case(chat_id: str, case_text: str, needs_more: bool) -> None:
+    if needs_more:
+        _pending[chat_id] = (case_text, time.monotonic())
+    else:
+        _pending.pop(chat_id, None)
+
+
+def run_agent(text: str) -> tuple[str, dict[str, Any], bool]:
     tracing.begin("zalo")
+    needs_more = False
     try:
         res = answer(text)
         if isinstance(res, dict):
             output = str(res.get("output") or "")
+            needs_more = res.get("needs_more") is True
         else:
             output = str(res or "")
     finally:
         summary, _ = tracing.end()
-    return output, summary
+    return output, summary, needs_more
 
 
 def _extract_chat_id(update: Update) -> str | None:
@@ -420,6 +464,18 @@ async def on_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _handle_unauthorized(update, chat_id, "/join", arg, raw_text)
 
 
+async def on_new_case(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = _extract_chat_id(update)
+    if chat_id is None:
+        return
+    if chat_id not in ALLOWED_CHAT_IDS:
+        raw_text = (update.message.text or "").strip() if update.message else ""
+        await _handle_unauthorized(update, chat_id, "", "", raw_text)
+        return
+    _pending.pop(chat_id, None)
+    await _reply_chunks(update, NEW_CASE_TEXT)
+
+
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = _extract_chat_id(update)
     if chat_id is None or update.message is None or not update.message.text:
@@ -433,6 +489,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if cmd == "/join":
         await on_join(update, context)
         return
+    if cmd == "/moi":
+        await on_new_case(update, context)
+        return
 
     if chat_id not in ALLOWED_CHAT_IDS:
         await _handle_unauthorized(update, chat_id, "", "", text)
@@ -443,20 +502,28 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception:
         pass
 
+    masked, had_ids = mask_identifiers(text)
     output = ""
     summary: dict[str, Any] = {}
     err_msg = ""
+    merged = False
     try:
         async with _agent_lock:
-            output, summary = await asyncio.to_thread(run_agent, text)
+            case_text, merged = _compose_case(chat_id, masked)
+            output, summary, needs_more = await asyncio.to_thread(run_agent, case_text)
+            _remember_case(chat_id, case_text, needs_more)
     except Exception as exc:
         err_msg = redact(f"{type(exc).__name__}: {exc}")
         print(f"[error] {err_msg}")
-        log_turn(chat_id=chat_id, user_input=text, output="", summary=summary, error=err_msg)
+        log_turn(chat_id=chat_id, user_input=masked, output="", summary=summary, error=err_msg)
         await _reply_chunks(update, "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút.")
         return
 
-    log_turn(chat_id=chat_id, user_input=text, output=output, summary=summary, error="",
+    if had_ids and not output.startswith(PII_WARNING):
+        output = f"{PII_WARNING}\n{output}"
+    if merged:
+        output = f"{output}\n{MERGED_NOTE}"
+    log_turn(chat_id=chat_id, user_input=masked, output=output, summary=summary, error="",
              drop_input=PII_WARNING in output)
     await _reply_chunks(update, output)
 
@@ -472,6 +539,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", on_start))
     app.add_handler(CommandHandler("help", on_start))
     app.add_handler(CommandHandler("join", on_join))
+    app.add_handler(CommandHandler("moi", on_new_case))
     app.add_handler(MessageHandler(filters.TEXT, on_text))
 
     provider = (os.environ.get("MODEL_PROVIDER") or "fake").strip()
