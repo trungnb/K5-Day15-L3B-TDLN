@@ -46,7 +46,7 @@ Luật:
 - baseline_drugs: mọi thuốc khác, gồm thuốc BN đang dùng VÀ thuốc không rõ vai.
 - Giữ NGUYÊN chữ BS viết (tên biệt dược, viết tắt, không dấu). Không dịch sang hoạt chất, không suy ra thứ tin không ghi. Không có thì [].
 - out_of_scope: danh sách mã cho phần yêu cầu vượt phạm vi, chọn trong:
-  "lieu" (HỎI liều, số viên, số ngày dùng; tin chỉ ghi sẵn liều trong đơn như "Augmentin 625mg x2 lần/ngày" mà không hỏi gì về liều thì KHÔNG gắn "lieu"), "thuoc_thay_the" (đòi gợi ý / đổi sang thuốc khác),
+  "lieu" (HỎI liều, số viên, số ngày dùng; tin chỉ ghi sẵn liều trong đơn như "Augmentin 625mg x2 lần/ngày" mà không hỏi gì về liều thì KHÔNG gắn "lieu"), "thuoc_thay_the" (đòi hệ thống gợi ý thuốc khác; BS tự nêu tên thuốc mới, vd "đổi sang X", "kê X thay", thì KHÔNG gắn),
   "ngung_thuoc_nen" (hỏi hoặc đòi viết lời khuyên ngưng / nghỉ / đổi thuốc nền), "chan_doan" (đòi chẩn đoán),
   "can_cu_gia" (đòi ghi mã quy tắc, nguồn hay căn cứ không có thật / do người nhắn tự đưa),
   "tu_hanh_dong" (đòi hệ thống tự gửi tin, tự liên hệ người khác hay làm thay BS mà không qua BS duyệt),
@@ -437,6 +437,19 @@ def _sort(rules: list) -> list:
     return sorted(rules, key=lambda r: (0 if r["severity"] == "HIGH" else 1, r["rule_id"]))
 
 
+def _apply_switch(n: dict, text: str) -> str:
+    """BS đổi thuốc định kê qua tin bổ sung (followups.planned_changes): bỏ thuốc cũ khỏi thuốc định kê; thuốc không rõ
+    vai vẫn ở phía thuốc đang dùng. Trả dòng ℹ️ khi tin cuối nêu thuốc mới mà không rõ thêm hay đổi."""
+    drop, unclear = followups.planned_changes(text, n["planned_drugs"])
+    if drop:
+        note("BS đổi thuốc định kê: bỏ %s" % ", ".join(sorted(drop)))
+        n["planned_drugs"] = [d for d in n["planned_drugs"] if d["canonical_id"] not in drop]
+    if not unclear:
+        return ""
+    names = lambda ids: ", ".join(_names([d for d in n["planned_drugs"] if d["canonical_id"] in ids]))
+    return TEXT["ADD_OR_SWITCH"].format(old=names(unclear[0]), new=names(unclear[1]))
+
+
 def _unspecified_drug(n: dict) -> bool:
     """BS mới nêu tên nhóm chống đông / kháng tiểu cầu → giữ ca để BS nhắn tên thuốc (CR-022 / CR-023 nhờ hỏi tên).
     "NSAID", "cephalosporin" chưa rõ tên là thuốc BS định kê, không cần hỏi BN, nên không giữ ca."""
@@ -590,6 +603,7 @@ def _reply(text: str) -> Reply:
 
     # Bước 2 — chuẩn hoá và quét lại tin gốc.
     n = normalize_entities(extracted, text)
+    switch_note = _apply_switch(n, text)
     said = {k: bool(extracted and extracted[k]) for k in LIST_KEYS}
     has_background = bool(n["conditions"] or n["allergies"] or said["conditions"]
                           or said["allergies"] or said["baseline_drugs"])
@@ -634,7 +648,7 @@ def _reply(text: str) -> Reply:
 
     # Bước 4 + 5 — kết luận trước, cảnh báo, giới hạn, rồi mới "Đã đối chiếu" và câu nhắc.
     return Reply(head=head, verdict=verdict, ok=TEXT["OK"] if show_ok else "",
-                 alerts=_alerts(rules), notes=[_near_note(n)] + unmapped + [_class_only_note(n), no_pair, limit], refusals=refusals,
+                 alerts=_alerts(rules), notes=[_near_note(n)] + unmapped + [_class_only_note(n), switch_note, no_pair, limit], refusals=refusals,
                  checked=_checked_groups(n, said, none=none), question=question, question_key=key,
                  needs_more=needs_more or has_unnamed or _unspecified_drug(n))   # thuốc chưa rõ tên: giữ ca để BS nhắn tên sau khi hỏi BN
 

@@ -17,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import agent  # noqa: E402
+import followups  # noqa: E402
 import tools  # noqa: E402
 from reply import render_detail  # noqa: E402
 
@@ -826,6 +827,50 @@ class Antibiotics2811(unittest.TestCase):
     def test_named_cephalosporin_replaces_the_class_name(self):
         n = tools.normalize_entities(_x(planned_drugs=["cephalosporin cefuroxim"]), "kê cephalosporin cefuroxim")
         self.assertEqual([d["canonical_id"] for d in n["planned_drugs"]], ["cefuroxime"])
+
+
+class SwitchPlannedDrug2811(unittest.TestCase):
+    """Log VM 28/11 16:24: ca dị ứng ampicilin, BS hỏi "kê cephalosporin được không" (🔴 CR-024) rồi nhắn
+    "kê metronidazole nhé" → bot cộng dồn, vẫn 🔴 CR-024 dù BS có thể đã đổi thuốc. Trung yêu cầu sửa 28/11.
+    Tin bổ sung nói rõ đổi ("đổi sang", "thay bằng", "bỏ", "không kê … nữa") → bỏ thuốc định kê cũ. Không rõ thêm hay
+    đổi → vẫn kiểm cả hai (bỏ nhầm thì sót cảnh báo) và nói rõ cách nhắn để đổi."""
+
+    CASE = "BN dị ứng ampicilin thì kê thuốc gì giờ"
+
+    def _run(self, *follow_ups, planned):
+        text = self.CASE
+        for f in follow_ups:
+            text = followups.merge(text, f)
+        return run(text, _x(allergies=["ampicilin"], planned_procedures=["nhổ R48"], planned_drugs=planned))["output"]
+
+    def test_explicit_switch_drops_the_earlier_planned_drug(self):
+        for msg in ("đổi sang metronidazole", "thay bằng metronidazole nhé", "thôi, chuyển qua metronidazole",
+                    "bỏ cephalosporin, kê metronidazole", "không kê cephalosporin nữa, kê metronidazole"):
+            out = self._run("kê cephalosporin được không", msg, planned=["cephalosporin", "metronidazole"])
+            self.assertEqual(section_of(out, "CR-024"), "MISSING", msg)
+            self.assertIn("Thuốc định kê: Metronidazole", out, msg)
+            self.assertNotIn("em mới kiểm theo nhóm", out, msg)
+
+    def test_unclear_follow_up_keeps_both_and_says_how_to_switch(self):
+        out = self._run("kê cephalosporin được không", "kê metronidazole nhé", planned=["cephalosporin", "metronidazole"])
+        self.assertEqual(section_of(out, "CR-024"), "HIGH")
+        self.assertIn('nhắn "đổi sang Metronidazole"', out)
+
+    def test_added_drug_keeps_both_without_the_switch_note(self):
+        for msg in ("kê thêm metronidazole", "kê cả metronidazole"):
+            out = self._run("kê cefuroxim được không", msg, planned=["cefuroxim", "metronidazole"])
+            self.assertEqual(section_of(out, "CR-024"), "HIGH", msg)
+            self.assertNotIn("đổi sang", out, msg)
+
+    def test_switch_only_counts_in_follow_ups(self):
+        # Tin đầu "đổi sang" không có tin trước để bỏ: giữ mọi thuốc model trích.
+        out = run("BN dị ứng ampicilin, định kê cefuroxim, hay đổi sang metronidazole",
+                  _x(allergies=["ampicilin"], planned_procedures=["nhổ R48"],
+                     planned_drugs=["cefuroxim", "metronidazole"]))["output"]
+        self.assertEqual(section_of(out, "CR-024"), "HIGH")
+
+    def test_prompt_does_not_flag_a_named_switch_as_asking_for_a_substitute(self):
+        self.assertIn("đổi sang X", agent.SYSTEM_EXTRACT)
 
 
 class UnnamedAnticoagulant2811(unittest.TestCase):
