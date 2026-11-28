@@ -332,7 +332,7 @@ def log_turn(
     kind: str = "case",
 ) -> None:
     """kind: "case" · "small_talk" · "feedback" (/sai) · "detail" ("chi tiết") · "non_text" (ảnh/sticker)
-    · "invite" (chat chưa có quyền, chỉ ghi bước) — bot/log_stats.py đếm theo trường này."""
+    · "new_case" (/moi) · "invite" (chat chưa có quyền, chỉ ghi bước) — bot/log_stats.py đếm theo trường này."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
     log_path = LOG_DIR / f"{now.strftime('%Y%m%d')}.jsonl"
@@ -664,6 +664,8 @@ async def on_new_case(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _handle_unauthorized(update, chat_id, "", "", raw_text)
         return
     _conv(chat_id).new_case()
+    # Ghi ranh giới ca: thiếu dòng này thì log không cho biết vì sao tin sau không ghép (log VM 28/11 08:30–08:34).
+    _log_safely(chat_id=chat_id, user_input="/moi", output=NEW_CASE_TEXT, summary={}, kind="new_case")
     await _reply_chunks(update, NEW_CASE_TEXT)
 
 
