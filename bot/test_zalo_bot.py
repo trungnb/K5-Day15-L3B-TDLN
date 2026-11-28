@@ -815,5 +815,80 @@ class ZaloBotLogPrivacyTests(unittest.TestCase):
         self.assertEqual(update.message.replies, [flagged + "\n" + bot_mod.FOLLOW_UP_HINT])
 
 
+class _FlakyMessage(_FakeMessage):
+    """reply_text lỗi `fails` lần đầu rồi mới gửi được (mô phỏng lỗi mạng / giới hạn tốc độ của Zalo)."""
+
+    def __init__(self, chat_id: str, text: str, fails: int):
+        super().__init__(chat_id, text)
+        self.fails = fails
+        self.attempts = 0
+
+    async def reply_text(self, chunk: str) -> None:
+        self.attempts += 1
+        if self.attempts <= self.fails:
+            raise RuntimeError("network down")
+        self.replies.append(chunk)
+
+
+class ZaloBotDeliveryTests(unittest.TestCase):
+    """Issue #32 (miss tin): gửi lỗi thì thử lại; lỗi bất ngờ trong handler không được tắt vòng polling."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._orig_log_dir = bot_mod.LOG_DIR
+        self._orig_allowed = set(bot_mod.ALLOWED_CHAT_IDS)
+        bot_mod.LOG_DIR = Path(self._tmpdir.name) / "logs"
+        bot_mod.ALLOWED_CHAT_IDS = {"chat_a"}
+        bot_mod._pending.clear()
+        bot_mod._last_case.clear()
+        self._patches = [
+            patch.object(bot_mod, "run_agent", return_value=("fake output", {"models": ["fake"]}, False)),
+            patch.object(bot_mod, "SEND_RETRY_SEC", 0, create=True),
+        ]
+        for p in self._patches:
+            p.start()
+
+    def tearDown(self) -> None:
+        for p in self._patches:
+            p.stop()
+        bot_mod.LOG_DIR = self._orig_log_dir
+        bot_mod.ALLOWED_CHAT_IDS = self._orig_allowed
+        bot_mod._pending.clear()
+        bot_mod._last_case.clear()
+        self._tmpdir.cleanup()
+
+    def _log_records(self) -> list[dict]:
+        return [json.loads(line) for f in sorted(bot_mod.LOG_DIR.glob("*.jsonl"))
+                for line in f.read_text(encoding="utf-8").splitlines()]
+
+    def test_send_failure_is_retried(self) -> None:
+        upd = _FakeUpdate("chat_a", "x")
+        upd.message = _FlakyMessage("chat_a", "x", fails=1)
+        asyncio.run(bot_mod._reply_chunks(upd, "Em rà xong rồi ạ."))
+        self.assertEqual(upd.message.replies, ["Em rà xong rồi ạ."])
+
+    def test_send_failure_after_retries_is_logged(self) -> None:
+        upd = _FakeUpdate("chat_a", "x")
+        upd.message = _FlakyMessage("chat_a", "x", fails=99)
+        asyncio.run(bot_mod._reply_chunks(upd, "Em rà xong rồi ạ."))
+        self.assertEqual(upd.message.replies, [])
+        self.assertEqual(upd.message.attempts, bot_mod.SEND_ATTEMPTS)
+        rec = self._log_records()[-1]
+        self.assertEqual(rec["kind"], "send_error")
+        self.assertIn("RuntimeError", rec["error"])
+
+    def test_unexpected_error_in_on_text_does_not_escape_and_doctor_is_told(self) -> None:
+        upd = _FakeUpdate("chat_a", "BN uống warfarin, nhổ R48")
+        with patch.object(bot_mod, "mask_identifiers", side_effect=ValueError("boom")):
+            asyncio.run(bot_mod.on_text(upd, _FakeContext()))   # không được ném lỗi ra vòng polling
+        self.assertEqual(upd.message.replies, [bot_mod.ERROR_TEXT])
+        self.assertEqual(self._log_records()[-1]["kind"], "handler_error")
+
+    def test_every_registered_handler_is_guarded(self) -> None:
+        for fn in (bot_mod.on_start, bot_mod.on_join, bot_mod.on_new_case, bot_mod.on_usage,
+                   bot_mod.on_feedback, bot_mod.on_non_text, bot_mod.on_text):
+            self.assertTrue(getattr(fn, "_guarded", False), fn.__name__)
+
+
 if __name__ == "__main__":
     unittest.main()
