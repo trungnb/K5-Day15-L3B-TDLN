@@ -131,13 +131,13 @@ flowchart TD
 - Data card: data/DATA_CARD.md. Benchmark chốt CP2: 27 câu (thuong 2 · kho 18 · tu_choi 7), 5 metric trong eval/metric_spec.yaml.
 - **Chuẩn đạt CP2:** ≥80% câu qua (ít nhất 22/27 với bộ 27 câu) **và đồng thời đạt cả 5 ngưỡng:** cảnh báo HIGH bắt buộc 100%; đúng mã, mức và nguồn 100%; từ chối đúng 100%; hỏi lại đúng ≥80%; báo mục chưa có dữ liệu 100%. So ngưỡng theo tỷ lệ chưa làm tròn.
 - Chấm từng câu theo pass_criterion và các metric áp dụng. Output lỗi hoặc trống trượt. Với metric không có mẫu áp dụng, ghi N/A và chưa xác nhận đạt toàn bộ. Mẫu CP2 cho từng metric nằm trong eval/README.md.
-- Kết quả: lượt 1 __/__ (__%) · lượt 2 __/__ (__%) — run ID: __ / __ → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
+- Kết quả: lượt 1 23/27 (85%) · lượt 2 26/27 (96%) — run ID: `run-1@20261128-085926` / `run-2@20261128-091840`. Lượt 1 **chưa đạt chuẩn**: hỏi lại đúng 4/6 (67%) < 80%; các ngưỡng khác đạt (HIGH 9/9, từ chối 7/7). Lượt 2 **đạt chuẩn**: hỏi lại đúng 6/6, HIGH 9/9, từ chối 7/7 → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
 
 ## §8. Chi phí khi dùng thật *(guide 4.2)*
-- Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-__.csv` (__ phiên)
-- Chi phí / task thành công: __ (model __) · __ (model __)
-- Chi phí / tháng ở quy mô thật: thấp __ · cơ sở __ · cao __ → chi tiết `cost/cost-estimate.md`
-- So với impact / người / tháng (§2): đáng làm không, vì sao:
+- Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-1.csv` (50 phiên, seed 42, tỉ lệ đạt từ `run-2`)
+- Chi phí / task thành công: $0.0027 (model `gemini-3.8-flash`) · $0.00049 (model `gemini-3.1-flash-lite`) · $0.0072 (model `gemini-4-argon`)
+- Chi phí / tháng ở quy mô thật (`gemini-3.8-flash`): thấp $1.93 (300 BS) · cơ sở $6.44 (999 BS) · cao $19.33 (3.000 BS) → chi tiết `cost/cost-estimate.md`
+- So với impact / người / tháng (§2): chi phí model ~$0.006 / BS / tháng không phải rào cản; đáng làm hay không phụ thuộc impact §2 còn UNKNOWN (chưa đo số phút tra thuốc tiết kiệm mỗi ca).
 
 ## §9. Rủi ro & an toàn
 - Dữ liệu: đã ẩn danh gì, không thu gì, không đưa gì vào model gói miễn phí:
@@ -157,15 +157,41 @@ flowchart TD
   | Model tự thêm liều hoặc kiến thức ngoài bảng | BN nếu BS làm theo | Model 2 chỉ nhận rule đã khớp và chỉ viết khối 🔴 🟡; kiểm liều trong output là việc để sau (`docs/design.md` §11) |
 
 ## §10. Phân công & changelog
-- Phân công có tên (theo chặng, chia cặp — guide "Cách chia việc"): __
-- Dùng AI vào việc gì (2–3 dòng; chi tiết `docs/ai-usage.md`):
+- Phân công có tên (theo chặng, chia cặp — guide "Cách chia việc"; bản đầy đủ: [docs/team-plan.md](docs/team-plan.md) §C):
+
+  | Chặng | Nguyễn Bảo Trung *(đội trưởng · BS RHM)* | Nguyễn Lương Nguyên *(BA · dữ liệu · bot)* | Hoàng Xuân Lĩnh *(AI core)* | Lại Trọng Đức *(eval · chi phí)* |
+  |---|---|---|---|---|
+  | **CP1** (→ 17:00 T6) | Phỏng vấn BS RHM ngoài nhóm; nộp Form 1, CP1 | `canvas.md`, `spec.md` §0–§2 (Impact có nguồn), kịch bản Mom Test | Nối Gemini, khung `codebase/` | `spec.md` §5 cùng Trung; cách đếm & mẫu số `evidence/data-mining.md`; nháp `metric_spec.yaml` |
+  | **CP2** (→ 19:30 T6) | Duyệt lâm sàng 3 CSV trong `data/` | Gom 48 câu hỏi đáp công khai + `count_qa.py`, bàn giao Đức rà nhãn | `tools.py` đọc 3 CSV, `agent.py` chạy hết luồng; sơ đồ §4 | ≥12 câu `benchmark.csv`, `metric_spec.yaml`, chốt §7 trước 19:15 |
+  | **CP3** (→ 10:00 T7) | Hoàn tất ≥3 phỏng vấn; duyệt `expected` | Test bot Zalo bằng tài khoản thứ 2; hỗ trợ chép `P*.md` | Prompt + guard (PII, ngoài phạm vi, giữ mã `HIGH`); chạy `run-1`; video 30 giây | Rà nhãn `qa_sample.csv`, chốt `x/N`; mở rộng 24–28 câu thử; `simulate --try` |
+  | **CP4** (→ 14:30 T7) | Thuyết trình pain + lâm sàng; nộp CP4 | Khung slide trước 11:30; trực bot + `validation/log.md`; xuất `demo-slides.pdf` | 1 cải tiến → `run-2`; trả lời phần kỹ thuật | Chấm `run-2`, `eval/report.md`, `simulate` ≥50 phiên → `cost/cost-estimate.md` |
+
+  **Cặp:** Trung + Đức chấm chéo 5 output và duyệt §5 · Trung + Nguyên phỏng vấn / cho BS ngoài nhóm thử bot (11:30–13:00 T7) · Lĩnh + Đức chạy và chấm `run-1`, `run-2`, `simulate` · Nguyên + Đức bàn giao mẫu hỏi đáp (Nguyên gom, Đức rà nhãn và chốt số).
+
+  *Ngoài §C:* trong chặng CP1 (15:40–16:23 T6) Nguyên làm thêm `spec.md` §3 (PR #4), luật thuốc phối hợp trong `data/build/` (PR #5) và README (PR #9).
+- Dùng AI vào việc gì (2–3 dòng; chi tiết `docs/ai-usage.md`): **Lĩnh** dùng Claude Code (Claude Opus 5.5) soạn `docs/design.md`, viết code luồng 5 bước và 2 prompt `SYSTEM_EXTRACT` / `SYSTEM_WRITE`; Lĩnh duyệt từng thay đổi và giữ phần quyết định trong code. **Nguyên** dùng Claude Code (Claude Opus 5.5) tìm nguồn §2–§3, viết script gom/đếm hỏi đáp và luật thuốc phối hợp `data/build/`; Nguyên kiểm tay 15/15 nhãn mẫu và đọc lại nguồn §2 (nguồn trang gốc §3 chưa mở được bằng công cụ, cần mở lại bằng trình duyệt). **Đức** dùng Antigravity (Gemini 4 Carbon) soạn nháp §5 và `eval/metric_spec.yaml`; Đức kiểm tay 48/48 nhãn mẫu hỏi đáp. **Trung** duyệt nội dung lâm sàng, câu chữ cố định và đáp án câu thử. Không dùng AI để tạo người được phỏng vấn, trích dẫn hay sửa kết quả các lượt đã chạy.
 - Nhật ký thay đổi — **mọi thay đổi sau CP2 19:30 Thứ Sáu 27/11 phải có dòng ở đây**:
 
 **CP2 → CP4** (vd thu hẹp lát cắt, hỏi thêm người dùng, lần cải tiến trước lượt 2)
 
 | Thời điểm | Đổi gì | Vì sao (trỏ về câu thử / lỗi / bằng chứng nào) |
 |---|---|---|
-| Trước CP3 | Giới hạn CR-008 ở nhóm penicillin, làm rõ hai cách đạt B22 và cập nhật bảng impact §2. | Rà phạm vi CR-008, chốt tiêu chí B22 và bổ sung số tự báo cáo từ P2/P3. |
+| 27/11 16:59 (trước CP2) | Giới hạn CR-008 ở nhóm penicillin, làm rõ hai cách đạt B22 và cập nhật bảng impact §2. *(Trước giờ khoá CP2, để lại cho minh bạch.)* | Rà phạm vi CR-008, chốt tiêu chí B22 và bổ sung số tự báo cáo từ P2/P3. |
+| 28/11 01:11 (trước CP3) | Thay bản tạm CP2 bằng luồng 5 bước gọi `gemini-3.8-flash` (PR #16). | CP3 yêu cầu lời gọi AI thật; chạy thử 27 câu tìm ra lỗi câu phủ định (B22), từ đệm (B01), tự gán vai trò (B04–B07), từ chối chung chung (B23, B25, B26). |
+| 28/11 06:54 (trước CP3) | Chốt số bằng chứng hỏi đáp: Đức rà 48/48 nhãn `evidence/qa_sample.csv`, cập nhật `data-mining.md` và `summary.md` (PR #14). | Việc đã có trong kế hoạch CP3 (`docs/team-plan.md` §D); số `x/N` chốt sau CP2 nên ghi lại cho minh bạch. |
+| 28/11 06:55 (trước CP3) | Thêm `eval/grade.py`: in gợi ý chấm `run-N.csv` ra `eval/grade-N.md`, không sửa file run (PR #15). | Việc đã có trong kế hoạch CP3 (`docs/team-plan.md` §C, Đức); người chấm tự điền cột `pass`. Ghi lại cho minh bạch. |
+| 28/11 08:20 (trước CP3) | Điền khung `cost/personas.yaml` (999 BS RHM tốt nghiệp/năm, persona theo P1–P5), dàn ý `slides/outline.md` và `docs/cp4-agent-plan.md` (PR #17). | Việc đã có trong kế hoạch CP3–CP4; chưa chạy `simulate` chính thức. Ghi lại cho minh bạch. |
+| 28/11 08:40 (trước CP3) | Sửa lỗi nạp `bot/test_zalo_bot.py` khi chưa cài SDK: phát hiện SDK bằng `PathFinder` (PR #18). | Máy chưa cài `python-zalo-bot` thì cả bộ test bot hỏng lúc nạp (`zalo_bot.__spec__ is None`). Chỉ đổi file test, không đổi code bot. |
+| 28/11 08:41 (trước CP3) | Bot che email, mã hồ sơ / mã BN / mã BHYT, dãy 9–12 chữ số khi ghi `bot/logs/`; tin có câu ⚠️ P1 thì không lưu tin gốc (PR #19). | `log_turn` ghi nguyên văn tin BS lên VM, cờ `has_pii` chỉ nhắc BS mà không ảnh hưởng log (`docs/cp4-agent-plan.md` mục 2). Chỉ áp vào log, tin gửi BS không đổi; `run.py eval` không đi qua bot. |
+| 28/11 08:41 (trước CP3) | Trung duyệt câu Q5 và 3 câu từ chối `can_cu_gia`, `tu_hanh_dong`, `lo_cau_hinh`, giữ nguyên câu chữ (PR #20). | Câu chữ cố định do PR #16 thêm cần BS duyệt; chạy thử B22, B23, B25, B26 khớp tiêu chí. Không đổi code, `data/` hay câu thử. |
+| 28/11 08:57 (trước CP3) | Thêm alias `azithro` → azithromycin và `methylpred` → methylprednisolone vào `data/entity_aliases.csv` (PR #22). | Chạy thử thấy hai viết tắt này chưa nhận ra ở B13, B15. Chốt trước `run-1`, không sửa `data/*.csv` sau đó. |
+| 28/11 08:57 (trước CP3) | Thêm alias `nho r18`, `nho r28`, `rung nhi` → `atrial_fibrillation` và rule **CR-021** (MODERATE: rung nhĩ × thủ thuật chảy máu → hỏi rõ thuốc chống đông) (PR #23). | Test bot Zalo: "Nhổ R18" ra *chưa nhận ra*, "rung nhĩ" ra *chưa có dữ liệu*. CR-021 **chưa có tài liệu nguồn** (DATA_CARD ghi `UNVERIFIED`), chỉ để rung nhĩ không bị báo ✅; Nguyễn Bảo Trung chọn dùng ngày 28/11/2026 (`data/DATA_CARD.md`), câu chữ chưa có bằng chứng BS duyệt. Không câu thử nào chứa các từ này, nên không đổi kết quả chấm. |
+| 28/11 09:00 (trước CP3) | Bot ghép tin bổ sung vào ca đang chờ trong 10 phút (`docs/design.md` §9), thêm lệnh `/moi`, ẩn SĐT và dãy 9–12 chữ số **trước** khi gọi model (PR #21). | Test bot Zalo: "BN đang uống warfarin…" rồi "Định kê ibuprofen" ra ✅, **mất DDI-001 HIGH** vì mỗi tin là một ca mới. Chỉ sửa lớp bot, không đổi kết quả `run.py eval`. |
+| 28/11 09:09 (trước CP3) | Chạy lượt 1 chính thức `run-1@20261128-085926`: 23/27 (85%); cột `pass` do Claude chấm nháp, Trung duyệt (PR #24). | Việc trong kế hoạch CP3. Chưa đạt chuẩn §7: hỏi lại đúng 4/6 (67%) < 80%; câu trượt B11, B12, B13, B15 dùng để chọn cải tiến trước `run-2`. |
+| 28/11 09:18 (sau CP3, trước `run-2`) | Một cải tiến cho lượt 2 trong `codebase/agent.py`: hỏi lại giai đoạn thủ thuật khi đang chảy máu (Q7), hỏi lại bệnh nền chưa nhận ra (Q6), nêu cặp thuốc chưa có quy tắc và giới hạn tra tác dụng phụ (ℹ️). Không đổi `data/*.csv`, `eval/benchmark.csv`, chuẩn "đạt". | Nhóm lỗi "không chỉ rõ phần còn thiếu" ở `run-1`: B11, B12, B13, B15; metric hỏi lại đúng 4/6 (67%) dưới ngưỡng 80%. |
+| 28/11 09:32 (trước CP4) | Chạy lượt 2 chính thức `run-2@20261128-091840` trên commit `555cbc7`: 26/27 (96%); cột `pass` do Claude chấm nháp, Trung duyệt (PR #27). | Đo lại sau một cải tiến, cùng bộ câu thử và cách chấm. Đạt chuẩn §7: hỏi lại đúng 6/6, HIGH 9/9, từ chối 7/7; còn trượt B13. |
+| 28/11 09:32 (trước CP4) | Thêm mức giá `gemini-4-argon` (tầng Lớn) vào `cost/personas.yaml`; chạy `simulate` 50 phiên theo tỉ lệ đạt `run-2`, điền `cost/cost-estimate.md` và §8. | Guide 4.2 cần ≥2 mức model rẻ và mạnh; bảng cũ chỉ có tầng Nhỏ và Vừa. |
+| 28/11 09:39 (sau run-2, chưa đo lại) | Rà UX hội thoại (nhánh `feat/ux-hoi-thoai`, chưa merge): giọng "em" cho câu cố định; tin xã giao (chào, hỏi bot làm gì, cảm ơn) đáp thẳng không gọi model; kết luận đầu tin, dòng cảnh báo hướng xử trí trước; tình huống 3 nêu tên thuốc khi hỏi vai trò; ❔ tách theo loại (thuốc lạ / không nhớ tên thuốc / chưa có quy tắc); tin nhiều BN xin gửi từng ca; cờ `cap_cuu` và sửa mô tả `lieu` trong prompt model 1; Q5 dặn nhắn "có gây tê"; alias viết tắt `ibu`, `metro`… (chờ BS RHM duyệt); bot trả lời ảnh/sticker, ghép tin "thêm …" sau ca đã xong. **Thay đổi output nằm ngoài `run-2`, chưa đo lại.** | Test Zalo: "HI" ra 🚫 lạc đề, "cảm ơn" bị ghép vào ca đang chờ, "tăng huyết áp" bị khuyên ghi "hoạt chất"; phỏng vấn P5 "bệnh nhân không nhớ tên thuốc". Câu chữ mới chờ Trung duyệt (`docs/design.md` §12). |
 
 **Sau CP4 (đến 23:59 Thứ Bảy 28/11)** (sửa theo góp ý — không sửa chuẩn "đạt", câu thử, số bằng chứng, kết quả các lượt đã chạy)
 

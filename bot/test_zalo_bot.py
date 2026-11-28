@@ -287,7 +287,7 @@ class ZaloBotInviteTests(unittest.TestCase):
         upd1_next = _FakeUpdate("chat_201", "BN uống Sintrom nhổ R48", display_name="Nguyễn Bảo Trung")
         asyncio.run(bot_mod.on_text(upd1_next, _FakeContext()))
         self.assertEqual(self.agent_calls, ["BN uống Sintrom nhổ R48"])
-        self.assertEqual(upd1_next.message.replies, ["fake output"])
+        self.assertEqual(upd1_next.message.replies, ["fake output\n" + bot_mod.FOLLOW_UP_HINT])
 
         # 2) /join RHM2026
         upd2 = _FakeUpdate("chat_202", "/join RHM2026", display_name="Lan")
@@ -449,6 +449,7 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         bot_mod.LOG_DIR = Path(self._tmpdir.name) / "logs"
         bot_mod.ALLOWED_CHAT_IDS = {"chat_a", "chat_b"}
         bot_mod._pending.clear()
+        bot_mod._last_case.clear()
         self.agent_calls: list[str] = []
         self.needs_more = True
 
@@ -464,6 +465,7 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         bot_mod.LOG_DIR = self._orig_log_dir
         bot_mod.ALLOWED_CHAT_IDS = self._orig_allowed
         bot_mod._pending.clear()
+        bot_mod._last_case.clear()
         self._tmpdir.cleanup()
 
     def _send(self, chat_id: str, text: str) -> list[str]:
@@ -493,6 +495,44 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         self._send("chat_a", "Định kê ibuprofen")
         self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
 
+    def test_expired_pending_warns_doctor_before_output(self) -> None:
+        self._send("chat_a", "BN đang uống warfarin. Dự kiến nhổ răng khôn.")
+        text, ts = bot_mod._pending["chat_a"]
+        bot_mod._pending["chat_a"] = (text, ts - bot_mod.PENDING_TTL_SEC - 1)
+        self.needs_more = False
+        replies = self._send("chat_a", "Định kê ibuprofen")
+        self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
+        self.assertTrue(replies[0].startswith(bot_mod.DROPPED_NOTE))
+        self.assertNotIn(bot_mod.MERGED_NOTE, replies[-1])
+        # Tin sau không có ca chờ → không báo lại.
+        replies = self._send("chat_a", "BN uống aspirin, nhổ R38")
+        self.assertNotIn(bot_mod.DROPPED_NOTE, "".join(replies))
+
+    def test_expired_pending_warns_even_when_agent_errors(self) -> None:
+        self._send("chat_a", "BN đang uống warfarin. Dự kiến nhổ răng khôn.")
+        text, ts = bot_mod._pending["chat_a"]
+        bot_mod._pending["chat_a"] = (text, ts - bot_mod.PENDING_TTL_SEC - 1)
+        with patch.object(bot_mod, "run_agent", side_effect=RuntimeError("api down")):
+            replies = self._send("chat_a", "Định kê ibuprofen")
+        self.assertTrue(replies[0].startswith(bot_mod.DROPPED_NOTE))
+        self.assertIn("hệ thống tra cứu đang lỗi", replies[-1])
+        self.assertNotIn("chat_a", bot_mod._pending)
+
+    def test_dropped_note_follows_ttl_constant(self) -> None:
+        self.assertIn(f"{bot_mod.PENDING_TTL_SEC // 60} phút", bot_mod.DROPPED_NOTE)
+
+    def test_too_long_pending_is_dropped_with_warning(self) -> None:
+        self._send("chat_a", "BN đang uống warfarin. " + "x" * bot_mod.MAX_PENDING_CHARS)
+        replies = self._send("chat_a", "Định kê ibuprofen")
+        self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
+        self.assertTrue(replies[0].startswith(bot_mod.DROPPED_NOTE))
+
+    def test_fresh_case_has_no_case_note(self) -> None:
+        self.needs_more = False
+        replies = "".join(self._send("chat_a", "BN uống aspirin, nhổ R38"))
+        self.assertNotIn(bot_mod.DROPPED_NOTE, replies)
+        self.assertNotIn(bot_mod.MERGED_NOTE, replies)
+
     def test_moi_command_clears_pending_without_calling_agent(self) -> None:
         self._send("chat_a", "BN đang uống warfarin.")
         calls = len(self.agent_calls)
@@ -514,6 +554,51 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         log_text = "".join(p.read_text(encoding="utf-8") for p in bot_mod.LOG_DIR.glob("*.jsonl"))
         self.assertNotIn("0912", log_text)
         self.assertNotIn("001203004567", log_text)
+
+    def test_thanks_while_case_pending_is_not_merged(self) -> None:
+        # "cảm ơn" từng bị ghép "…\nBổ sung: cảm ơn" → bot gửi lại nguyên ca và câu "Em đã ghép với tin trước".
+        self._send("chat_a", "BN đang uống warfarin. Dự kiến nhổ răng khôn.")
+        calls = len(self.agent_calls)
+        replies = self._send("chat_a", "Dạ em cảm ơn nhiều ạ")
+        self.assertEqual(len(self.agent_calls), calls)
+        self.assertTrue(replies[-1].startswith("Dạ không có gì"))
+        self.assertNotIn("/moi", replies[-1])
+        # Ca đang chờ vẫn còn: tin bổ sung thật vẫn được ghép.
+        self._send("chat_a", "Định kê ibuprofen")
+        self.assertEqual(self.agent_calls[-1],
+                         "BN đang uống warfarin. Dự kiến nhổ răng khôn.\nBổ sung: Định kê ibuprofen")
+
+    def test_photo_or_sticker_gets_type_it_reply_without_agent(self) -> None:
+        upd = _FakeUpdate("chat_a", "")
+        upd.message.text = None
+        upd.message.photo_url = "https://example.invalid/don.jpg"
+        asyncio.run(bot_mod.on_non_text(upd, _FakeContext()))
+        self.assertEqual(self.agent_calls, [])
+        self.assertIn("ảnh", upd.message.replies[-1])
+        self.assertIn("gõ", upd.message.replies[-1])
+        # Chat chưa kích hoạt: không trả lời gì (không lộ bot cho người lạ).
+        upd2 = _FakeUpdate("chat_x", "")
+        upd2.message.text = None
+        asyncio.run(bot_mod.on_non_text(upd2, _FakeContext()))
+        self.assertEqual(upd2.message.replies, [])
+
+    def test_follow_up_with_them_after_finished_case_is_merged(self) -> None:
+        self.needs_more = False
+        replies = self._send("chat_a", "BN uống warfarin. Nhổ R48, kê Augmentin")
+        self.assertIn("thêm", replies[-1])                     # gợi ý cách hỏi tiếp
+        self._send("chat_a", "thêm paracetamol được không")
+        self.assertEqual(self.agent_calls[-1],
+                         "BN uống warfarin. Nhổ R48, kê Augmentin\nBổ sung: thêm paracetamol được không")
+        # Tin không mở đầu bằng "thêm"/"bổ sung" là ca mới.
+        self._send("chat_a", "BN uống aspirin, nhổ R38")
+        self.assertEqual(self.agent_calls[-1], "BN uống aspirin, nhổ R38")
+
+    def test_moi_also_forgets_finished_case(self) -> None:
+        self.needs_more = False
+        self._send("chat_a", "BN uống warfarin. Nhổ R48, kê Augmentin")
+        self._send("chat_a", "/moi")
+        self._send("chat_a", "thêm paracetamol")
+        self.assertEqual(self.agent_calls[-1], "thêm paracetamol")
 
     def test_clinical_numbers_are_not_masked(self) -> None:
         text = "BN INR 2.5, HbA1c 7.2%, aspirin 81mg. Nhổ R48"
@@ -575,7 +660,7 @@ class ZaloBotLogPrivacyTests(unittest.TestCase):
         rec = self._records()[0]
         self.assertNotIn("Nguyễn Văn Test", json.dumps(rec, ensure_ascii=False))
         self.assertTrue(rec["pii_dropped"])
-        self.assertEqual(update.message.replies, [flagged])
+        self.assertEqual(update.message.replies, [flagged + "\n" + bot_mod.FOLLOW_UP_HINT])
 
 
 if __name__ == "__main__":

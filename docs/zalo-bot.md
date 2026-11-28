@@ -57,7 +57,7 @@ ZALO_ALLOWED_CHAT_IDS=
    `Chào BS <tên>, BS vui lòng nhập mã mời để bắt đầu sử dụng trợ lý tra cứu an toàn RHM (chỉ cần nhập 1 lần).`
 4. Nhắn đúng mã mời đã đặt ở `ZALO_INVITE_CODE` (hoặc `/join <mã>`). Bot phản hồi xác nhận kích hoạt kèm hướng dẫn dùng 5 ý và tự lưu `chat_id` vào `bot/allowed_chats.json`.
 5. Từ tin nhắn tiếp theo trở đi, cứ gửi ca bệnh trực tiếp — không cần nhập lại mã mời (kể cả sau khi khởi động lại bot).
-6. Khi bot hỏi lại (thiếu thuốc định kê, thủ thuật…), BS nhắn bổ sung trong 10 phút: bot ghép vào ca đang hỏi (design §9) và ghi chú đã ghép. Chuyển sang BN khác thì nhắn `/moi`. Ca đang chờ chỉ giữ trong RAM, tắt bot là mất.
+6. Khi bot hỏi lại (thiếu thuốc định kê, thủ thuật…), BS nhắn bổ sung trong 10 phút: bot ghép vào ca đang hỏi (design §9) và ghi chú đã ghép. Chuyển sang BN khác thì nhắn `/moi`. Quá 10 phút (hoặc ca quá dài) bot không ghép và đặt dòng ⏱️ lên đầu câu trả lời, báo tin được đối chiếu như ca mới. Ca đang chờ chỉ giữ trong RAM, tắt bot là mất.
 
 ---
 
