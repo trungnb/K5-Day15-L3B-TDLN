@@ -597,8 +597,10 @@ def answer(text: str, detail: bool = False) -> dict:
     ask_anticoag = (any(p["drug_class"] == "invasive_bleeding" for p in n["procedure_groups"])
                     and not (n["baseline_drugs"] or said["baseline_drugs"] or n["unknown_role_drugs"])
                     and not _NO_MEDS.search(_plain(text))
-                    # "không" trơn chỉ trả lời Q8 khi không hỏi kèm Q5/Q7 (không rõ trả lời câu nào → vẫn hỏi).
-                    and not (_bare_no_reply(text) and not ask_anesthesia and not ask_stage)
+                    # "không" trơn chỉ trả lời Q8 khi lượt đó chỉ hỏi Q8: không kèm Q5/Q7/Q6/Q2 (review PR #39) —
+                    # không rõ trả lời câu nào thì vẫn hỏi Q8.
+                    and not (_bare_no_reply(text) and not (ask_anesthesia or ask_stage or bad_conditions
+                                                           or (has_procedure and not has_planned)))
                     and not any(r["rule_id"] in ASKS_ANTICOAG_RULES for r in rules))
     if ask_anticoag:
         note("thủ thuật chảy máu, chưa khai thuốc đang dùng: hỏi Q8")

@@ -319,6 +319,17 @@ class AskAnticoagulant2811(unittest.TestCase):
         self.assertIn(agent.TEXT["Q5"], res["output"])
         self.assertIn(ASK_ANTICOAG, res["output"])
 
+    def test_bare_no_does_not_answer_q8_when_q2_or_q6_also_asked(self):
+        # Review PR #39: lượt hỏi cả Q2 (chưa có thuốc định kê) hoặc Q6 với Q8 → "không" có thể trả lời câu khác
+        # → vẫn hỏi Q8, không in ✅.
+        cases = (("Nhổ R48\nBổ sung: không", _x(planned_procedures=["nhổ R48"])),
+                 ("Bn đặt stent 6 tháng, giờ nhổ răng đc ko\nBổ sung: không",
+                  _x(conditions=["đặt stent 6 tháng"], planned_procedures=["nhổ răng"])))
+        for text, extracted in cases:
+            res = run(text, extracted)
+            self.assertIn(ASK_ANTICOAG, res["output"], text)
+            self.assertNotIn("✅", res["output"], text)
+
     def test_no_with_more_words_is_not_a_bare_no(self):
         # "không" kèm chữ khác (vd "không gây tê", "không nhớ tên") không phải câu trả lời Q8.
         for reply in ("không gây tê", "không nhớ tên thuốc", "không biết"):
