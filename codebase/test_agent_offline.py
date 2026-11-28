@@ -251,6 +251,13 @@ class SeveralPatients(unittest.TestCase):
         res = run("BN1 uống Sintrom. Nhổ R48", _x(baseline_drugs=["Sintrom"], planned_procedures=["nhổ R48"]))
         self.assertEqual(section_of(res["output"], "CR-001"), "HIGH")
 
+    def test_age_or_count_after_bn_or_ca_is_one_patient(self):
+        # Review PR #30: "BN 7 tuổi", "ca 2 răng", "BN 1 tuần", "ca 3 ngày" là tuổi / số đếm, không phải số thứ tự BN.
+        for text in ("BN 7 tuổi, dị ứng penicillin, ca 2 răng sữa cần nhổ",
+                     "BN 1 tuần trước nhổ răng, ca 3 ngày nay sốt"):
+            res = run(text, EXAMPLE_X)
+            self.assertNotIn("mỗi ca một tin", res["output"], text)
+
 
 class ExtractPrompt(unittest.TestCase):
     def test_emergency_flag_points_to_emergency_care_and_keeps_checking(self):

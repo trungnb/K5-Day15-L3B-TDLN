@@ -736,7 +736,9 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
                 rows.append({
                     **row,
                     "drug_class": "local_anesthesia",
-                    "source": "Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)",
+                    # Alias đề xuất 28/11 giữ nguồn duyệt của chính nó, không mượn nguồn chốt 27/11 (review PR #30).
+                    "source": source if source.startswith("Đề xuất alias TDLN")
+                    else "Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)",
                 })
     return expand_combo_rows(rows)
 
