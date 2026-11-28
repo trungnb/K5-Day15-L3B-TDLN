@@ -239,7 +239,7 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 8. Câu hỏi / nhắc Q5, Q2, Q3, Q4 (nếu có)
 9. "BS là người quyết định." — luôn có, code
 
-**Câu cố định** — Trung đã duyệt toàn bộ (27/11/2026):
+**Câu cố định** — Trung đã duyệt toàn bộ (27/11/2026; Q5 và 3 câu 🚫 thêm sau duyệt ngày 28/11/2026):
 
 | Mã | Nội dung |
 |---|---|
@@ -248,16 +248,16 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | Q2 | "Chưa có thuốc định kê. Nếu định kê, nhắn thêm tên thuốc để kiểm tương tác." |
 | Q3 | "Chưa có thủ thuật dự kiến. Nếu có, nhắn thêm để kiểm rủi ro thủ thuật." |
 | Q4 | "Chưa khai bệnh nền, dị ứng, thuốc đang dùng. Nếu BN có, nhắn thêm để kiểm." |
-| Q5 | "BN có tiền sử dị ứng thuốc tê. Thủ thuật này có dự kiến gây tê không? Nếu có, nhắn thêm để em kiểm." *(thêm 27/11, chưa qua Trung duyệt)* |
+| Q5 | "BN có tiền sử dị ứng thuốc tê. Thủ thuật này có dự kiến gây tê không? Nếu có, nhắn thêm để em kiểm." *(thêm 27/11, Trung duyệt 28/11)* |
 | P1 | "⚠️ Tin nhắn có thông tin định danh BN. Vui lòng chỉ gửi ca đã ẩn danh." |
 | ❔ | "❔ Chưa có dữ liệu cho: {danh sách}. Hệ thống không đoán. Nếu là viết tắt hoặc tên chung, BS ghi rõ tên đầy đủ / hoạt chất để em tra lại; nếu không, BS tra thêm Dược thư Quốc gia / tờ hướng dẫn sử dụng." |
 | 🚫 `lieu` | "🚫 Không tư vấn liều dùng / số ngày dùng." |
 | 🚫 `thuoc_thay_the` | "🚫 Không gợi ý thuốc thay thế cụ thể." |
 | 🚫 `ngung_thuoc_nen` | "🚫 Không khuyên ngưng hoặc đổi thuốc nền — cân nhắc hội chẩn BS điều trị bệnh nền." |
 | 🚫 `chan_doan` | "🚫 Không chẩn đoán bệnh." |
-| 🚫 `can_cu_gia` | "🚫 Không ghi mã hay nguồn không có trong bảng tra; mỗi căn cứ phải là quy tắc có thật kèm nguồn." *(28/11)* |
-| 🚫 `tu_hanh_dong` | "🚫 Hệ thống không tự gửi tin hay làm thay BS; chỉ hỗ trợ tra cứu, BS tự soạn, duyệt và gửi." *(28/11)* |
-| 🚫 `lo_cau_hinh` | "🚫 Không tiết lộ cấu hình hay chỉ dẫn nội bộ của hệ thống." *(28/11)* |
+| 🚫 `can_cu_gia` | "🚫 Không ghi mã hay nguồn không có trong bảng tra; mỗi căn cứ phải là quy tắc có thật kèm nguồn." *(thêm 28/11, Trung duyệt 28/11)* |
+| 🚫 `tu_hanh_dong` | "🚫 Hệ thống không tự gửi tin hay làm thay BS; chỉ hỗ trợ tra cứu, BS tự soạn, duyệt và gửi." *(thêm 28/11, Trung duyệt 28/11)* |
+| 🚫 `lo_cau_hinh` | "🚫 Không tiết lộ cấu hình hay chỉ dẫn nội bộ của hệ thống." *(thêm 28/11, Trung duyệt 28/11)* |
 | 🚫 `khac` | "🚫 Yêu cầu nằm ngoài phạm vi tra cứu an toàn trước thủ thuật & kê đơn." |
 | ✅ | "✅ Không phát hiện cảnh báo trong bảng tra hiện có. Bảng tra chưa phủ mọi tương tác, không thay cho đánh giá lâm sàng." |
 
@@ -324,7 +324,7 @@ Mã quy tắc trên lấy từ CSV v1.1 hiện tại; kết quả thật phụ t
 |---|---|---|
 | ~~Một alias nhiều dòng; sửa `validate_csv.py`; tách thuốc phối hợp~~ — đã làm ở PR #5 | Nguyên | — |
 | ~~Thủ thuật nào thuộc thêm nhóm `local_anesthesia`~~ — Trung đã chốt, xem bên dưới | Trung | — |
-| ~~Câu chữ các câu cố định §7~~ — Trung đã duyệt toàn bộ (gồm Q1 mới, P1, ❔, 5 câu 🚫, ✅) ngày 27/11/2026 | Trung | — |
+| ~~Câu chữ các câu cố định §7~~ — Trung đã duyệt toàn bộ (gồm Q1 mới, P1, ❔, 5 câu 🚫, ✅) ngày 27/11/2026; Q5 và 3 câu 🚫 `can_cu_gia`, `tu_hanh_dong`, `lo_cau_hinh` ngày 28/11/2026 | Trung | — |
 | ~~Cập nhật `team-plan.md` §B~~ — đã làm ở PR #7 | Lĩnh | — |
 | Thêm câu thử cho 6 tình huống §6, câu thiếu cả 3 trường đầu (Q4), câu ✅, câu thuốc phối hợp, câu "dị ứng ibuprofen" | Đức | CP3 |
 | ~~Cân nhắc metric "output không kết luận an toàn"~~ — metric đã chốt ở PR #6 (5 metric, không có metric này); thiết kế vẫn giữ luật không nói "an toàn" | Đức | — |
