@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import types
 import unittest
 from unittest.mock import patch
@@ -599,7 +600,7 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         for needs_more in (False, True):
             for text in ("Thêm 1 ca: BN uống aspirin, nhổ R38", "Thêm BN nữa uống warfarin, nhổ R48",
                          "thêm ca mới: BN có thai, kê ibuprofen", "Bổ sung 1 bệnh nhân: BN uống Sintrom",
-                         "Thêm ca: BN 30t kê Augmentin"):
+                         "Thêm ca: BN 30t kê Augmentin", "thêm một bệnh nhân uống clopidogrel"):
                 with self.subTest(needs_more=needs_more, text=text):
                     self.needs_more = needs_more
                     self._send("chat_a", "/moi")
@@ -607,7 +608,8 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
                     self._send("chat_a", text)
                     self.assertEqual(self.agent_calls[-1], text)
         # Vẫn là bổ sung cho cùng BN: ghép như cũ.
-        for text in ("thêm cả paracetamol", "thêm BN dị ứng penicillin", "thêm: BN có dị ứng penicillin"):
+        for text in ("thêm cả paracetamol", "thêm BN dị ứng penicillin", "thêm: BN có dị ứng penicillin",
+                     "Bổ sung ca này: BN tiểu đường", "bổ sung BN có uống aspirin"):
             with self.subTest(text=text):
                 self.needs_more = False
                 self._send("chat_a", "/moi")
@@ -881,6 +883,35 @@ class ZaloBotDeliveryTests(unittest.TestCase):
     def _log_records(self) -> list[dict]:
         return [json.loads(line) for f in sorted(bot_mod.LOG_DIR.glob("*.jsonl"))
                 for line in f.read_text(encoding="utf-8").splitlines()]
+
+    def _send(self, text: str) -> list[str]:
+        upd = _FakeUpdate("chat_a", text)
+        handler = bot_mod.on_feedback if text.startswith("/sai") else bot_mod.on_text
+        asyncio.run(handler(upd, _FakeContext()))
+        return upd.message.replies
+
+    def test_log_failure_still_delivers_high_warning(self) -> None:
+        # Review #33 (Nguyên) ý 1: log_turn đứng trước _reply_chunks; log lỗi thì BS mất cảnh báo đã tính xong.
+        high = "🔴 Nguy cơ cao: - [DDI-001] Ibuprofen + Warfarin"
+        with patch.object(bot_mod, "run_agent", return_value=(high, {"models": ["fake"]}, False)), \
+                patch.object(bot_mod, "log_turn", side_effect=OSError("disk full")):
+            replies = self._send("BN uống warfarin, kê ibuprofen")
+        self.assertTrue(replies and replies[0].startswith(high), replies)
+        self.assertNotIn(bot_mod.ERROR_TEXT, replies)
+
+    def test_log_failure_keeps_dropped_note_on_agent_error(self) -> None:
+        bot_mod._pending["chat_a"] = ("Nhổ R48", time.monotonic() - bot_mod.PENDING_TTL_SEC - 1)
+        with patch.object(bot_mod, "run_agent", side_effect=RuntimeError("model down")), \
+                patch.object(bot_mod, "log_turn", side_effect=OSError("disk full")):
+            replies = self._send("BN uống warfarin")
+        self.assertTrue(replies and replies[0].startswith(bot_mod.DROPPED_NOTE), replies)
+
+    def test_log_failure_still_acks_feedback_and_small_talk(self) -> None:
+        with patch.object(bot_mod, "log_turn", side_effect=OSError("disk full")):
+            self.assertEqual(self._send("/sai thiếu cảnh báo"), [bot_mod.FEEDBACK_ACK])
+            replies = self._send("cảm ơn em")
+        self.assertTrue(replies, replies)
+        self.assertNotIn(bot_mod.ERROR_TEXT, replies)
 
     def test_send_failure_is_retried(self) -> None:
         upd = _FakeUpdate("chat_a", "x")
