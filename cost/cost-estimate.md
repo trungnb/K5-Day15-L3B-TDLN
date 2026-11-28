@@ -34,9 +34,9 @@ Chi phí / task thành công = chi phí trung bình mỗi phiên ÷ tỉ lệ đ
 
 ## 3. So với impact
 
-- Impact / người / tháng (`spec.md` §2): **UNKNOWN** — §2 chưa đo được số BS thực sự gặp vấn đề, tần suất đại diện hay số phút tra thuốc riêng. Dữ kiện có: P2, P3 tự báo cáo 2 và khoảng 5 lần phải dừng rà trong tháng; ca gần nhất xử lý khoảng 90 phút (P2) và 3 phút (P3) — là thời gian xử lý ca, không phải thời gian tra thuốc.
+- Impact / người / tháng (`spec.md` §2): **ước tính ~6 phút BS / tháng** = 2 lượt (trung bình persona) × 3 phút (giả định, chưa đo); cả 999 BS ≈ 100 giờ / tháng. Số đo thật vẫn **UNKNOWN** — §2 chưa đo được số BS thực sự gặp vấn đề, tần suất đại diện hay số phút tra thuốc riêng. Dữ kiện có: P2, P3 tự báo cáo 2 và khoảng 5 lần phải dừng rà trong tháng; ca gần nhất xử lý khoảng 90 phút (P2) và 3 phút (P3) — là thời gian xử lý ca, không phải thời gian tra thuốc.
 - Chi phí / người / tháng (cơ sở, model `gemini-3.8-flash`): **$0.0064** (chỉ tiền model; cả 999 BS ≈ $6.44 / tháng).
-- **Kết luận một dòng — đáng làm không:** chi phí model (~$0.006 / BS / tháng, kể cả model Lớn chỉ ~$0.017) không phải rào cản; có đáng làm hay không phụ thuộc impact §2 hiện còn **UNKNOWN** — cần đo số phút tra thuốc tiết kiệm được mỗi ca trước khi kết luận. *(Chưa tính chi phí ngoài model: hosting bot, giờ công BS RHM duyệt bảng quy tắc.)*
+- **Kết luận một dòng — đáng làm không:** chi phí model (~$0.006 / BS / tháng, kể cả model Lớn chỉ ~$0.017) không phải rào cản; so với ước tính ~100 giờ BS / tháng (giả định §2) thì đáng làm tiếp, nhưng impact chưa đo — cần đo số phút tra thuốc tiết kiệm được mỗi ca trước khi dùng thật (*iterate*). *(Chưa tính chi phí ngoài model: hosting bot, giờ công BS RHM duyệt bảng quy tắc.)*
 
 ## 4. *(Muốn sâu hơn, không bắt buộc)*
 
