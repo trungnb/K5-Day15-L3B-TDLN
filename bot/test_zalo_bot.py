@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -540,7 +541,7 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         calls = len(self.agent_calls)
         replies = self._send("chat_a", "/moi")
         self.assertEqual(len(self.agent_calls), calls)
-        self.assertEqual(replies, ["Đã bắt đầu ca mới."])
+        self.assertEqual(replies, [bot_mod.NEW_CASE_TEXT])
         self.assertNotIn("chat_a", bot_mod._pending)
         self._send("chat_a", "Định kê ibuprofen")
         self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
@@ -616,6 +617,20 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
                 self._send("chat_a", "BN uống warfarin. Nhổ R48, kê Augmentin")
                 self._send("chat_a", text)
                 self.assertEqual(self.agent_calls[-1], "BN uống warfarin. Nhổ R48, kê Augmentin\nBổ sung: " + text)
+
+    def test_merged_follow_up_mentions_moi_once(self) -> None:
+        # Review #30 (Nguyên) ý 5: MERGED_NOTE và FOLLOW_UP_HINT cùng nhắc /moi làm tin dài.
+        self.needs_more = False
+        self._send("chat_a", "BN uống warfarin. Nhổ R48")
+        replies = self._send("chat_a", "thêm ibuprofen")
+        self.assertEqual(replies[-1].count("/moi"), 1, replies[-1])
+
+    def test_on_text_sends_formatted_reply(self) -> None:
+        self.needs_more = False
+        with patch.object(bot_mod, "run_agent",
+                          return_value=("Đã đối chiếu — Bệnh nền: không khai · Thuốc đang dùng: Warfarin", {}, False)):
+            replies = self._send("chat_a", "BN uống warfarin")
+        self.assertIn("• Chưa khai: bệnh nền", replies[-1])
 
     def test_moi_also_forgets_finished_case(self) -> None:
         self.needs_more = False
@@ -835,7 +850,7 @@ class ZaloBotLogPrivacyTests(unittest.TestCase):
         rec = self._records()[0]
         self.assertNotIn("Nguyễn Văn Test", json.dumps(rec, ensure_ascii=False))
         self.assertTrue(rec["pii_dropped"])
-        self.assertEqual(update.message.replies, [flagged + "\n" + bot_mod.FOLLOW_UP_HINT])
+        self.assertEqual(update.message.replies, [bot_mod.format_reply(flagged) + "\n" + bot_mod.FOLLOW_UP_HINT])
 
 
 class _FlakyMessage(_FakeMessage):
@@ -940,6 +955,60 @@ class ZaloBotDeliveryTests(unittest.TestCase):
         for fn in (bot_mod.on_start, bot_mod.on_join, bot_mod.on_new_case, bot_mod.on_usage,
                    bot_mod.on_feedback, bot_mod.on_non_text, bot_mod.on_text):
             self.assertTrue(getattr(fn, "_guarded", False), fn.__name__)
+
+
+class ZaloBotFormatTests(unittest.TestCase):
+    """Issue #31: định dạng lại bản tin ở lớp bot — chỉ thêm câu dẫn / tách dòng, không bỏ chữ của agent."""
+
+    CHECKED = ("Đã đối chiếu — Bệnh nền: không khai · Dị ứng: không khai · Thuốc đang dùng: Warfarin (kháng vitamin K)"
+               " · Thủ thuật: Nhổ răng / Tiểu phẫu răng khôn · Thuốc định kê: không khai")
+
+    def test_checked_line_becomes_bullets_with_chua_khai(self) -> None:
+        out = bot_mod.format_reply("Em rà xong rồi ạ — có 1 nguy cơ cao.\n" + self.CHECKED + "\n" + bot_mod.AGENT_TEXT["FOOTER"])
+        self.assertIn("📋 Em đã đối chiếu:\n• Thuốc đang dùng: Warfarin (kháng vitamin K)\n"
+                      "• Thủ thuật: Nhổ răng / Tiểu phẫu răng khôn\n• Chưa khai: bệnh nền, dị ứng, thuốc định kê", out)
+        self.assertNotIn("Đã đối chiếu —", out)
+        self.assertTrue(out.endswith(bot_mod.AGENT_TEXT["FOOTER"]))
+
+    def test_unrecognised_checked_line_is_left_as_is(self) -> None:
+        odd = "Đã đối chiếu — Bệnh nền không rõ · Dị ứng: không khai"
+        self.assertEqual(bot_mod.format_reply(odd), odd)
+
+    def test_q1_gets_lead_in_and_moi_hint(self) -> None:
+        q1, footer = bot_mod.AGENT_TEXT["Q1"], bot_mod.AGENT_TEXT["FOOTER"]
+        self.assertEqual(bot_mod.format_reply(f"{q1}\n{footer}"),
+                         f"{bot_mod.ASK_LEAD}\n{q1}\n{bot_mod.ASK_MOI_HINT}\n{footer}")
+
+    def test_refusal_gets_lead_in_but_emergency_line_does_not(self) -> None:
+        dose, q1 = "🚫 Em không tư vấn liều dùng / số ngày dùng.", bot_mod.AGENT_TEXT["Q1"]
+        out = bot_mod.format_reply(f"{dose}\n{q1}")
+        self.assertTrue(out.startswith(f"{bot_mod.REFUSAL_LEAD}\n{dose}\n"), out)
+        self.assertNotIn(bot_mod.ASK_LEAD, out)            # câu dẫn từ chối đã đủ, không chồng thêm
+        er = "🚫 Em không hỗ trợ xử trí cấp cứu. Anh/chị xử trí theo phác đồ cấp cứu của cơ sở, cần thì gọi 115."
+        self.assertTrue(bot_mod.format_reply(f"{er}\nEm rà xong rồi ạ — có 1 nguy cơ cao.").startswith(er))
+
+    def test_formatting_never_drops_agent_text_on_eval_outputs(self) -> None:
+        import csv
+        root = Path(bot_mod.__file__).resolve().parent.parent / "eval"
+        outputs = [row["output"] for name in ("run-1.csv", "run-2.csv")
+                   for row in csv.DictReader(open(root / name, encoding="utf-8-sig")) if row.get("output")]
+        self.assertGreaterEqual(len(outputs), 50)
+        for raw in outputs:
+            out = bot_mod.format_reply(raw)
+            for line in raw.split("\n"):
+                if line.startswith("Đã đối chiếu — "):
+                    for part in line[len("Đã đối chiếu — "):].split(" · "):
+                        value = part.split(": ", 1)[-1]
+                        if value != "không khai":
+                            self.assertIn(value, out)
+                else:
+                    self.assertIn(line, out)
+            self.assertEqual(sorted(re.findall(r"\[(?:DDI|CR)-\d+\]", raw)),
+                             sorted(re.findall(r"\[(?:DDI|CR)-\d+\]", out)))
+
+    def test_format_errors_fall_back_to_raw_output(self) -> None:
+        with patch.object(bot_mod, "_format_checked_line", side_effect=ValueError("boom")):
+            self.assertEqual(bot_mod.format_reply(self.CHECKED), self.CHECKED)
 
 
 if __name__ == "__main__":

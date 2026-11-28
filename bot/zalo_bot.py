@@ -56,9 +56,9 @@ INVITE_WINDOW_SEC = 600
 PENDING_TTL_SEC = 600
 SEND_ATTEMPTS = 3        # gửi lỗi thì thử lại (issue #32 A); mốc đề xuất, không có nguồn
 SEND_RETRY_SEC = 1.0
-ERROR_TEXT = "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút."
+ERROR_TEXT = "Dạ em xin lỗi, hệ thống tra cứu đang lỗi — anh/chị thử lại sau ít phút giúp em nhé."
 MAX_PENDING_CHARS = 4000
-NEW_CASE_TEXT = "Đã bắt đầu ca mới."
+NEW_CASE_TEXT = "Dạ, em đã chuyển sang BN mới. Anh/chị gửi ca tiếp theo nhé."
 FOLLOW_UP_HINT = "(Hỏi tiếp cho BN này: nhắn \"thêm <tên thuốc / thủ thuật>\" trong 10 phút. BN khác: nhắn /moi.)"
 NON_TEXT_TEXT = ("Em chưa đọc được ảnh, sticker hay tin thoại ạ. Anh/chị gõ tên thuốc, bệnh nền, thủ thuật giúp em — "
                  "đừng gửi ảnh đơn thuốc thật của BN nhé.")
@@ -71,6 +71,8 @@ NEW_PATIENT_RE = re.compile(
     r"|(?:ca|bn|bệnh nhân|benh nhan)\s+(?:khác|khac|nữa|nua|mới|moi)\b"
     r"|ca\s*:)", re.IGNORECASE)
 MERGED_NOTE = "(Em đã ghép với tin trước của ca này. Nếu là BN khác, nhắn /moi rồi gửi lại.)"
+# Tin đã ghép thì MERGED_NOTE đã nhắc /moi — gợi ý hỏi tiếp bỏ phần /moi cho tin đỡ dài (review PR #30, Nguyên ý 5).
+FOLLOW_UP_HINT_MERGED = "(Hỏi tiếp cho BN này: nhắn \"thêm <tên thuốc / thủ thuật>\" trong 10 phút.)"
 # Kế hoạch giao tiếp Trung duyệt 28/11 (docs/design.md §7, §9).
 GREET_AGAIN_SEC = 12 * 3600   # chào lại trong 12 giờ → câu ngắn HELLO_AGAIN (mốc đề xuất, không có nguồn)
 DETAIL_RE = re.compile(r"^\s*(?:xem\s+|cho\s+(?:em\s+|mình\s+|minh\s+)?xem\s+)?chi\s+ti[eếê]t"
@@ -129,7 +131,7 @@ USAGE_TEXT = (
     "Ví dụ:\n"
     "BN nam 65t, rung nhĩ uống Sintrom, ĐTĐ type 2 uống metformin. Dự kiến nhổ R48. Định kê Augmentin + Ibuprofen"
 )
-START_TEXT = f"Xin chào! {USAGE_TEXT}"
+START_TEXT = f"Dạ chào anh/chị ạ! {USAGE_TEXT}"
 ACTIVATED_TEXT = (
     "Đã kích hoạt. Chào {title} ạ!\n"
     "Em là trợ lý AI tra cứu an toàn trước thủ thuật & kê đơn RHM (bản thử hackathon).\n"
@@ -481,6 +483,61 @@ async def _handle_unauthorized(
     )
 
 
+# ------------------------------------------------------------------ định dạng bản tin (issue #31)
+# Chỉ tách dòng và thêm câu dẫn; không bỏ, không sửa chữ nào của agent (mã rule, nguồn, câu chân trang).
+# Không nhận ra cấu trúc hoặc lỗi bất kỳ → gửi nguyên output gốc.
+CHECKED_PREFIX = "Đã đối chiếu — "
+CHECKED_HEADER = "📋 Em đã đối chiếu:"
+ASK_LEAD = "Dạ, em chưa đọc ra đủ thông tin để rà ca này."
+ASK_MOI_HINT = "Hoặc nhắn /moi để bắt đầu ca khác."
+REFUSAL_LEAD = "Dạ, phần này nằm ngoài việc em hỗ trợ:"
+EMERGENCY_PREFIX = "🚫 Em không hỗ trợ xử trí cấp cứu."   # dòng cấp cứu giữ đứng đầu tin, không chèn câu dẫn
+
+
+def _format_checked_line(line: str) -> str:
+    parts = line[len(CHECKED_PREFIX):].split(" · ")
+    shown, undeclared = [], []
+    for part in parts:
+        label, sep, value = part.partition(": ")
+        if not sep or not label or not value:
+            return line
+        if value == AGENT_TEXT["NOT_DECLARED"]:
+            undeclared.append(label[:1].lower() + label[1:])
+        else:
+            shown.append(f"• {label}: {value}")
+    if undeclared:
+        shown.append("• Chưa khai: " + ", ".join(undeclared))
+    return "\n".join([CHECKED_HEADER] + shown)
+
+
+def _format_lines(output: str) -> str:
+    lines = output.split("\n")
+    analysed = any(line.startswith(CHECKED_PREFIX) for line in lines)
+    out: list[str] = []
+    refusal_led = False
+    for line in lines:
+        if line.startswith(CHECKED_PREFIX):
+            out.append(_format_checked_line(line))
+        elif line.startswith("🚫") and not line.startswith(EMERGENCY_PREFIX):
+            if not refusal_led:
+                out.append(REFUSAL_LEAD)
+                refusal_led = True
+            out.append(line)
+        elif line == AGENT_TEXT["Q1"] and not analysed:
+            out.extend(([] if refusal_led else [ASK_LEAD]) + [line] + ([] if refusal_led else [ASK_MOI_HINT]))
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def format_reply(output: str) -> str:
+    try:
+        return _format_lines(output or "")
+    except Exception as exc:
+        print(f"[warn] định dạng bản tin thất bại, gửi bản gốc: {redact(f'{type(exc).__name__}: {exc}')}")
+        return output
+
+
 def _log_safely(**kwargs: Any) -> None:
     """Ghi log nhưng không bao giờ ném lỗi (đĩa đầy, quyền ghi…): handler gọi hàm này trước khi gửi,
     nên log lỗi không làm BS mất bản tin đã tính xong (review PR #33)."""
@@ -631,8 +688,9 @@ async def _reply_detail(update: Update, chat_id: str) -> None:
         err_msg = redact(f"{type(exc).__name__}: {exc}")
         print(f"[error] {err_msg}")
         _log_safely(chat_id=chat_id, user_input="chi tiết", output="", summary={}, error=err_msg, kind="detail")
-        await _reply_chunks(update, "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút.")
+        await _reply_chunks(update, ERROR_TEXT)
         return
+    output = format_reply(output)
     _log_safely(chat_id=chat_id, user_input="chi tiết", output=output, summary=summary, kind="detail")
     await _reply_chunks(update, output)
 
@@ -715,13 +773,14 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 _misses.pop(chat_id, None)
             if AGENT_TEXT["MODERATE_HEADER"].split(":")[0] in output:   # có khối 🟡 gọn → mời xem chi tiết
                 output = f"{output}\n{DETAIL_HINT}"
+            output = format_reply(output)
             if not needs_more:
-                output = f"{output}\n{FOLLOW_UP_HINT}"
+                output = f"{output}\n{FOLLOW_UP_HINT_MERGED if case_status == 'merged' else FOLLOW_UP_HINT}"
     except Exception as exc:
         err_msg = redact(f"{type(exc).__name__}: {exc}")
         print(f"[error] {err_msg}")
         _log_safely(chat_id=chat_id, user_input=masked, output="", summary=summary, error=err_msg)
-        error_text = "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút."
+        error_text = ERROR_TEXT
         if case_status == "dropped":
             # Ca chờ đã bị xoá trong _compose_case: BS gửi lại tin bổ sung sẽ thành ca mới,
             # nên phải báo ngay ở đây, không thì lần sau ra ✅ mà không có dòng ⏱️.
