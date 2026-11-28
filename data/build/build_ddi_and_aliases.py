@@ -642,6 +642,8 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
         # Viết tắt hay gặp khi BS nhắn nhanh (đề xuất 28/11, rà UX) — tách dòng riêng để không mượn nguồn đã duyệt.
         ("ibuprofen", "Ibuprofen", "drug", "nsaid", "ibuprofen", "Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026", ["ibu"]),
         ("metronidazole", "Metronidazole", "drug", "nitroimidazole", "metronidazole", "Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026", ["metro"]),
+        ("atrial_fibrillation", "Rung nhĩ", "condition", "cardiovascular", None, "Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026",
+         ["af", "atrial fibrillation"]),
         # --- Thủ thuật RHM ---
         (
             "extraction",
