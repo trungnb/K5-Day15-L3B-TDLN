@@ -44,4 +44,6 @@ Lượt chạy lại vì lỗi kỹ thuật, lượt sau CP4: ghi thêm dòng, k
 
 ## 6. Lỗi chính
 
-Tóm 2–3 dòng từ `eval/report.md`: nhóm lỗi lớn nhất · đã sửa gì · còn lại gì.
+- **Nhóm lỗi lớn nhất ở lượt 1 (4/27 câu trượt: B11, B12, B13, B15):** không chỉ rõ phần còn thiếu khi đã nhận ra thực thể — thiếu câu hỏi giai đoạn chảy máu / mức kiểm soát huyết áp (khiến `hoi_lai_khi_thieu` chỉ đạt 4/6 = 67% < 80%), chưa nêu giới hạn tra tác dụng phụ chung (B15) và chưa báo cặp thuốc chưa có quy tắc trực tiếp (B13).
+- **Đã sửa (1 cải tiến ở `codebase/agent.py`, commit `555cbc7`):** thêm câu hỏi giai đoạn thủ thuật chảy máu (Q7), hỏi tình trạng bệnh nền ngoài bảng (Q6), nêu cặp thuốc chưa có quy tắc và giới hạn tra tác dụng phụ (ℹ️) → nhóm lỗi giảm từ 4 còn 1 câu (B11, B12, B15 đạt), nâng tổng điểm từ **23/27 (85%) → 26/27 (96%)**, `hoi_lai_khi_thieu` từ **4/6 → 6/6**, không câu nào tụt điểm.
+- **Còn lại:** B13 chưa nhắc ưu tiên khám trực tiếp sớm cho ca nhiễm trùng cấp (viêm mô tế bào); viết tắt `"ibu"` ở B14 chưa có trong từ điển chốt trước `run-1`; bộ 27 câu chưa tách tập held-out riêng (chi tiết tại [report.md](report.md)).
