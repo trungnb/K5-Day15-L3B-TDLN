@@ -20,8 +20,8 @@ import followups
 from ai import call_model
 from reply import Alert, Reply, render_text
 from texts import OUT_OF_SCOPE, TEXT  # noqa: F401  (bot và test đọc agent.TEXT)
-from tools import (check_clinical_risks, check_drug_interactions, fold, known_condition_with_status,
-                   normalize_entities, normalize_text, rule_behavior)
+from tools import (check_clinical_risks, check_drug_interactions, fold, known_condition_base,
+                   known_condition_with_status, normalize_entities, normalize_text, rule_behavior)
 from tracing import note
 
 # Cải tiến lượt 2 (nhóm lỗi "không chỉ rõ phần còn thiếu", B11–B13, B15): phát hiện bằng so khớp chữ đã chuẩn hoá.
@@ -313,10 +313,12 @@ def _checked_groups(n, said, asking_roles=False, skip_drugs=False):
     định danh. Nhóm trống: BS không ghi → "không khai"; BS có ghi nhưng không có trong bảng → "chưa nhận ra (xem ❔)".
     asking_roles=True (tình huống 3, đang hỏi lại Q1): không tự gán thuốc là "đang dùng" — ghi "Thuốc đã nêu";
     chỉ in nhóm BS có ghi (đang hỏi lại nên "không khai" chỉ thêm nhiễu); skip_drugs=True khi câu hỏi đã nêu tên thuốc."""
-    unknown_ids = {e["canonical_id"] for e in n["unknown_role_drugs"]}
+    unknown_ids = {e["canonical_id"] for e in n["unknown_role_drugs"] + n["procedure_drugs"]}
+    # Bệnh có tên trong bảng mà BS chưa ghi / ghi tình trạng ngoài bảng ("cao huyết áp") → in đúng chữ BS viết.
+    conditions = _names(n["conditions"]) + [p for p in n["unmapped"] if known_condition_base(p)]
     if asking_roles:
         groups = [
-            ("Bệnh nền", "conditions", _names(n["conditions"])),
+            ("Bệnh nền", "conditions", conditions),
             ("Dị ứng", "allergies", _names(n["allergies"])),
             ("Thuốc đã nêu (chưa rõ đang dùng hay định kê)", "baseline_drugs", _names(n["baseline_drugs"])),
         ]
@@ -325,10 +327,10 @@ def _checked_groups(n, said, asking_roles=False, skip_drugs=False):
         return [(label, ", ".join(names) if names else TEXT["NOT_RECOGNIZED"])
                 for label, key, names in groups if names or said[key]]
     groups = [
-        ("Bệnh nền", "conditions", _names(n["conditions"])),
+        ("Bệnh nền", "conditions", conditions),
         ("Dị ứng", "allergies", _names(n["allergies"])),
         ("Thuốc đang dùng", "baseline_drugs", _names(n["baseline_drugs"], exclude=unknown_ids)),
-        ("Thủ thuật", "planned_procedures", _names(n["procedure_groups"])),
+        ("Thủ thuật", "planned_procedures", _names(n["procedure_groups"]) + _names(n["procedure_drugs"])),
         ("Thuốc định kê", "planned_drugs", _names(n["planned_drugs"], exclude=unknown_ids)),
     ]
     parts = [(label, ", ".join(names) if names else TEXT["NOT_RECOGNIZED"] if said[key] else TEXT["NOT_DECLARED"])
@@ -366,8 +368,9 @@ def _pairs_without_rule(n: dict, rules: list, limit: int = 3) -> list:
     Ca đã có cảnh báo DDI thì không liệt kê cặp khác (tránh nhiễu, B10). Trả tối đa `limit` cặp."""
     if any(r["rule_id"].startswith("DDI-") for r in rules):
         return []
-    planned = n["planned_drugs"]
-    others = list(planned) + [d for d in n["baseline_drugs"] if d not in planned]
+    # Thuốc tê / co mạch của thủ thuật đã được tra; liệt kê "chưa có quy tắc" cho chúng chỉ thêm nhiễu (log VM 28/11).
+    planned = [d for d in n["planned_drugs"] if d not in n["procedure_drugs"]]
+    others = list(planned) + [d for d in n["baseline_drugs"] if d not in planned and d not in n["procedure_drugs"]]
     pairs, seen = [], set()
     for p in planned:
         for q in others:
@@ -481,7 +484,8 @@ def _needs_anticoag(c: _Case) -> bool:
     """Q8: thủ thuật chảy máu, chưa khai thuốc đang dùng (kể cả thuốc chưa rõ vai), BS không ghi "không dùng thuốc",
     và chưa có rule nào đã hỏi đúng ý này (asks_anticoagulant trong data/rule_behavior.csv)."""
     return (c.bleeding_procedure
-            and not (c.n["baseline_drugs"] or c.said["baseline_drugs"] or c.n["unknown_role_drugs"])
+            and not ([d for d in c.n["baseline_drugs"] if d not in c.n["procedure_drugs"]]
+                     or c.said["baseline_drugs"] or c.n["unknown_role_drugs"])
             and not _NO_MEDS.search(fold(c.text))
             and not any(rule_behavior(r["rule_id"])["asks_anticoagulant"] for r in c.rules))
 
@@ -519,7 +523,10 @@ def _reminder(questions: list, has_background: bool, bad_conditions: list) -> tu
     Hết câu hỏi mới nhắc Q4 — Q4 chỉ nhắc (BS gửi lại cả ca), không giữ ca."""
     if questions:
         key = questions[0]
-        return key, TEXT[key].format(names=", ".join(bad_conditions)) if key == "Q6" else TEXT[key], True
+        if key == "Q6":   # tên bệnh đã có trong bảng, chỉ thiếu tình trạng → chỉ hỏi mức kiểm soát
+            key = "Q6_STATUS" if all(known_condition_base(c) for c in bad_conditions) else "Q6"
+            return key, TEXT[key].format(names=", ".join(bad_conditions)), True
+        return key, TEXT[key], True
     return ("", "", False) if has_background else ("Q4", TEXT["Q4"], False)
 
 

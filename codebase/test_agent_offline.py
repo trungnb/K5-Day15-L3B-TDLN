@@ -424,9 +424,62 @@ class GeneralMatching2811(unittest.TestCase):
             self.assertIn("❔ Em chưa có quy tắc cho: " + condition, out)   # vẫn hiện, BS tự đánh giá
             self.assertNotIn("✅", out)
 
-    def test_q6_still_asked_when_name_unknown_or_status_missing(self):
-        for condition in ("th áp đang điều trị", "đặt stent 6 tháng", "tăng huyết áp"):
+    def test_q6_still_asked_when_name_unknown(self):
+        for condition in ("th áp đang điều trị", "đặt stent 6 tháng"):
             self.assertIn(self.Q6_MARK, self._case(condition)["output"], condition)
+
+
+class LogCase1228(unittest.TestCase):
+    """Log VM 28/11 12:28: "Bn 65t sử dụng amlodipin cao huyết áp. Dự kiến điều trị tuỷ r16 gây tê bằng lidocain.
+    Kê đơn: vigentin + paracetamol". (1) Bệnh có tên trong bảng nhưng chưa ghi tình trạng → chỉ hỏi mức kiểm soát,
+    không nói "chưa nhận ra". (2) Thuốc tê / co mạch là thuốc của thủ thuật, không phải thuốc định kê: không liệt kê
+    trong cặp "chưa có quy tắc", không hiện ở "Thuốc định kê"/"chưa rõ vai", nhưng vẫn được tra (DDI-020) và kéo theo
+    nhóm gây tê (CR-014)."""
+
+    TEXT = ("Bn 65t sử dụng amlodipin cao huyết áp. Dự kiến điều trị tuỷ r16 gây tê bằng lidocain. "
+            "Kê đơn: vigentin + paracetamol")
+
+    def test_known_condition_without_status_asks_only_status(self):
+        for condition in ("cao huyết áp", "tăng huyết áp", "THA"):
+            res = run("BN %s. Nhổ R48, kê paracetamol" % condition,
+                      _x(conditions=[condition], planned_procedures=["nhổ R48"], planned_drugs=["paracetamol"]))
+            out = res["output"]
+            self.assertNotIn("em chưa nhận ra", out, condition)
+            self.assertIn(agent.TEXT["Q6_STATUS"].format(names=condition), out, condition)
+            self.assertTrue(res["needs_more"], condition)
+            self.assertIn("Bệnh nền: %s ·" % condition, out, condition)   # tên đã nhận ra, không ghi "chưa nhận ra"
+
+    def test_anesthetic_in_procedure_is_not_a_planned_drug(self):
+        out = run(self.TEXT, _x(conditions=["cao huyết áp"], baseline_drugs=["amlodipin"],
+                                planned_procedures=["điều trị tuỷ r16", "gây tê bằng lidocain"],
+                                planned_drugs=["vigentin", "paracetamol"]))["output"]
+        self.assertNotIn("Lidocaine +", out)
+        self.assertNotIn("+ Lidocaine", out)
+        checked = next(l for l in out.splitlines() if l.startswith("Đã đối chiếu"))
+        self.assertNotIn("chưa rõ vai", checked)
+        planned = checked.split("Thuốc định kê:")[1]
+        self.assertNotIn("Lidocaine", planned)
+        self.assertIn("Lidocaine", checked.split("Thủ thuật:")[1].split("·")[0])
+
+    def test_anesthetic_named_only_in_text_is_not_listed_in_pairs(self):
+        out = run("BN tăng huyết áp chưa kiểm soát. Nội nha R16, dùng lidocain. Kê paracetamol",
+                  _x(conditions=["tăng huyết áp chưa kiểm soát"], planned_procedures=["nội nha R16"],
+                     planned_drugs=["paracetamol"]))["output"]
+        self.assertEqual(section_of(out, "CR-014"), "HIGH")
+        self.assertNotIn("Lidocaine +", out)
+        self.assertNotIn("+ Lidocaine", out)
+
+    def test_anesthetic_is_not_a_drug_the_patient_takes(self):
+        # Thuốc tê không phải "thuốc đang dùng": thủ thuật chảy máu chưa khai thuốc nền vẫn phải hỏi Q8.
+        out = run("Nhổ R48 gây tê lidocain, kê paracetamol",
+                  _x(planned_procedures=["nhổ R48", "gây tê lidocain"], planned_drugs=["paracetamol"]))["output"]
+        self.assertIn(agent.TEXT["Q8"], out)
+
+    def test_vasoconstrictor_still_checked_against_baseline_drugs(self):
+        out = run("BN đang uống propranolol. Nhổ R48, gây tê Lignospan. Kê paracetamol",
+                  _x(baseline_drugs=["propranolol"], planned_procedures=["nhổ R48", "gây tê Lignospan"],
+                     planned_drugs=["paracetamol"]))["output"]
+        self.assertEqual(section_of(out, "DDI-020"), "HIGH")
 
 
 class ExtractPrompt(unittest.TestCase):

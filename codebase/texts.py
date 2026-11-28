@@ -19,6 +19,7 @@ TEXT = {
     "Q5": "BN dị ứng thuốc tê. Thủ thuật này có gây tê không ạ? Có thì nhắn \"có gây tê\" để em kiểm.",
     "Q6": "Bệnh nền \"{names}\" em chưa nhận ra. Anh/chị ghi rõ tên bệnh và tình trạng (ổn định chưa, đang điều trị gì, "
           "chỉ số gần nhất nếu có) để em kiểm.",
+    "Q6_STATUS": "BN có \"{names}\": đã kiểm soát ổn định chưa (chỉ số gần nhất nếu có)? Anh/chị nhắn thêm để em kiểm.",
     "Q7": "Ca đang chuẩn bị hay đang làm thủ thuật, có chảy máu khó cầm không ạ?",
     # Trung chốt 28/11: thủ thuật chảy máu mà chưa khai thuốc đang dùng → luôn hỏi (stent, van tim, đột quỵ… không cần luật riêng).
     "Q8": "BN có dùng thuốc chống đông hoặc kháng tiểu cầu không? Có thì nhắn tên thuốc để em kiểm.",
