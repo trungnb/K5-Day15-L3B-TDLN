@@ -74,13 +74,42 @@ def _alias_index():
 # soát" và "tăng huyết áp đang ổn định" cùng gốc "tang huyet ap". Dùng để biết BS đã ghi tên bệnh ĐÃ CÓ trong bảng
 # kèm tình trạng, chỉ là bảng chưa có quy tắc cho tình trạng đó — khi ấy không hỏi lại Q6 (agent.py).
 PROCEDURE_DRUG_CLASSES = frozenset({"local_anesthetic", "vasoconstrictor"})
-# Tên NHÓM thuốc khi chưa biết tên thuốc ("uống chống đông", "thuốc kháng tiểu cầu"; log VM 28/11 14:59) → nhóm thuốc
-# cụ thể thay thế nó: có tên thuốc cụ thể thì bỏ thực thể nhóm (CR-022 / CR-023 chỉ dành cho lúc chưa rõ tên).
-UNSPECIFIED_DRUG_CLASSES = {"anticoagulant_unspecified": frozenset({"vka", "doac", "lmwh"}),
-                            "antiplatelet_unspecified": frozenset({"antiplatelet", "p2y12_antiplatelet"})}
+# Tên NHÓM thuốc khi chưa biết tên thuốc ("uống chống đông", "thuốc kháng tiểu cầu"; log VM 28/11 14:59) → các nhóm
+# thuốc cụ thể thay thế nó: có tên thuốc cụ thể thì bỏ thực thể nhóm (CR-022 / CR-023 chỉ dành cho lúc chưa rõ tên).
+# BS hay gọi chung aspirin / clopidogrel là "chống đông" (log VM 15:29: "chống đông" rồi "đang uống aspirin"), nên tên
+# thuốc chống huyết khối nào cũng trả lời được câu hỏi tên, cho cả hai nhóm.
+# "NSAID" (log VM 15:34: BN mang thai + "kê NSAID được không") mang drug_class nsaid để rule theo nhóm (CR-013, DDI-001…)
+# chạy, nên khoá là canonical_id, không phải drug_class.
+ANTITHROMBOTIC_CLASSES = frozenset({"vka", "doac", "lmwh", "antiplatelet", "p2y12_antiplatelet"})
+UNSPECIFIED_DRUG_CLASSES = {"anticoagulant_unspecified": ANTITHROMBOTIC_CLASSES,
+                            "antiplatelet_unspecified": ANTITHROMBOTIC_CLASSES,
+                            "nsaid_unspecified": frozenset({"nsaid", "nsaid_cox2"})}
 STATUS_MARK = re.compile(r"\b(?:on dinh|kiem soat|dieu tri)\b")
 _STATUS_WORDS = re.compile(r"\b(?:on dinh|kiem soat|dieu tri|tot|kem|dang|da|chua|khong)\b")
 
+
+# BS ghi rõ BN không có cả nhóm (PR #54; dùng cả ở followups.new_patient) → mục "Đã đối chiếu" ghi "không có" thay "không khai", không nhắc Q4 (Trung chọn 28/11).
+# Chỉ khớp khi cụm phủ định đứng cuối một vế (tách theo , . ; ! ? xuống dòng), để "không bệnh tim", "không dị ứng thuốc
+# tê", "không dùng thuốc chống đông" — chỉ loại một bệnh / một nhóm — không bị tính là "không có"; "và / hay / với"
+# cũng tách vế. "Khoẻ mạnh" (không có "không/chưa" ngay trước) chỉ tính cho bệnh nền, không đóng Q8.
+_NEG = r"(?:khong|ko|k|chua)"
+_TAIL = r"(?: (?:gi|nao))?(?: (?:ca|het|nhe|a|dau))*$"
+_NONE_CLAUSE = {
+    "conditions": re.compile(r"(?<!khong )(?<!ko )(?<!k )(?<!chua )\bkhoe manh\b|\b%s (?:co )?(?:tien su )?(?:benh ly|benh nen|benh)%s"
+                             r"|\b(?:benh nen|benh ly) %s(?: co| ghi nhan)?$" % (_NEG, _TAIL, _NEG)),
+    "allergies": re.compile(r"\b%s (?:co )?(?:tien su )?di ung(?: thuoc)?%s|\bdi ung(?: thuoc)? %s(?: co)?$"
+                            % (_NEG, _TAIL, _NEG)),
+    "baseline_drugs": re.compile(r"\b%s (?:dung|uong|su dung|co) thuoc%s|\bthuoc (?:dang )?(?:dung|uong) %s(?: co)?$"
+                                 % (_NEG, _TAIL, _NEG)),
+}
+_CLAUSE_SPLIT = re.compile(r"[,.;!?\n]+")
+_WORD_SPLIT = re.compile(r"\b(?:va|hay|voi)\b")
+
+
+def declared_none(text: str) -> frozenset:
+    """Nhóm BS ghi rõ là BN không có: "conditions", "allergies", "baseline_drugs"."""
+    clauses = [p.strip() for c in _CLAUSE_SPLIT.split(text or "") for p in _WORD_SPLIT.split(fold(c))]
+    return frozenset(key for key, pattern in _NONE_CLAUSE.items() if any(pattern.search(c) for c in clauses))
 
 def condition_base(normalized_text):
     """Tên bệnh đã bỏ từ chỉ tình trạng (chuỗi đã chuẩn hoá)."""
@@ -252,7 +281,7 @@ def normalize_entities(extracted, raw_text):
         for entity in entities:
             if entity["entity_type"] == "drug":
                 # Tên nhóm chỉ nhận khi model xếp vào danh sách thuốc: quét chữ không hiểu "không dùng chống đông".
-                if entity["drug_class"] in UNSPECIFIED_DRUG_CLASSES:
+                if entity["canonical_id"] in UNSPECIFIED_DRUG_CLASSES:
                     continue
                 if entity["canonical_id"] not in known_drug_ids:
                     _add(out["unknown_role_drugs"], entity)
@@ -262,9 +291,10 @@ def normalize_entities(extracted, raw_text):
 
     # Thuốc tê / co mạch không rõ vai (thường nằm trong cụm thủ thuật, vd "gây tê bằng lidocain") là thuốc dùng
     # trong thủ thuật, không phải thuốc BN đang dùng hay thuốc kê (log VM 28/11). Vẫn kiểm ở cả hai phía (DDI-020).
-    named = {e["drug_class"] for k in ("baseline_drugs", "planned_drugs", "unknown_role_drugs") for e in out[k]}
+    named = {e["drug_class"] for k in ("baseline_drugs", "planned_drugs", "unknown_role_drugs") for e in out[k]
+             if e["canonical_id"] not in UNSPECIFIED_DRUG_CLASSES}
     for k in ("baseline_drugs", "planned_drugs", "unknown_role_drugs"):
-        out[k] = [e for e in out[k] if not UNSPECIFIED_DRUG_CLASSES.get(e["drug_class"], frozenset()) & named]
+        out[k] = [e for e in out[k] if not UNSPECIFIED_DRUG_CLASSES.get(e["canonical_id"], frozenset()) & named]
     out["procedure_drugs"] = [e for e in out["unknown_role_drugs"] if e["drug_class"] in PROCEDURE_DRUG_CLASSES]
     out["unknown_role_drugs"] = [e for e in out["unknown_role_drugs"] if e not in out["procedure_drugs"]]
     # Thuốc không rõ vai được kiểm ở cả hai phía để không sót tương tác.

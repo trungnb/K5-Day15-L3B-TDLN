@@ -294,3 +294,13 @@ lay tuy,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy
 lay tuy,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)
 dieu tri noi nha,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,non_invasive,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
 dieu tri noi nha,non_invasive_dental,Khám / Trám răng đơn giản / Nội nha / Lấy cao trên nướu,procedure,local_anesthesia,,Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)
+ampicillin,ampicillin,Ampicillin,drug,penicillin,DDInterID:DDInter89,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+ampicilin,ampicillin,Ampicillin,drug,penicillin,DDInterID:DDInter89,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+di ung ampicillin,penicillin,Dị ứng Penicillin / Beta-lactam,allergy,allergy_beta_lactam,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+di ung ampicilin,penicillin,Dị ứng Penicillin / Beta-lactam,allergy,allergy_beta_lactam,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+nsaid,nsaid_unspecified,NSAID (chưa rõ tên),drug,nsaid,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+thuoc nsaid,nsaid_unspecified,NSAID (chưa rõ tên),drug,nsaid,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+khang viem khong steroid,nsaid_unspecified,NSAID (chưa rõ tên),drug,nsaid,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+thuoc khang viem khong steroid,nsaid_unspecified,NSAID (chưa rõ tên),drug,nsaid,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+chong viem khong steroid,nsaid_unspecified,NSAID (chưa rõ tên),drug,nsaid,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
+thuoc chong viem khong steroid,nsaid_unspecified,NSAID (chưa rõ tên),drug,nsaid,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026
