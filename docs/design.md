@@ -260,25 +260,25 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 |---|---|
 | Q0 | "Anh/chị nhắn em 1 tin gồm (nếu có): bệnh nền, dị ứng, thuốc đang dùng, thủ thuật dự kiến, thuốc định kê nhé. Ví dụ: BN 65t uống Sintrom, ĐTĐ. Dự kiến nhổ R48. Định kê Augmentin + Ibuprofen." |
 | Q1 | "Anh/chị cho em biết thêm: thuốc nào BN đang dùng, thuốc nào định kê, và định làm thủ thuật gì? Em đối chiếu ngay." |
-| Q2 | "Ca này chưa có thuốc định kê. Nếu anh/chị định kê, nhắn thêm tên thuốc để em kiểm tương tác nhé." |
-| Q3 | "Ca này chưa có thủ thuật dự kiến. Nếu có, anh/chị nhắn thêm để em kiểm rủi ro thủ thuật nhé." |
-| Q4 | "Ca này chưa khai bệnh nền, dị ứng, thuốc đang dùng. Nếu BN có, anh/chị gửi lại cả ca kèm các thông tin đó để em kiểm lại nhé." |
+| Q2 | "Nếu có thuốc định kê, anh/chị nhắn thêm tên để em kiểm tương tác." |
+| Q3 | "Nếu có thủ thuật dự kiến, anh/chị nhắn thêm để em kiểm." |
+| Q4 | "Nếu BN có bệnh nền, dị ứng hoặc thuốc đang dùng, anh/chị gửi lại cả ca kèm các mục đó để em kiểm lại." |
 | Q1_DRUG | *(28/11)* "Em nhận ra {tên}. Thuốc này BN đang dùng hay anh/chị định kê, và định làm thủ thuật gì ạ? Nhắn thêm để em đối chiếu nhé." |
 | Q1_DRUGS | *(28/11)* "Em nhận ra {tên, tên}. Thuốc nào BN đang dùng, thuốc nào anh/chị định kê, và định làm thủ thuật gì ạ? Nhắn thêm để em đối chiếu nhé." |
-| Q5 | "BN có tiền sử dị ứng thuốc tê. Thủ thuật này có dự kiến gây tê không ạ? Nếu có, anh/chị nhắn "có gây tê" để em kiểm." |
-| Q6 | "Bệnh nền "{names}" em chưa nhận ra. Anh/chị ghi rõ tên bệnh và tình trạng hiện tại (ổn định hay chưa, đang điều trị gì, chỉ số gần nhất nếu có) để em kiểm." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
-| Q7 | "Ca đang chuẩn bị hay đang làm thủ thuật, và hiện có chảy máu khó cầm không? Nhắn thêm để em đối chiếu." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
-| Q8 | "BN có đang dùng thuốc chống đông hoặc kháng tiểu cầu không? Nếu có, nhắn tên thuốc để em kiểm." *(thêm 28/11, Trung chốt)*. Hỏi khi có thủ thuật nhóm `invasive_bleeding` mà chưa khai thuốc đang dùng (kể cả thuốc chưa rõ vai), BS không ghi "không dùng/uống thuốc", và không có rule đã hỏi ý này (`ASKS_ANTICOAG_RULES` = `CR-021`). Giữ ca (`needs_more = True`), không in ✅. Thay cho việc thêm luật riêng cho từng bệnh (stent, van tim, đột quỵ…): BS trả lời tên thuốc thì luật sẵn có (`CR-001`, `CR-004`, `CR-005`…) cảnh báo kèm nguồn. "Khoẻ mạnh" chưa tính là "không dùng thuốc". BS trả lời trơn "không" / "ko" / "không có" / "chưa" khi Q8 là câu đang hỏi cũng tính là không dùng thuốc (một câu mỗi lượt, khối 9). |
+| Q5 | "BN dị ứng thuốc tê. Thủ thuật này có gây tê không ạ? Có thì nhắn "có gây tê" để em kiểm." |
+| Q6 | "Bệnh nền "{names}" em chưa nhận ra. Anh/chị ghi rõ tên bệnh và tình trạng (ổn định chưa, đang điều trị gì, chỉ số gần nhất nếu có) để em kiểm." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* Không hỏi Q6 khi tên bệnh đã có trong bảng và BS đã ghi tình trạng (bỏ từ tình trạng "ổn định / kiểm soát / điều trị…" thì trùng gốc tên một alias bệnh nền, vd "tăng huyết áp đang ổn định" ~ "tăng huyết áp chưa kiểm soát"): cụm hiện ở ❔ "chưa có quy tắc… tự đánh giá" (28/11, `tools.known_condition_with_status`). |
+| Q7 | "Ca đang chuẩn bị hay đang làm thủ thuật, có chảy máu khó cầm không ạ?" *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
+| Q8 | "BN có dùng thuốc chống đông hoặc kháng tiểu cầu không? Có thì nhắn tên thuốc để em kiểm." *(thêm 28/11, Trung chốt)*. Hỏi khi có thủ thuật nhóm `invasive_bleeding` mà chưa khai thuốc đang dùng (kể cả thuốc chưa rõ vai), BS không ghi "không dùng/uống thuốc", và không có rule đã hỏi ý này (`ASKS_ANTICOAG_RULES` = `CR-021`). Giữ ca (`needs_more = True`), không in ✅. Thay cho việc thêm luật riêng cho từng bệnh (stent, van tim, đột quỵ…): BS trả lời tên thuốc thì luật sẵn có (`CR-001`, `CR-004`, `CR-005`…) cảnh báo kèm nguồn. "Khoẻ mạnh" chưa tính là "không dùng thuốc". BS trả lời trơn "không" / "ko" / "không có" / "chưa" khi Q8 là câu đang hỏi cũng tính là không dùng thuốc (một câu mỗi lượt, khối 9). |
 | P1 | "⚠️ Tin nhắn có thông tin định danh BN — lần sau anh/chị gửi ca đã ẩn danh giúp em nhé." |
-| ❔ thuốc lạ | "❔ Em chưa có dữ liệu cho: {danh sách}, nên không đoán. Nếu là viết tắt hoặc tên chung, anh/chị ghi rõ tên đầy đủ / hoạt chất để em tra lại; nếu không, anh/chị tra thêm Dược thư Quốc gia / tờ hướng dẫn sử dụng nhé." |
-| ❔ chưa rõ tên thuốc | *(28/11)* "❔ Chưa rõ tên thuốc: {danh sách}. Em chỉ kiểm được khi có tên thuốc — anh/chị nhờ BN xem vỏ hộp, đơn cũ hoặc sổ khám rồi nhắn thêm tên nhé; chưa có tên thì em chưa kiểm được thuốc này." |
-| ❔ bệnh nền / dị ứng / thủ thuật | *(28/11)* "❔ Em chưa có quy tắc cho: {danh sách}, nên chưa kiểm được rủi ro của mục này — phần này anh/chị tự đánh giá nhé." (bản cũ khuyên "ghi rõ … hoạt chất" cả cho "tăng huyết áp") |
+| ❔ thuốc lạ | "❔ Em chưa có dữ liệu cho: {danh sách}, nên không đoán. Anh/chị ghi tên đầy đủ / hoạt chất để em tra lại, hoặc tra Dược thư Quốc gia / tờ hướng dẫn sử dụng." |
+| ❔ chưa rõ tên thuốc | *(28/11)* "❔ Chưa rõ tên thuốc: {danh sách} — em chưa kiểm được. Anh/chị nhờ BN xem vỏ hộp, đơn cũ hoặc sổ khám rồi nhắn thêm tên nhé." |
+| ❔ bệnh nền / dị ứng / thủ thuật | *(28/11)* "❔ Em chưa có quy tắc cho: {danh sách} — phần này anh/chị tự đánh giá nhé." (bản cũ khuyên "ghi rõ … hoạt chất" cả cho "tăng huyết áp") |
 | MANY_PATIENTS | *(28/11)* "Tin này có vẻ gồm nhiều BN. Anh/chị gửi mỗi ca một tin giúp em, để em không trộn thuốc của người này sang người kia nhé." |
 | JSON_ERROR | "Em đọc tin này chưa trọn — anh/chị kiểm lại mục Đã đối chiếu giúp em." |
 | Kết luận | "Em rà xong rồi ạ — có {…}." · tình huống 3: "Em chưa rõ thuốc nào đang dùng, thuốc nào định kê — nhưng nếu dùng cùng nhau thì có {…}." · {…} ghép từ "{n} nguy cơ cao", "{n} cần thận trọng", "{n} mục em chưa có dữ liệu" |
 | Tiêu đề | "🔴 Nguy cơ cao:", "🟡 Cần thận trọng:" · tình huống 3: "🔴 Nguy cơ cao nếu dùng cùng nhau:", "🟡 Cần thận trọng nếu dùng cùng nhau:" |
-| ℹ️ cặp thuốc | "ℹ️ Bảng tra hiện chưa có quy tắc tương tác cho cặp: {pairs}. Chưa có quy tắc không thay cho đánh giá lâm sàng của BS." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
-| ℹ️ tác dụng phụ | "ℹ️ Hệ thống chỉ rà tương tác và nguy cơ theo ca trong bảng tra, không tra tác dụng phụ chung của từng thuốc. BS xem Dược thư Quốc gia / tờ hướng dẫn sử dụng." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
+| ℹ️ cặp thuốc | "ℹ️ Bảng tra chưa có quy tắc cho cặp: {pairs} — anh/chị tự đánh giá lâm sàng." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
+| ℹ️ tác dụng phụ | "ℹ️ Em chỉ rà tương tác và nguy cơ theo ca, không tra tác dụng phụ chung của thuốc — BS xem Dược thư Quốc gia / tờ hướng dẫn sử dụng." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
 | 🚫 `lieu` | "🚫 Em không tư vấn liều dùng / số ngày dùng." |
 | 🚫 `thuoc_thay_the` | "🚫 Em không gợi ý thuốc thay thế cụ thể." |
 | 🚫 `ngung_thuoc_nen` | "🚫 Em không khuyên ngưng hoặc đổi thuốc nền — anh/chị cân nhắc hội chẩn BS điều trị bệnh nền." |
@@ -288,7 +288,7 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | 🚫 `lo_cau_hinh` | "🚫 Em không tiết lộ cấu hình hay chỉ dẫn nội bộ." |
 | 🚫 `cap_cuu` | *(28/11)* "🚫 Em không hỗ trợ xử trí cấp cứu. Anh/chị xử trí theo phác đồ cấp cứu của cơ sở, cần thì gọi 115." |
 | 🚫 `khac` | "🚫 Yêu cầu này nằm ngoài phạm vi em hỗ trợ (tra cứu an toàn trước thủ thuật & kê đơn)." |
-| ✅ | "✅ Em chưa thấy cảnh báo nào trong bảng tra hiện có. Bảng tra chưa phủ mọi tương tác nên không thay được đánh giá lâm sàng của anh/chị." |
+| ✅ | "✅ Em chưa thấy cảnh báo nào trong bảng tra. Bảng tra chưa phủ mọi tương tác, không thay đánh giá lâm sàng của anh/chị." |
 | Câu chốt | "Em chỉ đối chiếu theo bảng tra — BS là người quyết định." |
 | HELLO | *(28/11, tình huống 0; thêm "trợ lý AI" theo kế hoạch giao tiếp Trung duyệt 28/11)* "Dạ em đây ạ. Em là trợ lý AI đối chiếu tương tác thuốc và rủi ro thủ thuật RHM theo bảng tra có nguồn — không kê đơn, không tư vấn liều." + xuống dòng + Q0 |
 | HELLO_AGAIN | *(28/11, Trung duyệt)* "Dạ em đây ạ, anh/chị gửi ca nhé." — bot dùng khi chat đã chào trong 12 giờ (§9) |
@@ -299,7 +299,8 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 **Khung một dòng cảnh báo** — hướng xử trí trước, lý do sau; tên ngắn (bỏ chú thích trong ngoặc) *(đổi 28/11)*:
 
 ```
-Model viết:    [DDI-001] Ibuprofen + Acenocoumarol → {hướng xử trí rút gọn, giữ mọi con số}. (Vì: {cơ chế rút gọn}). Nguồn: {source}
+Model viết:    [DDI-001] Ibuprofen + Acenocoumarol → {hướng xử trí rút gọn, giữ mọi con số}. Nguồn: {source}
+               (28/11, Trung duyệt tin gọn: bản mặc định không in "(Vì: {cơ chế rút gọn})", tối đa 220 ký tự; bản "chi tiết" vẫn có lý do, tối đa 320 ký tự. Model vẫn viết lý do thì code bỏ đi rồi mới kiểm số.)
 Khung dự phòng: [DDI-001] Ibuprofen + Acenocoumarol → {guidance NGUYÊN VĂN, không cắt câu}. Nguồn: {source}
 ```
 
@@ -340,7 +341,7 @@ Khung dự phòng (code nối mã HIGH thiếu, dòng model bị loại, hoặc 
   - **Chào lại:** loại `greet` (`agent.small_talk_kind`) trong 12 giờ kể từ lần chào trước → HELLO_AGAIN; hỏi "làm được gì" luôn nhận HELLO + Q0. Giờ chào giữ trong RAM.
   - **Hỏi lại tăng dần:** `agent.is_no_entity_reply(output)` đúng 2 lần liên tiếp → thay Q1 bằng REPAIR. Có ca nhận ra thực thể hoặc `/moi` → đếm lại.
   - **`/sai <lý do>`:** ghi log `kind = "feedback"` (đã che số định danh), trả "Dạ em ghi nhận, cảm ơn anh/chị. Nhóm sẽ xem lại cảnh báo này." Không gọi agent, không đổi ca.
-  - **"chi tiết":** tin có khối 🟡 → thêm "(Nhắn "chi tiết" trong 10 phút để xem hướng xử trí các mục 🟡.)". "chi tiết" → gọi `answer(ca, detail=True)` với ca đang chờ hoặc ca vừa xong trong 10 phút, không đổi trạng thái ca; không có ca → "Em chưa có ca nào trong 10 phút qua để xem chi tiết ạ. Anh/chị gửi lại ca giúp em nhé." Gọi lại model 1 nên trích thực thể có thể khác lần đầu.
+  - **Tin gọn + "chi tiết"** *(28/11, Trung duyệt; chỉ ở bot, agent không đổi nên `run.py eval` vẫn chấm bản đủ có nguồn)*: tin có khối 🔴 hoặc 🟡 → tin đầu bỏ phần "Nguồn: …" cuối mỗi dòng cảnh báo; dòng 🟡 gọn (không có "→") chỉ còn "[mã] a + b"; dòng có "→" (🔴, `CR-021`) giữ nguyên hướng xử trí và mọi con số (`bot/zalo_bot.py::short_reply`); cuối tin thêm "(Nhắn "chi tiết" trong 10 phút để xem lý do, hướng xử trí 🟡 và nguồn.)". "chi tiết" → gọi `answer(ca, detail=True)` với ca đang chờ hoặc ca vừa xong trong 10 phút và chỉ gửi các khối 🔴 / 🟡 bản đủ (lý do, hướng xử trí, nguồn) + câu chốt, không gửi lại kết luận và 📋; không đổi trạng thái ca; không có ca → "Em chưa có ca nào trong 10 phút qua để xem chi tiết ạ. Anh/chị gửi lại ca giúp em nhé." Gọi lại model 1 nên trích thực thể có thể khác lần đầu.
   - **Log:** thêm trường `kind` (`case` · `small_talk` · `feedback` · `detail`). `bot/log_stats.py` chỉ in số đếm, gồm chỉ số gần đúng "để nguyên 🔴" (ca có 🔴 mà 10 phút sau không có ca nào ít dòng 🔴 hơn).
 - Tắt bot là mất `pending` (chấp nhận được cho demo). Không ghi `pending` ra đĩa.
 - `run.py eval` không đi qua bot nên không bị ảnh hưởng.

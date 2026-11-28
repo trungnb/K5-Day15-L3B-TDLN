@@ -186,7 +186,7 @@ class SmallTalk(unittest.TestCase):
 class FollowUpAnswers(unittest.TestCase):
     def test_q5_tells_doctor_a_reply_the_merge_can_read(self):
         # Bot ghép "…\nBổ sung: <tin mới>" (design §9); "có" trơn không khớp alias thủ thuật, "gây tê" thì khớp.
-        self.assertIn("gây tê", agent.TEXT["Q5"].split("Nếu có", 1)[1])
+        self.assertIn("gây tê", agent.TEXT["Q5"].split("Có thì", 1)[1])
 
 
 class DrugOnly(unittest.TestCase):
@@ -261,7 +261,7 @@ class SeveralPatients(unittest.TestCase):
 
 
 
-ASK_ANTICOAG = "BN có đang dùng thuốc chống đông hoặc kháng tiểu cầu không? Nếu có, nhắn tên thuốc để em kiểm."
+ASK_ANTICOAG = "BN có dùng thuốc chống đông hoặc kháng tiểu cầu không? Có thì nhắn tên thuốc để em kiểm."
 
 
 class AskAnticoagulant2811(unittest.TestCase):
@@ -396,6 +396,34 @@ class OneQuestionPerTurn2811(unittest.TestCase):
         self.assertEqual(self._questions(res["output"]), [ASK_ANTICOAG])
 
 
+class GeneralMatching2811(unittest.TestCase):
+    """Log VM 28/11 — sửa tổng quát, không thêm từng alias: (1) tin xã giao viết liền không dấu cách ("Huongdan");
+    (2) bệnh nền đã biết tên và BS đã ghi tình trạng ("tăng huyết áp đang ổn định") thì không hỏi lại Q6."""
+
+    Q6_MARK = "em chưa nhận ra. Anh/chị ghi rõ"
+
+    def test_small_talk_without_spaces(self):
+        for text, kind in (("Huongdan", "help"), ("xinchao", "greet"), ("camon em", "thanks"), ("tambiet", "bye"),
+                           ("lamduocgi", "help")):
+            self.assertEqual(agent.small_talk_kind(text), kind, text)
+        self.assertIsNone(agent.small_talk_kind("nhorang"))
+
+    def _case(self, condition):
+        return run("BN %s. Nhổ R48, kê paracetamol" % condition,
+                   _x(conditions=[condition], planned_procedures=["nhổ R48"], planned_drugs=["paracetamol"]))
+
+    def test_known_condition_with_status_is_not_asked_again(self):
+        for condition in ("tăng huyết áp đang ổn định", "THA ổn định", "huyết áp đã kiểm soát tốt"):
+            out = self._case(condition)["output"]
+            self.assertNotIn(self.Q6_MARK, out, condition)
+            self.assertIn("❔ Em chưa có quy tắc cho: " + condition, out)   # vẫn hiện, BS tự đánh giá
+            self.assertNotIn("✅", out)
+
+    def test_q6_still_asked_when_name_unknown_or_status_missing(self):
+        for condition in ("th áp đang điều trị", "đặt stent 6 tháng", "tăng huyết áp"):
+            self.assertIn(self.Q6_MARK, self._case(condition)["output"], condition)
+
+
 class ExtractPrompt(unittest.TestCase):
     def test_emergency_flag_points_to_emergency_care_and_keeps_checking(self):
         res = run("BN uống Sintrom, nhổ R48 xong chảy máu không cầm, kê thêm gì?",
@@ -526,6 +554,35 @@ class Communication2811(unittest.TestCase):
         self.assertIn("nếu dùng cùng nhau", out)
         line = [l for l in out.splitlines() if "[DDI-029]" in l][0]
         self.assertIn("Nguồn:", line)
+
+
+class ConciseReply2811(unittest.TestCase):
+    """Trung duyệt 28/11: tin trả lời gọn hơn nhưng giữ mã, cặp, hướng xử trí và nguồn. Lý do "(Vì: …)" của dòng 🔴
+    chỉ in ở bản "chi tiết"; câu hỏi cuối tin không nhắc lại điều mục "Đã đối chiếu" đã ghi ("không khai")."""
+
+    @staticmethod
+    def _model2(rules):
+        return {"lines": {r["rule_id"]: "[%s] %s + %s → %s. (Vì: lý do mẫu)" % (
+            r["rule_id"], r["a"], r["b"], r["guidance"].rstrip(" .")) for r in rules}}
+
+    def test_high_line_drops_reason_but_keeps_action_and_source(self):
+        out = run(EXAMPLE, EXAMPLE_X, model2=self._model2)["output"]
+        line = next(l for l in out.splitlines() if "[CR-001]" in l)
+        self.assertNotIn("Vì:", out)
+        self.assertIn("INR < 4", line)
+        self.assertIn("Nguồn:", line)
+
+    def test_detail_keeps_reason(self):
+        out = run(EXAMPLE, EXAMPLE_X, model2=self._model2, detail=True)["output"]
+        self.assertIn("(Vì: lý do mẫu)", out)
+
+    def test_questions_do_not_repeat_not_declared(self):
+        x = dict(HEALTHY_X, planned_drugs=[])
+        out = run("BN 25t khoẻ mạnh, nhổ R38", x)["output"]
+        self.assertIn("Thuốc định kê: không khai", out)
+        self.assertNotIn("chưa có thuốc định kê", out)
+        for key in ("Q2", "Q3", "Q4"):
+            self.assertFalse(agent.TEXT[key].startswith("Ca này chưa"), key)
 
 
 if __name__ == "__main__":

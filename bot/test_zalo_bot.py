@@ -767,26 +767,58 @@ class ZaloBotCommunicationTests(unittest.TestCase):
         self.assertIn("chat_a", bot_mod._last_case)
         self.assertEqual(self._log_records()[-1]["kind"], "detail")
 
-    def test_detail_sends_only_moderate_block(self) -> None:
-        # Tự thử 28/11/2026: "chi tiết" in lại cả bản tin (🔴, 📋…) nên BS phải đọc lại từ đầu.
-        self.output = "Em rà xong rồi ạ — có 1 nguy cơ cao, 1 cần thận trọng.\n🟡 Cần thận trọng:\n- [DDI-029] a. Nguồn: b."
-        self.detail_output = "\n".join([
-            "Em rà xong rồi ạ — có 1 nguy cơ cao, 1 cần thận trọng.",
-            "🔴 Nguy cơ cao:", "- [DDI-001] Ibuprofen + Warfarin → Tránh. Nguồn: DDInter.",
-            "🟡 Cần thận trọng:", "- [DDI-029] Paracetamol + Warfarin → Dùng ngắn ngày nhất có thể. Nguồn: DDInter.",
-            "📋 Em đã đối chiếu: Thuốc đang dùng: Warfarin",
-            bot_mod.AGENT_TEXT["FOOTER"]])
+    FULL = "\n".join([
+        "Em rà xong rồi ạ — có 1 nguy cơ cao, 1 cần thận trọng.",
+        "🔴 Nguy cơ cao:", "- [DDI-001] Ibuprofen + Warfarin → Tránh phối hợp, theo dõi INR. Nguồn: DDInter (Major: X).",
+        "🟡 Cần thận trọng:", "- [DDI-029] Paracetamol + Warfarin: tăng INR. Nguồn: DDInter (Moderate: Y).",
+        "Đã đối chiếu — Bệnh nền: không khai · Thuốc đang dùng: Warfarin (kháng vitamin K)",
+        "Em chỉ đối chiếu theo bảng tra — BS là người quyết định."])
+
+    def test_first_reply_is_short_without_sources(self) -> None:
+        # Trung duyệt 28/11: tin đầu gọn (mã, cặp, hướng xử trí 🔴 giữ nguyên), nguồn đầy đủ để ở "chi tiết".
+        self.output = self.FULL
+        reply = "\n".join(self._send("BN uống warfarin, kê Alaxan"))
+        self.assertNotIn("Nguồn:", reply)
+        self.assertIn("- [DDI-001] Ibuprofen + Warfarin → Tránh phối hợp, theo dõi INR.", reply)
+        self.assertIn("- [DDI-029] Paracetamol + Warfarin\n", reply)   # 🟡 gọn: chỉ mã + cặp, nguy cơ ở "chi tiết"
+        self.assertNotIn("tăng INR", reply)
+        for keep in ("Em rà xong", "📋 Em đã đối chiếu:", "Warfarin (kháng vitamin K)", bot_mod.AGENT_TEXT["FOOTER"],
+                     bot_mod.DETAIL_HINT):
+            self.assertIn(keep, reply)
+
+    def test_moderate_line_with_action_keeps_it(self) -> None:
+        # CR-021 in đủ hướng xử trí ("→ hỏi thuốc chống đông") — tin đầu không được cắt mất hành động.
+        self.output = "🟡 Cần thận trọng:\n- [CR-021] Rung nhĩ + Nhổ răng → Hỏi thuốc chống đông. Nguồn: c."
+        reply = self._send("BN rung nhĩ, nhổ R48")[-1]
+        self.assertIn("- [CR-021] Rung nhĩ + Nhổ răng → Hỏi thuốc chống đông.", reply)
+
+    def test_red_only_reply_also_offers_detail(self) -> None:
+        self.output = "🔴 Nguy cơ cao:\n- [DDI-001] a → b. Nguồn: c."
+        reply = self._send("BN uống warfarin, kê ibuprofen")[-1]
+        self.assertIn(bot_mod.DETAIL_HINT, reply)
+        self.assertNotIn("Nguồn:", reply)
+
+    def test_detail_sends_all_alert_blocks_with_sources(self) -> None:
+        # Tự thử 28/11/2026: "chi tiết" in lại cả bản tin (kết luận, 📋…) nên BS phải đọc lại → chỉ gửi khối cảnh báo.
+        self.output = self.FULL
+        self.detail_output = self.FULL.replace("theo dõi INR.", "theo dõi INR. (Vì: NSAID ức chế tiểu cầu).")
         self._send("BN uống warfarin, kê Alaxan")
         detail = "\n".join(self._send("chi tiết"))
-        self.assertTrue(detail.startswith("🟡 Cần thận trọng:"), detail)
-        self.assertIn("[DDI-029] Paracetamol + Warfarin → Dùng ngắn ngày nhất có thể", detail)
-        self.assertIn(bot_mod.AGENT_TEXT["FOOTER"], detail)
-        for gone in ("DDI-001", "Em rà xong", "📋"):
+        self.assertTrue(detail.startswith("🔴 Nguy cơ cao:"), detail)
+        for keep in ("(Vì: NSAID ức chế tiểu cầu). Nguồn: DDInter (Major: X).", "[DDI-029] Paracetamol + Warfarin",
+                     "Nguồn: DDInter (Moderate: Y).", bot_mod.AGENT_TEXT["FOOTER"]):
+            self.assertIn(keep, detail)
+        for gone in ("Em rà xong", "📋", "Đã đối chiếu"):
             self.assertNotIn(gone, detail)
 
-    def test_no_moderate_no_detail_hint(self) -> None:
-        self.output = "🔴 Nguy cơ cao:\n- [DDI-001] a. Nguồn: b."
-        self.assertNotIn(bot_mod.DETAIL_HINT, self._send("BN uống warfarin, kê ibuprofen")[-1])
+    def test_detail_keeps_conditional_headers(self) -> None:
+        self.output = self.detail_output = "🔴 Nguy cơ cao nếu dùng cùng nhau:\n- [DDI-001] a → b. Nguồn: c."
+        self._send("ibuprofen, warfarin")
+        self.assertTrue(self._send("chi tiết")[0].startswith("🔴 Nguy cơ cao nếu dùng cùng nhau:"))
+
+    def test_no_alert_no_detail_hint(self) -> None:
+        self.output = "✅ Em chưa thấy cảnh báo nào trong bảng tra.\nEm chỉ đối chiếu theo bảng tra — BS là người quyết định."
+        self.assertNotIn(bot_mod.DETAIL_HINT, self._send("BN khoẻ, nhổ R38, kê paracetamol")[-1])
 
     def test_detail_without_recent_case(self) -> None:
         self.assertEqual(self._send("xem chi tiet"), [bot_mod.NO_DETAIL_TEXT])
