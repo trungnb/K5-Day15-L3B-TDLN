@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import functools
 import hashlib
@@ -20,6 +21,7 @@ from pathlib import Path
 import re
 import sys
 import tempfile
+import threading
 import time
 from typing import Any
 
@@ -33,6 +35,29 @@ if str(CODEBASE_DIR) not in sys.path:
 
 import followups  # noqa: E402
 import tracing  # noqa: E402
+
+
+class _ThreadCase:
+    """Thay `tracing._case` (khung, không sửa file) bằng bản riêng cho từng luồng: mỗi ca chạy trọn
+    begin→end trong một luồng của asyncio.to_thread, nên nhiều ca song song không ghi lẫn trace."""
+
+    def __init__(self) -> None:
+        self._local = threading.local()
+
+    def _d(self) -> dict:
+        d = getattr(self._local, "d", None)
+        if d is None:
+            d = self._local.d = {"id": None, "events": None, "t0": 0.0}
+        return d
+
+    def __getitem__(self, key: str) -> Any:
+        return self._d()[key]
+
+    def update(self, *args: Any, **kwargs: Any) -> None:
+        self._d().update(*args, **kwargs)
+
+
+tracing._case = _ThreadCase()
 from agent import TEXT as AGENT_TEXT, answer, small_talk_kind, small_talk_text  # noqa: E402  (agent -> ai.py nạp .env)
 from reply import Reply, render_chat, render_detail  # noqa: E402
 
@@ -99,8 +124,12 @@ ENV_ALLOWED_CHAT_IDS = {
     if part.strip()
 }
 
-# tracing dùng biến toàn cục nên chỉ cho phép một ca chạy qua answer() tại một thời điểm.
-_agent_lock = asyncio.Lock()
+# Số ca chạy agent cùng lúc (mỗi ca 1–3 lần gọi model): chỉnh theo hạn mức RPM của model. Chưa đo tải thật.
+AGENT_CONCURRENCY = max(1, int(os.environ.get("BOT_AGENT_CONCURRENCY") or "8"))
+_agent_slots = asyncio.Semaphore(AGENT_CONCURRENCY)
+_chat_locks: dict[str, asyncio.Lock] = {}   # tin cùng một chat xử lý lần lượt (giữ thứ tự ghép ca)
+_chat_users: dict[str, int] = {}            # số task đang giữ hoặc chờ khoá của chat; về 0 mới xoá khoá
+_inflight: set[asyncio.Task] = set()        # giữ tham chiếu task đang chạy để không bị GC
 _allowlist_lock = asyncio.Lock()
 _prompted_chats: set[str] = set()
 _failed_attempts: dict[str, list[float]] = {}
@@ -676,11 +705,12 @@ async def _reply_case(update: Update, chat_id: str, text: str) -> None:
     summary: dict[str, Any] = {}
     case_status = "new"
     try:
-        async with _agent_lock:
-            case_text, case_status = conv.compose(masked, time.monotonic())
+        # Không cần khoá ở đây: _spawn_update đã cho tin cùng chat chạy lần lượt (PR #50).
+        case_text, case_status = conv.compose(masked, time.monotonic())
+        async with _agent_slots:
             reply, summary = await asyncio.to_thread(run_agent, case_text)
-            conv.remember(case_text, reply, time.monotonic())
-            repeat_miss = conv.count_miss(reply)
+        conv.remember(case_text, reply, time.monotonic())
+        repeat_miss = conv.count_miss(reply)
     except Exception as exc:
         err_msg = redact(f"{type(exc).__name__}: {exc}")
         print(f"[error] {err_msg}")
@@ -729,6 +759,53 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await _reply_case(update, chat_id, text)
 
 
+async def _process_in_chat_order(app: Any, update: Update) -> None:
+    key = str(_extract_chat_id(update) or "")
+    lock = _chat_locks.setdefault(key, asyncio.Lock())
+    _chat_users[key] = _chat_users.get(key, 0) + 1
+    try:
+        async with lock:
+            await app.process_update(update)
+    except Exception as exc:   # handler đã _guarded; đây chỉ chặn lỗi lọt ra từ chính SDK
+        print(f"[error] process_update: {redact(f'{type(exc).__name__}: {exc}')}")
+    finally:
+        # Không dựa vào lock.locked(): vừa nhả khoá thì task chờ kế tiếp chưa kịp giữ lại, xoá lúc đó
+        # sẽ làm tin tới sau tạo khoá mới và chạy chồng (review PR #50).
+        _chat_users[key] -= 1
+        if _chat_users[key] == 0:
+            _chat_users.pop(key, None)
+            _chat_locks.pop(key, None)
+
+
+def _spawn_update(app: Any, update: Update) -> asyncio.Task:
+    """Chạy mỗi tin thành một task riêng: chat khác nhau song song, cùng chat lần lượt."""
+    task = asyncio.create_task(_process_in_chat_order(app, update))
+    _inflight.add(task)
+    task.add_done_callback(_inflight.discard)
+    return task
+
+
+async def _poll_forever(app: Any) -> None:
+    """Thay app.run_polling(): vòng của SDK `await process_update` từng tin một, 200 BS nhắn cùng lúc
+    sẽ phải xếp hàng. Ở đây lấy tin rồi giao task ngay, quay lại lấy tin kế tiếp."""
+    asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(max_workers=AGENT_CONCURRENCY))
+    await app.bot.initialize()
+    try:
+        while True:
+            try:
+                update = await app.bot.get_update(timeout=30)
+            except Exception as exc:
+                print(f"[warn] lấy tin thất bại: {redact(f'{type(exc).__name__}: {exc}')}")
+                await asyncio.sleep(1)
+                continue
+            if update:
+                _spawn_update(app, update)
+            else:
+                await asyncio.sleep(1)
+    finally:
+        await app.bot.shutdown()
+
+
 def main() -> None:
     if not TOKEN:
         sys.exit(
@@ -748,9 +825,9 @@ def main() -> None:
     print(
         f"Zalo Bot RHM đang chạy (polling) · allowlist={len(ALLOWED_CHAT_IDS)} "
         f"(env={len(ENV_ALLOWED_CHAT_IDS)}, saved={len(SAVED_CHAT_IDS)}) · "
-        f"invite={invite_state} · model={provider}/{model_name}"
+        f"invite={invite_state} · model={provider}/{model_name} · concurrency={AGENT_CONCURRENCY}"
     )
-    app.run_polling()
+    asyncio.run(_poll_forever(app))
 
 
 if __name__ == "__main__":

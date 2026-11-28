@@ -492,5 +492,78 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         self.assertEqual(bot_mod.mask_identifiers(text), (text, False))
 
 
+class ZaloBotConcurrencyTests(unittest.TestCase):
+    """Nhiều BS nhắn cùng lúc: chat khác nhau chạy song song, cùng chat giữ thứ tự, trace không lẫn."""
+
+    def test_parallel_run_agent_keeps_separate_traces(self) -> None:
+        import threading
+        barrier = threading.Barrier(2)
+
+        @bot_mod.tracing.model_call
+        def fake_model(tag: str) -> dict:
+            barrier.wait(timeout=5)   # ép 2 ca chồng lên nhau trong lúc đang ghi trace
+            return {"text": tag, "model": "fake", "tokens_in": 1, "tokens_out": 1}
+
+        def fake_answer(text: str) -> dict:
+            fake_model(text)
+            return {"reply": _text_reply(text)}
+
+        async def go():
+            return await asyncio.gather(asyncio.to_thread(bot_mod.run_agent, "a"),
+                                        asyncio.to_thread(bot_mod.run_agent, "b"))
+
+        with patch.object(bot_mod, "answer", side_effect=fake_answer):
+            results = asyncio.run(go())
+        self.assertEqual([r[1]["model_calls"] for r in results], [1, 1])
+
+    def test_dispatch_parallel_across_chats_ordered_within_chat(self) -> None:
+        events: list[tuple[str, str, str]] = []
+
+        class _App:
+            async def process_update(self, update) -> None:
+                events.append(("start", update.message.chat.id, update.message.text))
+                await asyncio.sleep(0.2)
+                events.append(("end", update.message.chat.id, update.message.text))
+
+        async def go():
+            app = _App()
+            t0 = time.monotonic()
+            for chat, text in (("A", "1"), ("A", "2"), ("B", "1")):
+                bot_mod._spawn_update(app, _FakeUpdate(chat, text))
+            await asyncio.gather(*list(bot_mod._inflight))
+            return time.monotonic() - t0
+
+        elapsed = asyncio.run(go())
+        self.assertLess(elapsed, 0.55)   # A1→A2 nối tiếp (0.4s), B chạy song song; tuần tự sẽ là 0.6s
+        a = [(k, t) for k, c, t in events if c == "A"]
+        self.assertEqual(a, [("start", "1"), ("end", "1"), ("start", "2"), ("end", "2")])
+        self.assertLess(events.index(("start", "B", "1")), events.index(("end", "A", "1")))
+
+    def test_third_message_waits_after_lock_handoff(self) -> None:
+        """Tin 3 cùng chat tới đúng lúc tin 1 vừa nhả khoá cho tin 2: không được chạy chồng tin 2."""
+        overlaps: list[tuple[str, set[str]]] = []
+        running: set[str] = set()
+
+        class _App:
+            async def process_update(self, update) -> None:
+                text = update.message.text
+                if running:
+                    overlaps.append((text, set(running)))
+                running.add(text)
+                await asyncio.sleep(0.1)
+                running.discard(text)
+
+        async def go():
+            app = _App()
+            bot_mod._spawn_update(app, _FakeUpdate("A", "1"))
+            bot_mod._spawn_update(app, _FakeUpdate("A", "2"))
+            await asyncio.sleep(0.12)   # tin 1 xong, tin 2 đang giữ khoá
+            bot_mod._spawn_update(app, _FakeUpdate("A", "3"))
+            await asyncio.gather(*list(bot_mod._inflight))
+
+        asyncio.run(go())
+        self.assertEqual(overlaps, [])
+
+
 if __name__ == "__main__":
     unittest.main()
