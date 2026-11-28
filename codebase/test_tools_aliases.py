@@ -48,6 +48,10 @@ class AliasProposals2811Tests(unittest.TestCase):
         self.assertIn(("ibuprofen", "nsaid"), _ids("kê ibu"))
         self.assertIn(("metronidazole", "nitroimidazole"), _ids("kê metro"))
 
+    def test_misspelled_warfarin(self):
+        # Log VM 28/11: BS gõ "wafarin" → bot không nhận ra, mất cảnh báo warfarin + nhổ răng / ibuprofen.
+        self.assertIn(("warfarin", "vka"), _ids("BN đang uống wafarin. Dự kiến nhổ răng khôn."))
+
     def test_other_names_of_known_procedures(self):
         cases = {"tooth extraction": ("extraction", "invasive_bleeding"), "Chích áp xe": ("abscess_drainage",
                  "invasive_bleeding"), "dẫn lưu áp xe": ("abscess_drainage", "invasive_bleeding"),
@@ -85,7 +89,7 @@ class AliasProposals2811Tests(unittest.TestCase):
                               .open(encoding="utf-8-sig"))
         for row in rows:
             # Gồm cả dòng local_anesthesia sinh kèm cho "extraction" / "tooth extraction" (review PR #30).
-            if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy", "extraction", "tooth extraction", "af", "atrial fibrillation"}:
+            if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy", "extraction", "tooth extraction", "af", "atrial fibrillation", "wafarin"}:
                 # Dòng gây tê của áp xe / điều trị tủy ghi "Trung chốt 28/11/2026" (phân nhóm), không mượn nguồn 27/11.
                 expected = "Trung chốt 28/11/2026" if row["drug_class"] == "local_anesthesia" and row["canonical_id"] != "extraction" \
                     else "Trung duyệt 28/11/2026"
