@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+import functools
 import hashlib
 import hmac
 import json
@@ -53,6 +54,9 @@ INVITE_WINDOW_SEC = 600
 
 # Ghép tin bổ sung (docs/design.md §9): giữ ca đang chờ bổ sung trong RAM, không ghi ra đĩa.
 PENDING_TTL_SEC = 600
+SEND_ATTEMPTS = 3        # gửi lỗi thì thử lại (issue #32 A); mốc đề xuất, không có nguồn
+SEND_RETRY_SEC = 1.0
+ERROR_TEXT = "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút."
 MAX_PENDING_CHARS = 4000
 NEW_CASE_TEXT = "Đã bắt đầu ca mới."
 FOLLOW_UP_HINT = "(Hỏi tiếp cho BN này: nhắn \"thêm <tên thuốc / thủ thuật>\" trong 10 phút. BN khác: nhắn /moi.)"
@@ -477,18 +481,60 @@ async def _handle_unauthorized(
     )
 
 
+def _log_safely(**kwargs: Any) -> None:
+    """Ghi log nhưng không bao giờ ném lỗi (đĩa đầy, quyền ghi…): handler gọi hàm này trước khi gửi,
+    nên log lỗi không làm BS mất bản tin đã tính xong (review PR #33)."""
+    try:
+        log_turn(**kwargs)
+    except Exception as exc:
+        print(f"[warn] ghi log thất bại: {redact(f'{type(exc).__name__}: {exc}')}")
+
+
 async def _reply_chunks(update: Update, text: str) -> None:
+    """Gửi từng đoạn; lỗi gửi thì thử lại tối đa SEND_ATTEMPTS lần (issue #32 A). Hết lượt thì dừng, ghi
+    kind="send_error" để đối chiếu log khi BS báo miss tin. Lỗi do timeout sau khi Zalo đã nhận có thể làm BS
+    nhận một đoạn hai lần — chấp nhận, vì trùng ít hại hơn mất."""
     msg = update.message
     if msg is None:
         return
     for chunk in split_message(text):
+        for attempt in range(1, SEND_ATTEMPTS + 1):
+            try:
+                await msg.reply_text(chunk)
+                break
+            except Exception as exc:
+                err = redact(f"{type(exc).__name__}: {exc}")
+                print(f"[warn] gửi phản hồi thất bại (lần {attempt}/{SEND_ATTEMPTS}): {err}")
+                if attempt == SEND_ATTEMPTS:
+                    _log_safely(chat_id=str(_extract_chat_id(update) or ""), user_input="", output="",
+                                summary={}, error=err, kind="send_error")
+                    return
+                await asyncio.sleep(SEND_RETRY_SEC)
+
+
+def _guarded(handler):
+    """Bọc handler để lỗi bất ngờ không lọt ra `_polling_loop` của SDK (issue #32): SDK gọi `process_update`
+    ngoài khối try, một lỗi ở đó làm dừng hẳn polling và bot im với mọi tin tới khi khởi động lại."""
+
+    @functools.wraps(handler)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
-            await msg.reply_text(chunk)
+            await handler(update, context)
         except Exception as exc:
-            print(f"[warn] gửi phản hồi thất bại: {redact(f'{type(exc).__name__}: {exc}')}")
-            break
+            err = redact(f"{type(exc).__name__}: {exc}")
+            print(f"[error] handler {handler.__name__}: {err}")
+            _log_safely(chat_id=str(_extract_chat_id(update) or ""), user_input="", output="",
+                        summary={}, error=err, kind="handler_error")
+            try:
+                await _reply_chunks(update, ERROR_TEXT)
+            except Exception:
+                pass
+
+    wrapper._guarded = True
+    return wrapper
 
 
+@_guarded
 async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = _extract_chat_id(update)
     if chat_id is None:
@@ -503,6 +549,7 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _handle_unauthorized(update, chat_id, cmd or "/start", arg, raw_text)
 
 
+@_guarded
 async def on_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = _extract_chat_id(update)
     if chat_id is None:
@@ -520,6 +567,7 @@ async def on_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _handle_unauthorized(update, chat_id, "/join", arg, raw_text)
 
 
+@_guarded
 async def on_new_case(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = _extract_chat_id(update)
     if chat_id is None:
@@ -534,6 +582,7 @@ async def on_new_case(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await _reply_chunks(update, NEW_CASE_TEXT)
 
 
+@_guarded
 async def on_usage(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/huongdan: cách dùng đầy đủ (tin kích hoạt chỉ in bản ngắn)."""
     chat_id = _extract_chat_id(update)
@@ -545,6 +594,7 @@ async def on_usage(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _reply_chunks(update, USAGE_TEXT)
 
 
+@_guarded
 async def on_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/sai <lý do>: ghi góp ý vào log (đã che PII), không gọi agent, không đụng ca đang chờ / ca vừa xong."""
     chat_id = _extract_chat_id(update)
@@ -555,7 +605,7 @@ async def on_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _handle_unauthorized(update, chat_id, "", "", raw_text)
         return
     masked, _ = mask_identifiers(raw_text)
-    log_turn(chat_id=chat_id, user_input=masked, output=FEEDBACK_ACK, summary={}, kind="feedback")
+    _log_safely(chat_id=chat_id, user_input=masked, output=FEEDBACK_ACK, summary={}, kind="feedback")
     await _reply_chunks(update, FEEDBACK_ACK)
 
 
@@ -580,13 +630,14 @@ async def _reply_detail(update: Update, chat_id: str) -> None:
     except Exception as exc:
         err_msg = redact(f"{type(exc).__name__}: {exc}")
         print(f"[error] {err_msg}")
-        log_turn(chat_id=chat_id, user_input="chi tiết", output="", summary={}, error=err_msg, kind="detail")
+        _log_safely(chat_id=chat_id, user_input="chi tiết", output="", summary={}, error=err_msg, kind="detail")
         await _reply_chunks(update, "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút.")
         return
-    log_turn(chat_id=chat_id, user_input="chi tiết", output=output, summary=summary, kind="detail")
+    _log_safely(chat_id=chat_id, user_input="chi tiết", output=output, summary=summary, kind="detail")
     await _reply_chunks(update, output)
 
 
+@_guarded
 async def on_non_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Ảnh / sticker / tin thoại: bot chỉ đọc chữ — trả một câu hướng dẫn thay vì im lặng. Chat lạ thì bỏ qua."""
     chat_id = _extract_chat_id(update)
@@ -595,6 +646,7 @@ async def on_non_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await _reply_chunks(update, NON_TEXT_TEXT)
 
 
+@_guarded
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = _extract_chat_id(update)
     if chat_id is None or update.message is None or not update.message.text:
@@ -637,7 +689,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if last is not None and now - last <= GREET_AGAIN_SEC:
                 small_talk = AGENT_TEXT["HELLO_AGAIN"]
             _last_greet[chat_id] = now
-        log_turn(chat_id=chat_id, user_input=text, output=small_talk, summary={}, error="", kind="small_talk")
+        _log_safely(chat_id=chat_id, user_input=text, output=small_talk, summary={}, error="", kind="small_talk")
         await _reply_chunks(update, small_talk)
         return
 
@@ -668,7 +720,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as exc:
         err_msg = redact(f"{type(exc).__name__}: {exc}")
         print(f"[error] {err_msg}")
-        log_turn(chat_id=chat_id, user_input=masked, output="", summary=summary, error=err_msg)
+        _log_safely(chat_id=chat_id, user_input=masked, output="", summary=summary, error=err_msg)
         error_text = "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút."
         if case_status == "dropped":
             # Ca chờ đã bị xoá trong _compose_case: BS gửi lại tin bổ sung sẽ thành ca mới,
@@ -684,7 +736,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     elif case_status == "dropped":
         # Đặt lên đầu: BS phải thấy trước khi đọc dòng ✅ của ca thiếu dữ kiện.
         output = f"{DROPPED_NOTE}\n{output}"
-    log_turn(chat_id=chat_id, user_input=masked, output=output, summary=summary, error="",
+    _log_safely(chat_id=chat_id, user_input=masked, output=output, summary=summary, error="",
              drop_input=PII_WARNING in output)
     await _reply_chunks(update, output)
 
