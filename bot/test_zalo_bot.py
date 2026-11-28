@@ -599,7 +599,7 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         for needs_more in (False, True):
             for text in ("Thêm 1 ca: BN uống aspirin, nhổ R38", "Thêm BN nữa uống warfarin, nhổ R48",
                          "thêm ca mới: BN có thai, kê ibuprofen", "Bổ sung 1 bệnh nhân: BN uống Sintrom",
-                         "Thêm ca: BN 30t kê Augmentin"):
+                         "Thêm ca: BN 30t kê Augmentin", "thêm một bệnh nhân uống clopidogrel"):
                 with self.subTest(needs_more=needs_more, text=text):
                     self.needs_more = needs_more
                     self._send("chat_a", "/moi")
@@ -607,7 +607,8 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
                     self._send("chat_a", text)
                     self.assertEqual(self.agent_calls[-1], text)
         # Vẫn là bổ sung cho cùng BN: ghép như cũ.
-        for text in ("thêm cả paracetamol", "thêm BN dị ứng penicillin", "thêm: BN có dị ứng penicillin"):
+        for text in ("thêm cả paracetamol", "thêm BN dị ứng penicillin", "thêm: BN có dị ứng penicillin",
+                     "Bổ sung ca này: BN tiểu đường", "bổ sung BN có uống aspirin"):
             with self.subTest(text=text):
                 self.needs_more = False
                 self._send("chat_a", "/moi")
