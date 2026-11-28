@@ -86,7 +86,7 @@ def _check_alias_groups(
 ) -> int:
     """Kiểm thuốc phối hợp và thủ thuật có thêm nhóm gây tê.
 
-    - Một alias thủ thuật có thể giữ cùng canonical_id ở hai nhóm invasive_bleeding và local_anesthesia.
+    - Một alias thủ thuật có thể giữ cùng canonical_id ở hai nhóm: invasive_bleeding hoặc non_invasive, cộng local_anesthesia.
     - Alias khác chỉ được có nhiều dòng khi khai nhất quán các thành phần combo.
     - Khai combo: mỗi dòng phải là một thành phần của combo; thành phần nào đã có thực thể trong bảng
       thì phải có dòng cho alias đó (nếu không → lỗi, vì sẽ sót cảnh báo); thành phần chưa có thực thể
@@ -103,7 +103,8 @@ def _check_alias_groups(
         if "procedure" in types and len(rows) > 1:
             if not (
                 len(rows) == 2 and len(set(ids)) == 1 and types == {"procedure"}
-                and classes == {"invasive_bleeding", "local_anesthesia"} and combos == {()}
+                and classes in ({"invasive_bleeding", "local_anesthesia"}, {"non_invasive", "local_anesthesia"})
+                and combos == {()}
             ):
                 errors.append(f"entity_aliases.csv dòng {lines}: alias thủ thuật {alias!r} có nhóm trùng hoặc mơ hồ")
             continue

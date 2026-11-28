@@ -742,7 +742,15 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
                     "source": source if source.startswith("Đề xuất alias TDLN")
                     else "Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 27/11/2026)",
                 })
+            # Áp xe và điều trị tủy thường có gây tê (Trung chốt 28/11, câu hỏi review PR #30). Trám, khám, lấy cao trên nướu thì không.
+            elif alias in ANESTHESIA_ALIASES_2811:
+                rows.append({**row, "drug_class": "local_anesthesia",
+                             "source": "Phân nhóm nghiệp vụ TDLN (BS RHM Nguyễn Bảo Trung chốt 28/11/2026)"})
     return expand_combo_rows(rows)
+
+
+ANESTHESIA_ALIASES_2811 = frozenset({"rach ap xe", "chich ap xe", "trich ap xe", "dan luu ap xe",
+                                     "chua tuy", "noi nha", "dieu tri tuy", "lay tuy", "dieu tri noi nha"})
 
 
 def build_ddi_rows(ddinter_pairs: dict[tuple[str, str], str]) -> list[dict[str, Any]]:
