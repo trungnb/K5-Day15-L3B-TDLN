@@ -61,6 +61,8 @@ Bệnh nền,ibuprofen,Ibuprofen,drug,nsaid,ibuprofen,Đề xuất alias TDLN 28
 Bệnh nền,metronidazole,Metronidazole,drug,nitroimidazole,metronidazole,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026,metro,
 Bệnh nền,atrial_fibrillation,Rung nhĩ,condition,cardiovascular,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026,af|atrial fibrillation,
 Bệnh nền,warfarin,Warfarin (kháng vitamin K),drug,vka,warfarin,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026,wafarin,"Gõ sai thấy trong log VM 28/11 (""wafarin"")."
+Bệnh nền,anticoagulant_unspecified,Thuốc chống đông (chưa rõ tên),drug,anticoagulant_unspecified,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026,chong dong|thuoc chong dong|khang dong|thuoc khang dong|loang mau|thuoc loang mau,"Tên nhóm khi BS / BN chưa biết tên thuốc (log VM 28/11 14:59). Chỉ nhận khi model xếp vào danh sách thuốc; không lấy từ quét tin gốc (câu phủ định). Có tên thuốc chống đông cụ thể thì bỏ (CR-022)."
+Bệnh nền,antiplatelet_unspecified,Thuốc kháng tiểu cầu (chưa rõ tên),drug,antiplatelet_unspecified,,Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026,khang tieu cau|thuoc khang tieu cau|chong ket tap tieu cau|thuoc chong ket tap tieu cau,"Như dòng trên, cho kháng tiểu cầu (CR-023)."
 Thủ thuật RHM,extraction,Nhổ răng / Tiểu phẫu răng khôn,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3",nho rang|nho r|nho r8|nho r48|nho r38|nho r18|nho r28|nho rang khon|tieu phau,
 Thủ thuật RHM,implant_surgery,Cấy ghép Implant / Phẫu thuật nha chu / Tạo vạt,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3",implant|cay implant|phau thuat nha chu|tao vat,
 Thủ thuật RHM,abscess_drainage,Rạch dẫn lưu áp xe trong miệng,procedure,invasive_bleeding,,"SDCEP QRG (2022), Table 1 p. 3",rach ap xe,

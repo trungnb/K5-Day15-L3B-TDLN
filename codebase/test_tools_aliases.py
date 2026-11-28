@@ -89,7 +89,10 @@ class AliasProposals2811Tests(unittest.TestCase):
                               .open(encoding="utf-8-sig"))
         for row in rows:
             # Gồm cả dòng local_anesthesia sinh kèm cho "extraction" / "tooth extraction" (review PR #30).
-            if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy", "extraction", "tooth extraction", "af", "atrial fibrillation", "wafarin"}:
+            if row["alias"] in {"ibu", "metro", "chich ap xe", "dieu tri tuy", "extraction", "tooth extraction", "af", "atrial fibrillation", "wafarin",
+                                "chong dong", "thuoc chong dong", "khang dong", "thuoc khang dong", "loang mau",
+                                "thuoc loang mau", "khang tieu cau", "thuoc khang tieu cau", "chong ket tap tieu cau",
+                                "thuoc chong ket tap tieu cau"}:
                 # Dòng gây tê của áp xe / điều trị tủy ghi "Trung chốt 28/11/2026" (phân nhóm), không mượn nguồn 27/11.
                 expected = "Trung chốt 28/11/2026" if row["drug_class"] == "local_anesthesia" and row["canonical_id"] != "extraction" \
                     else "Trung duyệt 28/11/2026"
@@ -153,3 +156,19 @@ class OutsideTesterAliasTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NearMatch2811(unittest.TestCase):
+    """So gần đúng chỉ dùng cho chữ không khớp alias nào, chỉ trong đúng loại thực thể của danh sách model trả."""
+
+    def test_near_match_only_within_list_type(self):
+        n = normalize_entities({"conditions": [], "allergies": ["peniciline"], "baseline_drugs": [],
+                                "planned_procedures": [], "planned_drugs": []}, "")
+        self.assertEqual([e["canonical_id"] for e in n["allergies"]], ["penicillin"])
+        self.assertEqual(n["unmapped"], [])
+        self.assertEqual(n["near_matches"][0][0], "peniciline")
+
+    def test_exact_alias_does_not_report_near_match(self):
+        n = normalize_entities({"conditions": [], "allergies": ["penicillin"], "baseline_drugs": [],
+                                "planned_procedures": [], "planned_drugs": []}, "")
+        self.assertEqual(n["near_matches"], [])
