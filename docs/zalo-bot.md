@@ -95,7 +95,7 @@ Ghi output theo từng lượt và kiểm bot có báo đã gửi tin hay đưa 
 ## 7. Log hội thoại & danh sách `chat_id` đã kích hoạt
 
 - Mỗi lượt chat được ghi vào `bot/logs/YYYYMMDD.jsonl` (đã thêm vào `.gitignore` — không đẩy lên GitHub).
-- Chat chưa có quyền (chưa nhập mã mời) chỉ ghi bước, `kind` = `invite`, `input` = `[invite] prompt` · `wrong` · `activated` · `throttled` · `group` · `non_text` · `no_code_mode`. Bot không ghi chữ đã gõ, tên hay mã mời, `output` để trống. Ảnh / sticker từ BS đã kích hoạt ghi `kind` = `non_text`. Mục đích: đếm được người mới vào chat nhưng chưa dùng được bot (trước 28/11 15:45 các tin này không có trong log).
+- Chat chưa có quyền (chưa nhập mã mời) chỉ ghi bước, `kind` = `invite`, `input` = `[invite] prompt` · `wrong` · `activated` · `throttled` · `group` · `non_text` · `no_code_mode`. Bot không ghi chữ đã gõ, tên hay mã mời, `output` để trống. Ảnh / sticker từ BS đã kích hoạt ghi `kind` = `non_text`. Lệnh `/moi` ghi `kind` = `new_case` (`input` = `/moi`), để log cho thấy chỗ tách ca — trước bản này lệnh không có trong log nên không biết vì sao tin sau không được ghép. Mục đích: đếm được người mới vào chat nhưng chưa dùng được bot (trước 28/11 15:45 các tin này không có trong log).
 - Danh sách `chat_id` đã nhập đúng mã mời được lưu cục bộ tại `bot/allowed_chats.json` (đã thêm vào `.gitignore`), **chỉ lưu `chat_id`**, không lưu tên hiển thị hay thông tin cá nhân khác.
 - Trong log chỉ lưu hash 10 ký tự đầu của `chat_id`, không lưu token hay mã mời.
 - Bot thay SĐT và dãy 9–12 chữ số (CMND/CCCD/mã hồ sơ) bằng `[số định danh đã ẩn]` **trước khi** gọi model, rồi tự hiện cảnh báo ⚠️ định danh. Họ tên BN không lọc được bằng code, vẫn dựa vào cờ `has_pii` của model.
@@ -139,4 +139,4 @@ Ghi output theo từng lượt và kiểm bot có báo đã gửi tin hay đưa 
 
 ## Số liệu từ log *(28/11)*
 
-Trên VM, từ thư mục repo: `bot/.venv/bin/python bot/log_stats.py bot/logs`. Script chỉ đọc log và chỉ in số đếm (số tin theo `kind`, số chat đã vào bước mã mời `invite_chats` và số lần kích hoạt `invite_activated` — bước mã mời không tính vào `turns`, số ca có 🔴 / 🟡, 🚫 theo mã, số lần "thêm", số câu REPAIR, số lỗi, chỉ số gần đúng "để nguyên 🔴"), không in nội dung tin. Log ghi trước 28/11 không có trường `kind`: script suy loại tin từ input/output.
+Trên VM, từ thư mục repo: `bot/.venv/bin/python bot/log_stats.py bot/logs`. Script chỉ đọc log và chỉ in số đếm (số tin theo `kind`, số chat đã vào bước mã mời `invite_chats` và số lần kích hoạt `invite_activated` — bước mã mời và `/moi` (`new_case`) không tính vào `turns`, số ca có 🔴 / 🟡, 🚫 theo mã, số lần "thêm", số câu REPAIR, số lỗi, chỉ số gần đúng "để nguyên 🔴"), không in nội dung tin. Log ghi trước 28/11 không có trường `kind`: script suy loại tin từ input/output.

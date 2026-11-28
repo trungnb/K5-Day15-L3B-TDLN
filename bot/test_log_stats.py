@@ -62,6 +62,12 @@ class LogStatsTests(unittest.TestCase):
         self.assertEqual(s["invite_chats"], 2)
         self.assertEqual(s["invite_activated"], 1)
 
+    def test_new_case_records_counted_apart_from_turns(self):
+        # /moi chỉ có dòng log từ 28/11 16:15: không tính vào turns để số lượt so được với log cũ (review).
+        s = log_stats.compute(RECORDS + [rec("04:03:00", "a", "/moi", "x", kind="new_case")])
+        self.assertEqual(s["turns"], 9)
+        self.assertEqual(s["by_kind"]["new_case"], 1)
+
     def test_left_in_red_proxy(self):
         s = log_stats.compute(RECORDS)
         # c1 ca đầu: 2 🔴 → 1 🔴 trong 10 phút = đã sửa; c1 ca sau và c2: không có tin sau làm giảm 🔴.

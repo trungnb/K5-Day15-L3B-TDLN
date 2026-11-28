@@ -73,6 +73,8 @@ def compute(records: list[dict]) -> dict:
             invite_chats.add(str(rec.get("chat")))
             stats["invite_activated"] += str(rec.get("input") or "").endswith(" activated")
             continue
+        if kind == "new_case":   # /moi: lệnh tách ca, không phải lượt tra; log trước 28/11 16:15 không có dòng này
+            continue
         stats["turns"] += 1
         out = str(rec.get("output") or "")
         if rec.get("error"):
