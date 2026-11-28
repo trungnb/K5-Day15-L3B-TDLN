@@ -88,6 +88,29 @@ STATUS_MARK = re.compile(r"\b(?:on dinh|kiem soat|dieu tri)\b")
 _STATUS_WORDS = re.compile(r"\b(?:on dinh|kiem soat|dieu tri|tot|kem|dang|da|chua|khong)\b")
 
 
+# BS ghi rõ BN không có cả nhóm (PR #54; dùng cả ở followups.new_patient) → mục "Đã đối chiếu" ghi "không có" thay "không khai", không nhắc Q4 (Trung chọn 28/11).
+# Chỉ khớp khi cụm phủ định đứng cuối một vế (tách theo , . ; ! ? xuống dòng), để "không bệnh tim", "không dị ứng thuốc
+# tê", "không dùng thuốc chống đông" — chỉ loại một bệnh / một nhóm — không bị tính là "không có"; "và / hay / với"
+# cũng tách vế. "Khoẻ mạnh" (không có "không/chưa" ngay trước) chỉ tính cho bệnh nền, không đóng Q8.
+_NEG = r"(?:khong|ko|k|chua)"
+_TAIL = r"(?: (?:gi|nao))?(?: (?:ca|het|nhe|a|dau))*$"
+_NONE_CLAUSE = {
+    "conditions": re.compile(r"(?<!khong )(?<!ko )(?<!k )(?<!chua )\bkhoe manh\b|\b%s (?:co )?(?:tien su )?(?:benh ly|benh nen|benh)%s"
+                             r"|\b(?:benh nen|benh ly) %s(?: co| ghi nhan)?$" % (_NEG, _TAIL, _NEG)),
+    "allergies": re.compile(r"\b%s (?:co )?(?:tien su )?di ung(?: thuoc)?%s|\bdi ung(?: thuoc)? %s(?: co)?$"
+                            % (_NEG, _TAIL, _NEG)),
+    "baseline_drugs": re.compile(r"\b%s (?:dung|uong|su dung|co) thuoc%s|\bthuoc (?:dang )?(?:dung|uong) %s(?: co)?$"
+                                 % (_NEG, _TAIL, _NEG)),
+}
+_CLAUSE_SPLIT = re.compile(r"[,.;!?\n]+")
+_WORD_SPLIT = re.compile(r"\b(?:va|hay|voi)\b")
+
+
+def declared_none(text: str) -> frozenset:
+    """Nhóm BS ghi rõ là BN không có: "conditions", "allergies", "baseline_drugs"."""
+    clauses = [p.strip() for c in _CLAUSE_SPLIT.split(text or "") for p in _WORD_SPLIT.split(fold(c))]
+    return frozenset(key for key, pattern in _NONE_CLAUSE.items() if any(pattern.search(c) for c in clauses))
+
 def condition_base(normalized_text):
     """Tên bệnh đã bỏ từ chỉ tình trạng (chuỗi đã chuẩn hoá)."""
     return " ".join(_STATUS_WORDS.sub(" ", normalized_text).split())

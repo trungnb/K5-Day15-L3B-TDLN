@@ -742,6 +742,37 @@ class ClassNameAndAmpicillin2811(unittest.TestCase):
         self.assertEqual(section_of(out, "CR-008"), "HIGH")
 
 
+class DeniedGroups2811(unittest.TestCase):
+    """Log VM 28/11 15:37: BS ghi "không có bệnh nền, không dị ứng thuốc" mà mục 📋 vẫn ghi "Chưa khai: bệnh nền, dị ứng".
+    BS phủ nhận cả nhóm thì ghi "không có"; phủ nhận MỘT thuốc / một dị ứng cụ thể thì không tính."""
+
+    def test_denied_groups(self):
+        cases = {
+            "BN nam 58 tuổi, không có bệnh nền, không dị ứng thuốc. Đang dùng warfarin.": {"conditions", "allergies"},
+            "giờ bệnh nhân không có bệnh lý gì, nhổ răng": {"conditions"},
+            "BN khỏe mạnh, ko dị ứng gì, không dùng thuốc gì. Nhổ R48": {"conditions", "allergies", "baseline_drugs"},
+            "không dị ứng penicillin, nhổ R48": set(),
+            "không dùng thuốc chống đông, nhổ R48": set(),
+            "không có bệnh nền gì ngoài tăng huyết áp": set(),
+        }
+        for text, want in cases.items():
+            self.assertEqual(tools.declared_none(text), want, text)
+
+    def test_checked_line_says_none_for_denied_groups(self):
+        text = ("BN nam 58 tuổi, không có bệnh nền, không dị ứng thuốc. Đang dùng warfarin. Chuẩn bị nhổ 1 răng hàm dưới, "
+                "định kê amoxicillin và paracetamol.")
+        out = run(text, _x(baseline_drugs=["warfarin"], planned_procedures=["nhổ 1 răng hàm dưới"],
+                           planned_drugs=["amoxicillin", "paracetamol"]))["output"]
+        self.assertIn("Bệnh nền: không có", out)
+        self.assertIn("Dị ứng: không có", out)
+        self.assertNotIn("Bệnh nền: không khai", out)
+
+    def test_named_entity_wins_over_denial(self):
+        out = run("BN không có bệnh nền gì, tăng huyết áp ổn định, nhổ R48",
+                  _x(conditions=["tăng huyết áp ổn định"], planned_procedures=["nhổ R48"]))["output"]
+        self.assertNotIn("Bệnh nền: không có", out)
+
+
 class UnnamedAnticoagulant2811(unittest.TestCase):
     """Log VM 28/11 14:59: "Bn uống chống đông nhổ răng được ko" → chỉ ❔ "chưa có dữ liệu cho: chống đông".
     Trung chọn 28/11: tên nhóm thuốc chưa rõ tên → 🔴 CR-022 (chống đông) / 🟡 CR-023 (kháng tiểu cầu) × thủ thuật

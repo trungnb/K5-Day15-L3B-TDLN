@@ -496,6 +496,35 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
                 self._send("chat_a", text)
                 self.assertEqual(self.agent_calls[-1], "BN uống warfarin. Nhổ R48, kê Augmentin\nBổ sung: " + text)
 
+    def test_new_patient_description_is_not_merged_into_pending_case(self) -> None:
+        # Log VM 28/11 15:35: ca BN mang thai đang chờ, BS gửi "giờ bệnh nhân không có bệnh lý gì, nhổ răng kê augmentin…"
+        # → bot ghép, vẫn ghi "Bệnh nền: Đang mang thai". Tin tả BN (giới / tuổi) hoặc phủ nhận nhóm mà ca chờ đã có
+        # là BN khác: không ghép, báo BS cách ghép nếu cùng BN.
+        pending = Reply(checked=[("Bệnh nền", "Đang mang thai / Thai kỳ"), ("Dị ứng", "không khai")], needs_more=True)
+
+        def _stub(text: str):
+            self.agent_calls.append(text)
+            return pending, {"models": ["fake"], "tokens_in": 1, "tokens_out": 2}
+
+        with patch.object(bot_mod, "run_agent", side_effect=_stub):
+            for text in ("giờ bệnh nhân không có bệnh lý gì, nhổ răng kê augmentin và paracetamol nhé",
+                         "BN nam 58 tuổi, uống warfarin, nhổ R48", "Bệnh nhân nữ, nhổ R38 kê ibuprofen"):
+                with self.subTest(text=text):
+                    self._send("chat_a", "/moi")
+                    self._send("chat_a", "bệnh nhân nữ đang mang thai kê thuốc gì được nhỉ")
+                    replies = self._send("chat_a", text)
+                    self.assertEqual(self.agent_calls[-1], text)
+                    self.assertIn(bot_mod.SPLIT_NOTE, replies[-1])
+                    self.assertNotIn(bot_mod.MERGED_NOTE, replies[-1])
+            # Trả lời câu bot hỏi, kể cả phủ nhận nhóm ca chờ CHƯA có, vẫn ghép.
+            for text in ("dùng aspirin", "không dị ứng thuốc", "nhổ răng, kê augmentin", "thêm BN 30 tuổi"):
+                with self.subTest(text=text):
+                    self._send("chat_a", "/moi")
+                    self._send("chat_a", "bệnh nhân nữ đang mang thai kê thuốc gì được nhỉ")
+                    self._send("chat_a", text)
+                    self.assertEqual(self.agent_calls[-1],
+                                     "bệnh nhân nữ đang mang thai kê thuốc gì được nhỉ\nBổ sung: " + text)
+
     def test_merged_follow_up_mentions_moi_once(self) -> None:
         # Review #30 (Nguyên) ý 5: MERGED_NOTE và FOLLOW_UP_HINT cùng nhắc /moi làm tin dài.
         self.needs_more = False

@@ -20,8 +20,8 @@ import followups
 from ai import call_model
 from reply import Alert, Reply, render_text
 from texts import OUT_OF_SCOPE, TEXT  # noqa: F401  (bot và test đọc agent.TEXT)
-from tools import (check_clinical_risks, check_drug_interactions, fold, known_condition_base,
-                   known_condition_with_status, normalize_entities, normalize_text, rule_behavior,
+from tools import (check_clinical_risks, check_drug_interactions, declared_none as _declared_none, fold,
+                   known_condition_base, known_condition_with_status, normalize_entities, normalize_text, rule_behavior,
                    UNSPECIFIED_DRUG_CLASSES)
 from tracing import note
 
@@ -137,28 +137,6 @@ _PATIENT_NO = re.compile(r"\b(?:bn|benh nhan|ca)\s*(?:so\s*)?([1-9])"
                          r"(?=\s*[:.)\-]|\s*$|\s+(?!(?:tuoi|tuan|ngay|thang|nam|rang|lan|vien|ben|cai|ham|gio)\b)\w)")
 # BS ghi rõ BN không dùng thuốc → không hỏi Q8.
 _NO_MEDS = re.compile(r"\b(?:khong|ko|k|chua)\s+(?:dung|uong|su dung|co)\s+thuoc\b")
-# BS ghi rõ BN không có cả nhóm → mục "Đã đối chiếu" ghi "không có" thay "không khai", không nhắc Q4 (Trung chọn 28/11).
-# Chỉ khớp khi cụm phủ định đứng cuối một vế (tách theo , . ; ! ? xuống dòng), để "không bệnh tim", "không dị ứng thuốc
-# tê", "không dùng thuốc chống đông" — chỉ loại một bệnh / một nhóm — không bị tính là "không có"; "và / hay / với"
-# cũng tách vế. "Khoẻ mạnh" (không có "không/chưa" ngay trước) chỉ tính cho bệnh nền, không đóng Q8.
-_NEG = r"(?:khong|ko|k|chua)"
-_TAIL = r"(?: (?:gi|nao))?(?: (?:ca|het|nhe|a|dau))*$"
-_NONE_CLAUSE = {
-    "conditions": re.compile(r"(?<!khong )(?<!ko )(?<!k )(?<!chua )\bkhoe manh\b|\b%s (?:co )?(?:tien su )?(?:benh ly|benh nen|benh)%s"
-                             r"|\b(?:benh nen|benh ly) %s(?: co| ghi nhan)?$" % (_NEG, _TAIL, _NEG)),
-    "allergies": re.compile(r"\b%s (?:co )?(?:tien su )?di ung(?: thuoc)?%s|\bdi ung(?: thuoc)? %s(?: co)?$"
-                            % (_NEG, _TAIL, _NEG)),
-    "baseline_drugs": re.compile(r"\b%s (?:dung|uong|su dung|co) thuoc%s|\bthuoc (?:dang )?(?:dung|uong) %s(?: co)?$"
-                                 % (_NEG, _TAIL, _NEG)),
-}
-_CLAUSE_SPLIT = re.compile(r"[,.;!?\n]+")
-_WORD_SPLIT = re.compile(r"\b(?:va|hay|voi)\b")
-
-
-def _declared_none(text: str) -> frozenset:
-    """Nhóm BS ghi rõ là BN không có: "conditions", "allergies", "baseline_drugs"."""
-    clauses = [p.strip() for c in _CLAUSE_SPLIT.split(text or "") for p in _WORD_SPLIT.split(fold(c))]
-    return frozenset(key for key, pattern in _NONE_CLAUSE.items() if any(pattern.search(c) for c in clauses))
 # Câu trả lời "không" trơn cho câu đang hỏi, và câu nói giai đoạn thủ thuật (đóng Q7) — xem _open_questions.
 _BARE_NO = re.compile(r"(?:bn |benh nhan )?(?:khong|ko|k|hong|hok|chua|no)(?: (?:co|dung|uong|su dung|thuoc|gi|nao|het))*")
 _STAGE_REPLY = re.compile(r"\b(?:chuan bi|chua (?:lam|nho)|dang (?:lam|nho)|xong|chay mau|cam mau)\b")
@@ -348,8 +326,8 @@ def _checked_groups(n, said, asking_roles=False, skip_drugs=False, none=frozense
         ]
         if skip_drugs:
             groups = groups[:2]
-        return [(label, ", ".join(names) if names else TEXT["NOT_RECOGNIZED"])
-                for label, key, names in groups if names or said[key]]
+        return [(label, ", ".join(names) if names else TEXT["NOT_RECOGNIZED"] if said[key] else TEXT["DECLARED_NONE"])
+                for label, key, names in groups if names or said[key] or key in none]
     groups = [
         ("Bệnh nền", "conditions", conditions),
         ("Dị ứng", "allergies", _names(n["allergies"])),
@@ -486,7 +464,7 @@ def _roles_unknown(head, n, said, unmapped, refusals, text=""):
     return Reply(head=head, verdict=_verdict(rules, 0, together=True), alerts=_alerts(rules), together=True,
                  notes=[_near_note(n), unmapped, _class_only_note(n), limit], refusals=refusals,
                  # tên đã có trong câu hỏi thì mục "Đã đối chiếu" không lặp lại
-                 checked=_checked_groups(n, said, asking_roles=True, skip_drugs=bool(names)),
+                 checked=_checked_groups(n, said, asking_roles=True, skip_drugs=bool(names), none=_declared_none(text)),
                  question=TEXT[key].format(names=", ".join(names)), question_key=key, needs_more=True)
 
 
