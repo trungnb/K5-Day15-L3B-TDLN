@@ -166,6 +166,8 @@ flowchart TD
 | Thời điểm | Đổi gì | Vì sao (trỏ về câu thử / lỗi / bằng chứng nào) |
 |---|---|---|
 | Trước CP3 | Giới hạn CR-008 ở nhóm penicillin, làm rõ hai cách đạt B22 và cập nhật bảng impact §2. | Rà phạm vi CR-008, chốt tiêu chí B22 và bổ sung số tự báo cáo từ P2/P3. |
+| 28/11 (trước CP3) | Thay bản tạm CP2 bằng luồng 5 bước gọi `gemini-3.8-flash` (PR #16). | CP3 yêu cầu lời gọi AI thật; chạy thử 27 câu tìm ra lỗi câu phủ định (B22), từ đệm (B01), tự gán vai trò (B04–B07), từ chối chung chung (B23, B25, B26). |
+| 28/11 (trước CP3) | Thêm alias `azithro` → azithromycin và `methylpred` → methylprednisolone vào `data/entity_aliases.csv`. | Chạy thử thấy hai viết tắt này chưa nhận ra ở B13, B15. Chốt trước `run-1`, không sửa `data/*.csv` sau đó. |
 
 **Sau CP4 (đến 23:59 Thứ Bảy 28/11)** (sửa theo góp ý — không sửa chuẩn "đạt", câu thử, số bằng chứng, kết quả các lượt đã chạy)
 

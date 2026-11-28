@@ -28,6 +28,7 @@ zaromax,azithromycin,Azithromycin,drug,macrolide_azithromycin,DDInterID:DDInter1
 azicine,azithromycin,Azithromycin,drug,macrolide_azithromycin,DDInterID:DDInter157,DDInter; biệt dược phổ biến tại VN (BS RHM duyệt 27/11/2026)
 azimycin,azithromycin,Azithromycin,drug,macrolide_azithromycin,DDInterID:DDInter157,DDInter; biệt dược phổ biến tại VN (BS RHM duyệt 27/11/2026)
 zitromax,azithromycin,Azithromycin,drug,macrolide_azithromycin,DDInterID:DDInter157,DDInter; biệt dược phổ biến tại VN (BS RHM duyệt 27/11/2026)
+azithro,azithromycin,Azithromycin,drug,macrolide_azithromycin,DDInterID:DDInter157,"DDInter; viết tắt BS hay dùng, thấy ở B13 (BS RHM duyệt 28/11/2026)"
 clarithromycin,clarithromycin,Clarithromycin,drug,macrolide_cyp3a4,DDInterID:DDInter393,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 klacid,clarithromycin,Clarithromycin,drug,macrolide_cyp3a4,DDInterID:DDInter393,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
 fromilid,clarithromycin,Clarithromycin,drug,macrolide_cyp3a4,DDInterID:DDInter393,DDInter; QĐ 5948/QĐ-BYT (2021) (BS RHM duyệt 27/11/2026)
@@ -78,6 +79,7 @@ methylprednisolone,methylprednisolone,Methylprednisolone,drug,corticosteroid,DDI
 medrol,methylprednisolone,Methylprednisolone,drug,corticosteroid,DDInterID:DDInter1191,DDInter; biệt dược phổ biến tại VN (BS RHM duyệt 27/11/2026)
 menison,methylprednisolone,Methylprednisolone,drug,corticosteroid,DDInterID:DDInter1191,DDInter; biệt dược phổ biến tại VN (BS RHM duyệt 27/11/2026)
 solu-medrol,methylprednisolone,Methylprednisolone,drug,corticosteroid,DDInterID:DDInter1191,DDInter; biệt dược phổ biến tại VN (BS RHM duyệt 27/11/2026)
+methylpred,methylprednisolone,Methylprednisolone,drug,corticosteroid,DDInterID:DDInter1191,"DDInter; viết tắt BS hay dùng, thấy ở B15 (BS RHM duyệt 28/11/2026)"
 lidocaine,lidocaine,Lidocaine,drug,local_anesthetic,DDInterID:DDInter1066,DDInter; thực hành RHM (BS RHM duyệt 27/11/2026)
 lidocain,lidocaine,Lidocaine,drug,local_anesthetic,DDInterID:DDInter1066,DDInter; thực hành RHM (BS RHM duyệt 27/11/2026)
 xylocaine,lidocaine,Lidocaine,drug,local_anesthetic,DDInterID:DDInter1066,DDInter; thực hành RHM (BS RHM duyệt 27/11/2026)
