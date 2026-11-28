@@ -141,5 +141,5 @@ Chi tiết từng việc: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đ�
 | 4 | Bản chạy thử làm trọn lát cắt | `codebase/` · lệnh ở mục "Lệnh" |
 | 5 | Định nghĩa "tốt" + bộ câu thử | `data/DATA_CARD.md` · `eval/` |
 | 6 | Mô phỏng chi phí khi dùng thật | `cost/` |
-| 7 | Slide + demo + video dự phòng | `demo-slides.pdf` ở thư mục gốc repo (dàn ý: `slides/outline.md`, xuất trước CP4) · video CP3 (demo terminal): [Google Drive](https://drive.google.com/file/d/1mM6j1YoUaehnhUO7DALn2id9kV-TWhF2/view?usp=sharing) · video CP4 (demo Zalo): chưa nộp |
+| 7 | Slide + demo + video dự phòng | `demo-slides.pdf` ở thư mục gốc repo (dàn ý: `slides/outline.md`, xuất trước CP4) · video CP3 (demo terminal): [Google Drive](https://drive.google.com/file/d/1mM6j1YoUaehnhUO7DALn2id9kV-TWhF2/view?usp=sharing) · video CP4 (demo Zalo): [Google Drive](https://drive.google.com/file/d/1IYIrCECYCRTikSrn-g9F0NAhTSSwIbCK/view) |
 | + | *Bonus:* người dùng thử | `validation/log.md` |
