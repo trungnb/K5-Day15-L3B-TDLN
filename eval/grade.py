@@ -6,7 +6,7 @@ Cách dùng:
   python3 eval/grade.py eval/run-1.csv --out eval/grade-custom.md
 
 Quy ước an toàn:
-  - Script CHỈ ĐỌC eval/run-N.csv, eval/benchmark.csv, data/*.csv và traces/run-N.jsonl.
+  - Script CHỈ ĐỌC eval/run-N.csv, eval/benchmark.csv, eval/metric_notes.csv, data/*.csv và traces/run-N.jsonl.
   - Tuyệt đối KHÔNG sửa eval/run-*.csv hay bất kỳ file .csv nào; người chấm tự điền 1 / 0
     vào cột `pass` rồi chạy `python3 run.py score eval/run-N.csv`.
   - Chỉ dùng thư viện chuẩn của Python.
@@ -32,6 +32,7 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 BENCH_PATH = os.path.join(EVAL_DIR, "benchmark.csv")
+METRIC_NOTES_PATH = os.path.join(EVAL_DIR, "metric_notes.csv")
 DDI_PATH = os.path.join(ROOT, "data", "ddi_rules.csv")
 CR_PATH = os.path.join(ROOT, "data", "clinical_risk_rules.csv")
 
@@ -46,6 +47,8 @@ METRIC_THRESHOLDS = [
     ("hoi_lai_khi_thieu", "≥80%", 80.0),
     ("bao_chua_co_du_lieu", "100%", 100.0),
 ]
+VALID_METRICS = {m for m, _, _ in METRIC_THRESHOLDS}
+NO_METRIC_TOKENS = {"none", "khong", "-"}
 
 # Câu chữ cố định cho báo cáo Markdown gom tập trung tại đây.
 REPORT_TEXT = {
@@ -73,8 +76,19 @@ REPORT_TEXT = {
         "Nên soi trước các câu `{red_label}` (`{red_cnt}` câu) và `{yellow_label}` (`{yellow_cnt}` câu), "
         "rồi đọc lướt xác nhận các câu `{green_label}` (`{green_cnt}` câu)."
     ),
-    "PASS_RATE_OK": "Đạt ngưỡng (≥80%)",
-    "PASS_RATE_FAIL": "Chưa đạt (<80%)",
+    "PASS_RATE_OK": "Đạt ngưỡng câu qua (≥80%)",
+    "PASS_RATE_FAIL": "Chưa đạt ngưỡng câu qua (<80%)",
+    "STANDARD_OK": "Đạt ngưỡng câu qua (≥80%) và **đạt chuẩn §7** (đạt cả 5 ngưỡng metric)",
+    "STANDARD_FAIL_METRICS": "Đạt ngưỡng câu qua (≥80%), nhưng **chưa đạt chuẩn §7** vì trượt metric: {reasons}",
+    "STANDARD_UNRESOLVED": "Đạt ngưỡng câu qua (≥80%), **chưa xác nhận đạt chuẩn §7** (còn metric chưa tách rõ: {metrics})",
+    "STANDARD_FAIL_RATE": "**Chưa đạt chuẩn §7** (tỷ lệ câu qua <80%)",
+    "STANDARD_FAIL_BOTH": "**Chưa đạt chuẩn §7** (tỷ lệ câu qua <80% và trượt metric: {reasons})",
+    "METRIC_TABLE_HEADER": "| Metric | Mẫu áp dụng | Ngưỡng | Đạt (theo `pass` & ghi chú metric) | Câu trượt metric / chưa rõ (`?`) |",
+    "METRIC_NOTES_USED": "- **Phân rã metric câu `pass=0` (`{notes_rel}`):** {details}",
+    "AMBIGUOUS_NOTE": (
+        "*(Gợi ý: câu `pass=0` chưa rõ trượt metric nào được đánh dấu `?`. "
+        "Khai báo trong `{notes_rel}` hoặc ghi mã metric tường minh trong `ghi_chu` để tách chính xác.)*"
+    ),
     "METRIC_NA": "N/A",
     "METRIC_PENDING": "Chờ chấm đủ mẫu ({done}/{total})",
 }
@@ -577,13 +591,160 @@ def build_info_lines(run_path, rows, results):
     ]
 
 
-def build_summary_lines(results):
+def load_metric_notes(notes_path=METRIC_NOTES_PATH):
+    """Đọc file phụ phân rã metric cho câu pass=0 (không sửa eval/run-N.csv)."""
+    if not notes_path or not os.path.isfile(notes_path):
+        return {}
+    _, rows, _ = read_csv(notes_path)
+    notes = {}
+    for row in rows:
+        cid = (row.get("id") or "").strip()
+        if not cid:
+            continue
+        rid = (row.get("run_id") or "").strip()
+        notes[(rid, cid)] = {
+            "failed_metrics": (row.get("failed_metrics") or "").strip(),
+            "ly_do": (row.get("ly_do") or "").strip(),
+        }
+    return notes
+
+
+def resolve_failed_metrics(row_result, run_id="", metric_notes=None):
+    """Xác định danh sách metric bị trượt cho câu pass=0 từ metric_notes hoặc mã tường minh."""
+    notes = metric_notes or {}
+    cid = row_result["id"]
+    entry = notes.get((run_id, cid))
+    if entry is None:
+        entry = notes.get(("", cid))
+    if entry is not None:
+        raw = (entry.get("failed_metrics") or "").strip().lower()
+        tokens = [t for t in re.split(r"[,;\s]+", raw) if t]
+        if not tokens:
+            return False, set(), False
+        if len(tokens) == 1 and tokens[0] in NO_METRIC_TOKENS:
+            return True, set(), True
+        invalid = [t for t in tokens if t not in VALID_METRICS]
+        if invalid:
+            raise ValueError("Mã metric không hợp lệ trong metric_notes cho %s: %s" % (cid, ", ".join(invalid)))
+        unrelated = [t for t in tokens if t not in row_result["metrics"]]
+        if unrelated:
+            raise ValueError("Metric không áp dụng cho câu %s: %s" % (cid, ", ".join(unrelated)))
+        return True, set(tokens), True
+
+    note_low = (row_result.get("ghi_chu") or "").lower()
+    tagged = {
+        m for m in row_result["metrics"]
+        if re.search(r"(?<![a-z0-9_])" + re.escape(m) + r"(?![a-z0-9_])", note_low)
+    }
+    if tagged:
+        return True, tagged, False
+    return False, set(), False
+
+
+def _evaluate_metric_row(metric_name, thresh_label, thresh_num, results, run_id, metric_notes):
+    """Tính thống kê đạt/trượt và danh sách câu trượt/chưa rõ cho một metric."""
+    sample = [r for r in results if metric_name in r["metrics"]]
+    sample_ids = ", ".join(r["id"] for r in sample) if sample else "—"
+    if not sample:
+        return {
+            "metric": metric_name,
+            "line": "| `%s` | %s | %s | %s | %s |" % (metric_name, sample_ids, thresh_label, REPORT_TEXT["METRIC_NA"], "—"),
+            "ambiguous": False,
+            "failed_summary": None,
+            "used_notes": [],
+        }
+
+    s_graded = [r for r in sample if r["pass_val"] is not None]
+    if len(s_graded) < len(sample):
+        stat = REPORT_TEXT["METRIC_PENDING"].format(done=len(s_graded), total=len(sample))
+        fails = [r["id"] for r in s_graded if r["pass_val"] == 0]
+        return {
+            "metric": metric_name,
+            "line": "| `%s` | %s | %s | %s | %s |"
+                    % (metric_name, sample_ids, thresh_label, stat, ", ".join(fails) if fails else "—"),
+            "ambiguous": False,
+            "failed_summary": None,
+            "used_notes": [],
+        }
+
+    explicit_fails, ambiguous_fails, used_notes = [], [], []
+    passed_cnt = 0
+    for r in s_graded:
+        if r["pass_val"] == 1:
+            passed_cnt += 1
+            continue
+        resolved, failed_set, from_notes = resolve_failed_metrics(r, run_id=run_id, metric_notes=metric_notes)
+        if from_notes:
+            used_notes.append((r["id"], tuple(sorted(failed_set))))
+        if resolved:
+            if metric_name in failed_set:
+                explicit_fails.append(r["id"])
+            else:
+                passed_cnt += 1
+        else:
+            ambiguous_fails.append(r["id"])
+
+    if ambiguous_fails:
+        max_pass = passed_cnt + len(ambiguous_fails)
+        stat = "⚠️ %d–%d/%d (%.1f–%.1f%%)" % (
+            passed_cnt, max_pass, len(sample),
+            100.0 * passed_cnt / len(sample), 100.0 * max_pass / len(sample),
+        )
+        fails_str = ", ".join(explicit_fails + [cid + "?" for cid in ambiguous_fails])
+        return {
+            "metric": metric_name,
+            "line": "| `%s` | %s | %s | %s | %s |" % (metric_name, sample_ids, thresh_label, stat, fails_str),
+            "ambiguous": True,
+            "failed_summary": None,
+            "used_notes": used_notes,
+        }
+
+    s_pct = 100.0 * passed_cnt / len(sample)
+    passed_thresh = s_pct >= thresh_num
+    mark = "✅" if passed_thresh else "❌"
+    stat = "%s %d/%d (%.2f%%)" % (mark, passed_cnt, len(sample), s_pct)
+    fails_str = ", ".join(explicit_fails) if explicit_fails else "—"
+    failed_summary = None if passed_thresh else "`%s` %d/%d (%.2f%% < %s)" % (
+        metric_name, passed_cnt, len(sample), s_pct, thresh_label,
+    )
+    return {
+        "metric": metric_name,
+        "line": "| `%s` | %s | %s | %s | %s |" % (metric_name, sample_ids, thresh_label, stat, fails_str),
+        "ambiguous": False,
+        "failed_summary": failed_summary,
+        "used_notes": used_notes,
+    }
+
+
+def _format_overall_verdict(pct, full_graded, metric_rows):
+    """Tạo kết luận chuẩn §7 dựa trên cả tỷ lệ câu qua và 5 ngưỡng metric."""
+    if not full_graded:
+        return REPORT_TEXT["PASS_RATE_OK"] if pct >= 80.0 else REPORT_TEXT["PASS_RATE_FAIL"]
+    failed_reasons = [mr["failed_summary"] for mr in metric_rows if mr["failed_summary"]]
+    unresolved = ["`%s`" % mr["metric"] for mr in metric_rows if mr["ambiguous"]]
+    if pct >= 80.0:
+        if failed_reasons:
+            return REPORT_TEXT["STANDARD_FAIL_METRICS"].format(reasons=", ".join(failed_reasons))
+        if unresolved:
+            return REPORT_TEXT["STANDARD_UNRESOLVED"].format(metrics=", ".join(unresolved))
+        return REPORT_TEXT["STANDARD_OK"]
+    if failed_reasons:
+        return REPORT_TEXT["STANDARD_FAIL_BOTH"].format(reasons=", ".join(failed_reasons))
+    return REPORT_TEXT["STANDARD_FAIL_RATE"]
+
+
+def build_summary_lines(results, run_id="", metric_notes=None, notes_rel="eval/metric_notes.csv"):
     """Tạo phần 2 báo cáo: tiến độ chấm, phân bố gợi ý và bảng tổng hợp 5 metric."""
     total = len(results)
     graded = [r for r in results if r["pass_val"] is not None]
     green_cnt = sum(1 for r in results if r["status"] == STATUS_GREEN)
     yellow_cnt = sum(1 for r in results if r["status"] == STATUS_YELLOW)
     red_cnt = sum(1 for r in results if r["status"] == STATUS_RED)
+
+    metric_rows = [
+        _evaluate_metric_row(metric_name, thresh_label, thresh_num, results, run_id, metric_notes)
+        for metric_name, thresh_label, thresh_num in METRIC_THRESHOLDS
+    ]
 
     lines = [
         REPORT_TEXT["SEC_SUMMARY"],
@@ -602,7 +763,7 @@ def build_summary_lines(results):
     if graded:
         passed = sum(r["pass_val"] for r in graded)
         pct = 100.0 * passed / len(graded)
-        verdict = REPORT_TEXT["PASS_RATE_OK"] if pct >= 80.0 else REPORT_TEXT["PASS_RATE_FAIL"]
+        verdict = _format_overall_verdict(pct, len(graded) == total, metric_rows)
         lines.append("- **Tỷ lệ đạt (trên các câu đã điền `pass`):** **%d/%d (%.2f%%)** — %s"
                      % (passed, len(graded), pct, verdict))
         by_type = []
@@ -614,64 +775,27 @@ def build_summary_lines(results):
         if by_type:
             lines.append("- **Theo loại câu:** " + " · ".join(by_type))
 
+    seen_notes = {}
+    for mr in metric_rows:
+        for cid, failed_tuple in mr["used_notes"]:
+            seen_notes[cid] = failed_tuple
+    if seen_notes:
+        detail_parts = []
+        for cid in sorted(seen_notes):
+            target = ", ".join(seen_notes[cid]) if seen_notes[cid] else "không trượt metric (chỉ `pass_criterion`)"
+            detail_parts.append("`%s` → %s" % (cid, target))
+        lines.append(REPORT_TEXT["METRIC_NOTES_USED"].format(notes_rel=notes_rel, details="; ".join(detail_parts)))
+
     lines += [
         "",
-        "| Metric | Mẫu áp dụng | Ngưỡng | Đạt (theo cột `pass`) | Câu `pass=0` trong mẫu |",
+        REPORT_TEXT["METRIC_TABLE_HEADER"],
         "|---|---|---|---|---|",
     ]
-    has_ambiguous = False
-    for metric_name, thresh_label, thresh_num in METRIC_THRESHOLDS:
-        sample = [r for r in results if metric_name in r["metrics"]]
-        sample_ids = ", ".join(r["id"] for r in sample) if sample else "—"
-        if not sample:
-            stat = REPORT_TEXT["METRIC_NA"]
-            fails_str = "—"
-        else:
-            s_graded = [r for r in sample if r["pass_val"] is not None]
-            if len(s_graded) < len(sample):
-                stat = REPORT_TEXT["METRIC_PENDING"].format(done=len(s_graded), total=len(sample))
-                fails = [r["id"] for r in s_graded if r["pass_val"] == 0]
-                fails_str = ", ".join(fails) if fails else "—"
-            else:
-                explicit_fails, ambiguous_fails = [], []
-                passed_cnt = 0
-                for r in s_graded:
-                    if r["pass_val"] == 1:
-                        passed_cnt += 1
-                        continue
-                    note_low = r["ghi_chu"].lower()
-                    tagged = [m for m in r["metrics"] if m in note_low]
-                    if len(r["metrics"]) == 1:
-                        explicit_fails.append(r["id"])
-                    elif tagged:
-                        if metric_name in tagged:
-                            explicit_fails.append(r["id"])
-                        else:
-                            passed_cnt += 1
-                    else:
-                        ambiguous_fails.append(r["id"])
-
-                if ambiguous_fails:
-                    has_ambiguous = True
-                    max_pass = passed_cnt + len(ambiguous_fails)
-                    stat = "⚠️ %d–%d/%d (%.1f–%.1f%%)" % (
-                        passed_cnt, max_pass, len(sample),
-                        100.0 * passed_cnt / len(sample), 100.0 * max_pass / len(sample),
-                    )
-                    fail_parts = explicit_fails + [cid + "?" for cid in ambiguous_fails]
-                    fails_str = ", ".join(fail_parts)
-                else:
-                    s_pct = 100.0 * passed_cnt / len(sample)
-                    mark = "✅" if s_pct >= thresh_num else "❌"
-                    stat = "%s %d/%d (%.2f%%)" % (mark, passed_cnt, len(sample), s_pct)
-                    fails_str = ", ".join(explicit_fails) if explicit_fails else "—"
-        lines.append("| `%s` | %s | %s | %s | %s |" % (metric_name, sample_ids, thresh_label, stat, fails_str))
-    if has_ambiguous:
+    for mr in metric_rows:
+        lines.append(mr["line"])
+    if any(mr["ambiguous"] for mr in metric_rows):
         lines.append("")
-        lines.append(
-            "*(Gợi ý: câu `pass=0` thuộc nhiều metric chưa ghi tên metric trượt trong cột `ghi_chu` nên "
-            "được đánh dấu `?`. Ghi tên metric trượt — vd `bao_chua_co_du_lieu` — vào `ghi_chu` để bảng tách chính xác.)*"
-        )
+        lines.append(REPORT_TEXT["AMBIGUOUS_NOTE"].format(notes_rel=notes_rel))
     return lines
 
 
@@ -728,13 +852,15 @@ def build_detail_lines(results):
     return lines
 
 
-def render_report(run_path, rows, results):
+def render_report(run_path, rows, results, metric_notes=None, notes_path=METRIC_NOTES_PATH):
     """Ghép toàn bộ báo cáo gợi ý chấm thành văn bản Markdown hoàn chỉnh."""
+    run_id = next((r.get("run_id") for r in rows if r.get("run_id")), "")
+    notes_rel = rel(notes_path) if notes_path else rel(METRIC_NOTES_PATH)
     sections = [
         [REPORT_TEXT["TITLE"].format(name=os.path.basename(run_path)), "",
          REPORT_TEXT["DISCLAIMER"].format(run_rel=rel(run_path))],
         build_info_lines(run_path, rows, results),
-        build_summary_lines(results),
+        build_summary_lines(results, run_id=run_id, metric_notes=metric_notes, notes_rel=notes_rel),
         build_table_lines(results),
         build_detail_lines(results),
     ]
@@ -758,6 +884,8 @@ def main():
     parser = argparse.ArgumentParser(description="Xuất phiếu gợi ý chấm eval ra file Markdown (không sửa CSV).")
     parser.add_argument("run_csv", nargs="?", help="Đường dẫn eval/run-N.csv (mặc định tìm lượt mới nhất)")
     parser.add_argument("--out", help="Đường dẫn file .md xuất ra (mặc định eval/grade-N.md)")
+    parser.add_argument("--metric-notes", default=METRIC_NOTES_PATH,
+                        help="Đường dẫn CSV phân rã metric cho câu pass=0 (mặc định eval/metric_notes.csv)")
     args = parser.parse_args()
 
     run_path = args.run_csv or find_latest_run_csv()
@@ -771,10 +899,11 @@ def main():
 
     rules_db = load_rules_db()
     bench_map = load_benchmark_map()
+    metric_notes = load_metric_notes(args.metric_notes)
     results = [evaluate_row(r, bench_map.get((r.get("id") or "").strip(), {}), rules_db) for r in rows]
 
     out_path = args.out or default_out_path(run_path)
-    report_md = render_report(run_path, rows, results)
+    report_md = render_report(run_path, rows, results, metric_notes=metric_notes, notes_path=args.metric_notes)
     safe_write_markdown(out_path, run_path, report_md)
 
     green_cnt = sum(1 for r in results if r["status"] == STATUS_GREEN)

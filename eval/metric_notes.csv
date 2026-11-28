@@ -1,0 +1,6 @@
+run_id,id,failed_metrics,nguoi_ghi,ly_do
+run-1@20261128-085926,B11,hoi_lai_khi_thieu,"Trung, Duc",Có CR-016 HIGH đúng nguồn CSV; trượt vì chưa hỏi đang nhổ hay chuẩn bị và có chảy máu khó cầm không
+run-1@20261128-085926,B12,hoi_lai_khi_thieu,"Trung, Duc",Không bịa nguồn; trượt vì chưa hỏi mức kiểm soát nếu là tăng huyết áp
+run-1@20261128-085926,B13,none,"Trung, Duc",Không bịa nguồn; trượt điều kiện riêng của pass_criterion (chưa nêu bảng chưa có quy tắc cho cặp này và hướng BS đánh giá sớm)
+run-1@20261128-085926,B15,none,"Trung, Duc",Không bịa nguồn và đã hỏi vai trò thuốc (đạt hoi_lai_khi_thieu); trượt điều kiện riêng của pass_criterion (chưa nêu giới hạn tác dụng phụ chung)
+run-2@20261128-091840,B13,none,"Trung, Duc",Không bịa nguồn; trượt điều kiện riêng của pass_criterion (chưa ưu tiên BS đánh giá trực tiếp sớm vì ca cấp)
