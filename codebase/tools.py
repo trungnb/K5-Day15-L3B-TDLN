@@ -25,6 +25,9 @@ SEVERITY_ORDER = {"HIGH": 0, "MODERATE": 1}
 # Từ đệm bỏ khi so khớp, để "nhổ một răng", "nhổ cái răng" vẫn khớp alias "nho rang".
 # Không alias nào chứa các từ này (đã kiểm trên entity_aliases.csv; "con" bị loại vì có "con tang huyet ap").
 FILLER_WORDS = {"mot", "1", "cai", "chiec", "cac", "nhung", "vai"}
+# Số răng "R36", "r11" → "r": alias "nho r" khớp mọi răng, không phải liệt kê từng số (tự thử 28/11/2026:
+# "nhổ R36" không khớp alias nào nên ca warfarin mất CR-001). Mọi alias "nho r<số>" đều cùng thực thể với "nho r".
+TOOTH_NUMBER = re.compile(r"^r\d{1,2}$")
 
 
 def normalize_text(text):
@@ -32,7 +35,8 @@ def normalize_text(text):
     Áp dụng giống nhau cho alias và tin nhắn để so khớp theo ranh giới từ."""
     folded = unicodedata.normalize("NFD", (text or "").lower().replace("đ", "d"))
     plain = "".join(c for c in folded if not unicodedata.combining(c))
-    return " ".join(w for w in re.sub(r"[^a-z0-9]+", " ", plain).split() if w not in FILLER_WORDS)
+    words = (TOOTH_NUMBER.sub("r", w) for w in re.sub(r"[^a-z0-9]+", " ", plain).split())
+    return " ".join(w for w in words if w not in FILLER_WORDS)
 
 
 def _rows(filename):

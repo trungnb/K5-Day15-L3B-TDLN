@@ -676,6 +676,20 @@ def _recent_case(chat_id: str, now: float | None = None) -> str | None:
     return None
 
 
+def _moderate_block(output: str) -> str:
+    """ "chi tiết" chỉ gửi khối 🟡 (bản đủ hướng xử trí) + câu cuối: BS đã đọc 🔴 và 📋 ở tin trước
+    (tự thử 28/11/2026: gửi lại cả bản tin thì BS phải đọc lại từ đầu). Không thấy khối 🟡 → gửi nguyên bản."""
+    lines = output.split("\n")
+    header = AGENT_TEXT["MODERATE_HEADER"].split(":")[0]
+    start = next((i for i, line in enumerate(lines) if line.startswith(header)), None)
+    if start is None:
+        return output
+    end = start + 1
+    while end < len(lines) and lines[end].startswith("- "):
+        end += 1
+    return "\n".join(lines[start:end] + [AGENT_TEXT["FOOTER"]])
+
+
 async def _reply_detail(update: Update, chat_id: str) -> None:
     case_text = _recent_case(chat_id)
     if case_text is None:
@@ -690,7 +704,7 @@ async def _reply_detail(update: Update, chat_id: str) -> None:
         _log_safely(chat_id=chat_id, user_input="chi tiết", output="", summary={}, error=err_msg, kind="detail")
         await _reply_chunks(update, ERROR_TEXT)
         return
-    output = format_reply(output)
+    output = format_reply(_moderate_block(output))
     _log_safely(chat_id=chat_id, user_input="chi tiết", output=output, summary=summary, kind="detail")
     await _reply_chunks(update, output)
 
