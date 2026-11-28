@@ -54,6 +54,10 @@ PENDING_TTL_SEC = 600
 MAX_PENDING_CHARS = 4000
 NEW_CASE_TEXT = "Đã bắt đầu ca mới."
 MERGED_NOTE = "(Em đã ghép với tin trước của ca này. Nếu là BN khác, nhắn /moi rồi gửi lại.)"
+DROPPED_NOTE = (
+    f"⏱️ Ca trước đã quá {PENDING_TTL_SEC // 60} phút (hoặc quá dài) nên em KHÔNG ghép, tin này được đối chiếu như ca mới. "
+    "Nếu là cùng BN, anh/chị gửi lại một tin đủ bệnh nền, thuốc đang dùng, thủ thuật và thuốc định kê."
+)
 
 # Lọc số định danh bằng code trước khi gọi model và ghi log (design §11). Chỉ bắt SĐT và dãy 9–12 chữ số
 # (CMND/CCCD/mã hồ sơ); số lâm sàng như INR 2.5, HbA1c 7.2%, 81mg, R48 không bị đụng tới.
@@ -218,18 +222,23 @@ def mask_identifiers(text: str) -> tuple[str, bool]:
     return masked, masked != (text or "")
 
 
-def _compose_case(chat_id: str, text: str, now: float | None = None) -> tuple[str, bool]:
-    """Ghép tin mới vào ca đang chờ bổ sung của đúng chat nếu chưa quá PENDING_TTL_SEC (design §9)."""
+def _compose_case(chat_id: str, text: str, now: float | None = None) -> tuple[str, str]:
+    """Ghép tin mới vào ca đang chờ bổ sung của đúng chat nếu chưa quá PENDING_TTL_SEC (design §9).
+
+    Trả (chữ gửi agent, trạng thái): "new" không có ca chờ · "merged" đã ghép ·
+    "dropped" có ca chờ nhưng quá hạn / quá dài nên bỏ — phải báo BS, vì tin bổ sung đứng một mình
+    có thể thiếu thuốc nền và mất cảnh báo HIGH (vd warfarin rồi "Định kê ibuprofen").
+    """
     ts = time.monotonic() if now is None else now
     pending = _pending.get(chat_id)
     if pending is None:
-        return text, False
+        return text, "new"
     old_text, saved_at = pending
     merged = f"{old_text}\nBổ sung: {text}"
     if ts - saved_at > PENDING_TTL_SEC or len(merged) > MAX_PENDING_CHARS:
         _pending.pop(chat_id, None)
-        return text, False
-    return merged, True
+        return text, "dropped"
+    return merged, "merged"
 
 
 def _remember_case(chat_id: str, case_text: str, needs_more: bool) -> None:
@@ -506,23 +515,31 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     output = ""
     summary: dict[str, Any] = {}
     err_msg = ""
-    merged = False
+    case_status = "new"
     try:
         async with _agent_lock:
-            case_text, merged = _compose_case(chat_id, masked)
+            case_text, case_status = _compose_case(chat_id, masked)
             output, summary, needs_more = await asyncio.to_thread(run_agent, case_text)
             _remember_case(chat_id, case_text, needs_more)
     except Exception as exc:
         err_msg = redact(f"{type(exc).__name__}: {exc}")
         print(f"[error] {err_msg}")
         log_turn(chat_id=chat_id, user_input=masked, output="", summary=summary, error=err_msg)
-        await _reply_chunks(update, "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút.")
+        error_text = "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút."
+        if case_status == "dropped":
+            # Ca chờ đã bị xoá trong _compose_case: BS gửi lại tin bổ sung sẽ thành ca mới,
+            # nên phải báo ngay ở đây, không thì lần sau ra ✅ mà không có dòng ⏱️.
+            error_text = f"{DROPPED_NOTE}\n{error_text}"
+        await _reply_chunks(update, error_text)
         return
 
     if had_ids and not output.startswith(PII_WARNING):
         output = f"{PII_WARNING}\n{output}"
-    if merged:
+    if case_status == "merged":
         output = f"{output}\n{MERGED_NOTE}"
+    elif case_status == "dropped":
+        # Đặt lên đầu: BS phải thấy trước khi đọc dòng ✅ của ca thiếu dữ kiện.
+        output = f"{DROPPED_NOTE}\n{output}"
     log_turn(chat_id=chat_id, user_input=masked, output=output, summary=summary, error="",
              drop_input=PII_WARNING in output)
     await _reply_chunks(update, output)
