@@ -1108,6 +1108,31 @@ class ZaloBotConcurrencyTests(unittest.TestCase):
         self.assertEqual(a, [("start", "1"), ("end", "1"), ("start", "2"), ("end", "2")])
         self.assertLess(events.index(("start", "B", "1")), events.index(("end", "A", "1")))
 
+    def test_third_message_waits_after_lock_handoff(self) -> None:
+        """Tin 3 cùng chat tới đúng lúc tin 1 vừa nhả khoá cho tin 2: không được chạy chồng tin 2."""
+        overlaps: list[tuple[str, set[str]]] = []
+        running: set[str] = set()
+
+        class _App:
+            async def process_update(self, update) -> None:
+                text = update.message.text
+                if running:
+                    overlaps.append((text, set(running)))
+                running.add(text)
+                await asyncio.sleep(0.1)
+                running.discard(text)
+
+        async def go():
+            app = _App()
+            bot_mod._spawn_update(app, _FakeUpdate("A", "1"))
+            bot_mod._spawn_update(app, _FakeUpdate("A", "2"))
+            await asyncio.sleep(0.12)   # tin 1 xong, tin 2 đang giữ khoá
+            bot_mod._spawn_update(app, _FakeUpdate("A", "3"))
+            await asyncio.gather(*list(bot_mod._inflight))
+
+        asyncio.run(go())
+        self.assertEqual(overlaps, [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -128,6 +128,7 @@ ENV_ALLOWED_CHAT_IDS = {
 AGENT_CONCURRENCY = max(1, int(os.environ.get("BOT_AGENT_CONCURRENCY") or "8"))
 _agent_slots = asyncio.Semaphore(AGENT_CONCURRENCY)
 _chat_locks: dict[str, asyncio.Lock] = {}   # tin cùng một chat xử lý lần lượt (giữ thứ tự ghép ca)
+_chat_users: dict[str, int] = {}            # số task đang giữ hoặc chờ khoá của chat; về 0 mới xoá khoá
 _inflight: set[asyncio.Task] = set()        # giữ tham chiếu task đang chạy để không bị GC
 _allowlist_lock = asyncio.Lock()
 _prompted_chats: set[str] = set()
@@ -882,13 +883,18 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def _process_in_chat_order(app: Any, update: Update) -> None:
     key = str(_extract_chat_id(update) or "")
     lock = _chat_locks.setdefault(key, asyncio.Lock())
+    _chat_users[key] = _chat_users.get(key, 0) + 1
     try:
         async with lock:
             await app.process_update(update)
     except Exception as exc:   # handler đã _guarded; đây chỉ chặn lỗi lọt ra từ chính SDK
         print(f"[error] process_update: {redact(f'{type(exc).__name__}: {exc}')}")
     finally:
-        if not lock.locked() and _chat_locks.get(key) is lock:
+        # Không dựa vào lock.locked(): vừa nhả khoá thì task chờ kế tiếp chưa kịp giữ lại, xoá lúc đó
+        # sẽ làm tin tới sau tạo khoá mới và chạy chồng (review PR #50).
+        _chat_users[key] -= 1
+        if _chat_users[key] == 0:
+            _chat_users.pop(key, None)
             _chat_locks.pop(key, None)
 
 
