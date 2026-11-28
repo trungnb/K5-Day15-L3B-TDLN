@@ -525,6 +525,12 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
                     self.assertEqual(self.agent_calls[-1],
                                      "bệnh nhân nữ đang mang thai kê thuốc gì được nhỉ\nBổ sung: " + text)
 
+    def test_emergency_only_reply_has_no_follow_up_hint(self) -> None:
+        # Log VM 28/11 15:30: tin chỉ báo cấp cứu → agent trả riêng dòng cấp cứu (footer=False); không mời "thêm …".
+        line = "🚫 Em không hỗ trợ xử trí cấp cứu. Anh/chị xử trí theo phác đồ cấp cứu của cơ sở, cần thì gọi 115."
+        text = bot_mod.compose_reply(Reply(head=[line], footer=False), repeat_miss=False, case_status="new", had_ids=False)
+        self.assertEqual(text, line)
+
     def test_merged_follow_up_mentions_moi_once(self) -> None:
         # Review #30 (Nguyên) ý 5: MERGED_NOTE và FOLLOW_UP_HINT cùng nhắc /moi làm tin dài.
         self.needs_more = False

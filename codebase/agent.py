@@ -89,11 +89,17 @@ NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 # "có", "không" trơn KHÔNG là xã giao: đó có thể là câu trả lời Q5 mà bot đang ghép vào ca.
 _FILLER = {"da", "vang", "a", "u", "uh", "em", "anh", "chi", "minh", "bot", "ban", "nhe", "nha", "nhieu",
            "oi", "m", "may", "mi", "vay", "the", "rat", "ha", "nhi", "ne", "dr", "bs", "bac", "si"}
+_GREET = (r"(?:xin )?chao|hi|hello|helo|hey|alo|a lo|test|"
+          r"(?:con|co) (?:onl|online|do|o do|o day)(?: (?:khong|ko|k|hong|hok))?")
+# Hỏi bot là ai / làm gì, có thể mở đầu bằng lời chào (log VM 28/11 03:08 "Xin chào, bạn làm được những gì?",
+# 08:25 "nhiệm vụ của bạn là gì" từng nhận 🚫 ngoài phạm vi).
+_HELP = (r"(?:lam|giup|ho tro) (?:duoc|dc|đc) (?:gi|nhung gi|viec gi)|huong dan|cach dung|"
+         r"dung (?:sao|the nao|nhu the nao)|"
+         r"(?:nhiem vu|chuc nang|cong viec|viec)(?: cua)?(?: (?:la|lam))? gi|la ai|lam (?:nhung |viec )?gi|"
+         r"co the lam (?:duoc )?(?:nhung )?gi")
 _SMALL_TALK = (
-    ("greet", re.compile(r"(?:xin )?chao|hi|hello|helo|hey|alo|a lo|test|"
-                         r"(?:con|co) (?:onl|online|do|o do|o day)(?: (?:khong|ko|k|hong|hok))?")),
-    ("help", re.compile(r"(?:lam|giup|ho tro) (?:duoc|dc|đc) (?:gi|nhung gi|viec gi)|huong dan|cach dung|"
-                        r"dung (?:sao|the nao|nhu the nao)")),
+    ("greet", re.compile(_GREET)),
+    ("help", re.compile(r"(?:(?:{g}) )?(?:{h})".format(g=_GREET, h=_HELP))),
     ("bye", re.compile(r"(?:tam biet|bye|bai|goodbye|good bye|hen gap lai)(?: (?:bye|nhe|nha))*")),
     ("thanks", re.compile(r"(?:{t})(?: (?:{t}))*".format(
         t=r"cam on|cam ou|lam|thanks?|thank you|tks|thx|ok|oke|okie|okay|okela|(?:duoc|ro|hieu) roi|tot qua|tuyet"))),
@@ -594,6 +600,11 @@ def _reply(text: str) -> Reply:
     case = _Case(text, n, said, [], _unmapped_conditions(extracted, n))
 
     # Bảng quyết định §6.
+    # Cấp cứu mà không nhận ra gì để đối chiếu (log VM 28/11 15:30) → chỉ dòng cấp cứu: không ❔, không hỏi, không giữ ca.
+    if "cap_cuu" in flags and not any(n[k] for k in ("conditions", "allergies", "baseline_drugs", "planned_drugs",
+                                                       "procedure_groups")):
+        note("cấp cứu, không nhận ra thực thể: chỉ gửi dòng cấp cứu")
+        return Reply(head=head, footer=False)
     if not (case.has_procedure or case.has_planned or has_background or n["baseline_drugs"] or n["unmapped"]):
         note("tình huống %d: không có thực thể" % (2 if flags else 1))   # tình huống 1 (không cờ) / 2 (có cờ)
         return Reply(head=head, refusals=refusals, question=TEXT["Q1"], question_key="Q1", needs_more=not flags)

@@ -173,6 +173,14 @@ class SmallTalk(unittest.TestCase):
             self.assertNotIn("Em đọc tin này chưa trọn", out, text)
             self.assertFalse(res["needs_more"], text)
 
+    def test_role_questions_get_intro(self):
+        # Log VM 28/11 03:08 "Xin chào, bạn làm được những gì?" và 08:25 "nhiệm vụ của bạn là gì" → 🚫 ngoài phạm vi.
+        for text in ("Xin chào, bạn làm được những gì?", "nhiệm vụ của bạn là gì", "bạn là ai", "chức năng của em là gì",
+                     "bạn làm gì?", "chào bạn, bạn là ai vậy"):
+            self.assertEqual(agent.small_talk_kind(text), "help", text)
+        for text in ("làm gì khi BN chảy máu", "BN là ai", "nhổ răng làm gì"):
+            self.assertIsNone(agent.small_talk_kind(text), text)
+
     def test_thanks_gets_short_ack(self):
         for text in ("cảm ơn em", "Dạ em cảm ơn nhiều ạ!", "cam on", "ok em", "thanks"):
             res = run(text, {})
@@ -499,6 +507,14 @@ class ExtractPrompt(unittest.TestCase):
                                                          out_of_scope=["cap_cuu"]))["output"]
         self.assertTrue(out.startswith("🚫 Em không hỗ trợ xử trí cấp cứu"))
         self.assertNotIn("✅", out)
+
+    def test_emergency_with_nothing_recognised_is_only_the_emergency_line(self):
+        # Log VM 28/11 15:30: "tiêm thuốc tê … BN không phản ứng gì thì thế nào?" → dòng 🚫 cấp cứu rồi ❔, 📋, câu hỏi.
+        # Không nhận ra gì để đối chiếu thì chỉ gửi dòng cấp cứu: không hỏi, không giữ ca.
+        res = run("tôi tiêm thuốc tê cho bệnh nhân mà giờ bệnh nhân không phản ứng gì thì thế nào?",
+                  _x(baseline_drugs=["thuốc tê"], planned_procedures=["tiêm thuốc tê"], out_of_scope=["cap_cuu", "khac"]))
+        self.assertEqual(res["output"], agent.OUT_OF_SCOPE["cap_cuu"])
+        self.assertFalse(res["needs_more"])
 
     def test_emergency_does_not_also_print_generic_out_of_scope(self):
         # Gemini thật 28/11 trả cả "cap_cuu" lẫn "khac" cho "chảy máu không cầm … làm sao?" → 2 dòng 🚫 chồng nhau.

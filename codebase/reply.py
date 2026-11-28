@@ -63,6 +63,12 @@ class Reply:
         return cls(notes=[text], footer=False, needs_more=needs_more)
 
     @property
+    def head_only(self) -> bool:
+        """Chỉ có dòng đầu tin (vd riêng dòng cấp cứu khi không nhận ra gì để đối chiếu, agent._reply)."""
+        return bool(self.head) and not (self.verdict or self.ok or self.alerts or self.notes or self.refusals
+                                        or self.checked or self.question)
+
+    @property
     def is_no_entity(self) -> bool:
         """Tình huống 1/2 (§6): không nhận ra thực thể nào, chỉ hỏi lại Q1. Bot đổi lần thứ 2 liên tiếp sang REPAIR."""
         return (self.question_key == "Q1" and not self.checked and not self.alerts

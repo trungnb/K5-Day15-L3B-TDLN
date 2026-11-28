@@ -372,7 +372,7 @@ def compose_reply(reply: Reply, *, repeat_miss: bool, case_status: str, had_ids:
     """Tin gửi BS cho một ca: bản tin agent (dạng chat) + các câu của lớp hội thoại, đúng thứ tự đọc:
     ⏱️ ca quá hạn và ⚠️ định danh lên đầu (BS phải thấy trước dòng ✅), gợi ý hỏi tiếp / ghi chú đã ghép xuống cuối."""
     text = render_chat(reply, repeat_miss=repeat_miss)
-    if not reply.needs_more:
+    if not reply.needs_more and not reply.head_only:   # chỉ dòng cấp cứu: không có ca để hỏi tiếp
         text += "\n" + (FOLLOW_UP_HINT_MERGED if case_status == "merged" else FOLLOW_UP_HINT)
     if had_ids and not text.startswith(PII_WARNING):
         text = f"{PII_WARNING}\n{text}"
