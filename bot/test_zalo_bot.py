@@ -420,6 +420,26 @@ class ZaloBotCaseFlowTests(unittest.TestCase):
         self._send("chat_a", "Định kê ibuprofen")
         self.assertEqual(self.agent_calls[-1], "Định kê ibuprofen")
 
+    def test_moi_is_logged_as_case_boundary(self) -> None:
+        # Log VM 28/11 08:30–08:34: không biết tin nào tách ca vì /moi không có dòng log.
+        self._send("chat_a", "BN đang uống warfarin.")
+        self._send("chat_a", "/moi")
+        recs = [json.loads(line) for f in bot_mod.LOG_DIR.glob("*.jsonl")
+                for line in f.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual((recs[-1]["kind"], recs[-1]["input"], recs[-1]["output"]),
+                         ("new_case", "/moi", bot_mod.NEW_CASE_TEXT))
+        self.assertEqual(recs[-1]["tokens_in"], 0)
+        # Lệnh tới qua on_text (SDK có lúc giao lệnh cho on_text) cũng chỉ một dòng.
+        self._send("chat_a", "/moi")
+        recs2 = [json.loads(line) for f in bot_mod.LOG_DIR.glob("*.jsonl")
+                 for line in f.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(len(recs2), len(recs) + 1)
+        # Chat chưa có quyền: không ghi dòng new_case.
+        self._send("chat_x", "/moi")
+        recs3 = [json.loads(line) for f in bot_mod.LOG_DIR.glob("*.jsonl")
+                 for line in f.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertFalse([r for r in recs3[len(recs2):] if r["kind"] == "new_case"])
+
     def test_phone_and_id_numbers_are_masked_before_agent_and_log(self) -> None:
         self.needs_more = False
         replies = self._send("chat_a", "BN SĐT 0912 345 678, CCCD 001203004567, uống aspirin. Nhổ R38")
