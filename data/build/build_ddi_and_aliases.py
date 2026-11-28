@@ -644,6 +644,9 @@ def build_alias_rows(ddinter_ids: dict[str, str]) -> list[dict[str, str]]:
         ("metronidazole", "Metronidazole", "drug", "nitroimidazole", "metronidazole", "Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026", ["metro"]),
         ("atrial_fibrillation", "Rung nhĩ", "condition", "cardiovascular", None, "Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026",
          ["af", "atrial fibrillation"]),
+        # Gõ sai thấy trong log VM 28/11 ("wafarin").
+        ("warfarin", "Warfarin (kháng vitamin K)", "drug", "vka", "warfarin", "Đề xuất alias TDLN 28/11/2026 — Trung duyệt 28/11/2026",
+         ["wafarin"]),
         # --- Thủ thuật RHM ---
         (
             "extraction",
