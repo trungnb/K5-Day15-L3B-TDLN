@@ -67,6 +67,7 @@ def _alias_index():
 # Từ chỉ tình trạng bệnh nền (log VM 28/11). Bỏ các từ này khỏi tên bệnh để so "gốc" tên: "tăng huyết áp chưa kiểm
 # soát" và "tăng huyết áp đang ổn định" cùng gốc "tang huyet ap". Dùng để biết BS đã ghi tên bệnh ĐÃ CÓ trong bảng
 # kèm tình trạng, chỉ là bảng chưa có quy tắc cho tình trạng đó — khi ấy không hỏi lại Q6 (agent.py).
+PROCEDURE_DRUG_CLASSES = frozenset({"local_anesthetic", "vasoconstrictor"})
 STATUS_MARK = re.compile(r"\b(?:on dinh|kiem soat|dieu tri)\b")
 _STATUS_WORDS = re.compile(r"\b(?:on dinh|kiem soat|dieu tri|tot|kem|dang|da|chua|khong)\b")
 
@@ -82,11 +83,15 @@ def _condition_bases():
                                    if any(e["entity_type"] == "condition" for e in ents))))
 
 
+def known_condition_base(phrase):
+    """True khi cụm bệnh nền, bỏ từ chỉ tình trạng, TRÙNG gốc tên một bệnh nền trong bảng
+    (vd "cao huyết áp" là gốc của "cao huyet ap chua kiem soat"). Tên lạ ("th áp", "đặt stent") → False."""
+    return condition_base(normalize_text(phrase)) in _condition_bases()
+
+
 def known_condition_with_status(phrase):
-    """True khi cụm bệnh nền có từ chỉ tình trạng và phần còn lại TRÙNG gốc tên một bệnh nền trong bảng
-    (vd "THA ổn định" → gốc "tha" của "tha chua kiem soat"). Tên lạ ("th áp", "đặt stent") hoặc thiếu tình trạng → False."""
-    norm = normalize_text(phrase)
-    return bool(STATUS_MARK.search(norm)) and condition_base(norm) in _condition_bases()
+    """known_condition_base và có từ chỉ tình trạng (vd "THA ổn định"). Thiếu tình trạng ("tăng huyết áp") → False."""
+    return bool(STATUS_MARK.search(normalize_text(phrase))) and known_condition_base(phrase)
 
 
 def find_aliases(normalized_text):
@@ -124,12 +129,13 @@ def _keys(entity):
 def normalize_entities(extracted, raw_text):
     """Chuẩn hoá thực thể (design §5 bước 2).
     Input: JSON model lần 1 (dict 5 danh sách, hoặc None nếu model lỗi / JSON hỏng) + tin nhắn gốc (str).
-    Output: dict conditions, allergies, baseline_drugs, planned_drugs, procedure_groups, unknown_role_drugs
+    Output: dict conditions, allergies, baseline_drugs, planned_drugs, procedure_groups, unknown_role_drugs,
+            procedure_drugs (thuốc tê / co mạch không rõ vai; cũng có trong baseline_drugs và planned_drugs)
             (list thực thể chuẩn), unmapped (list chữ BS viết không có trong bảng).
             procedure_groups: mỗi phần tử là thực thể thủ thuật, drug_class = tên nhóm thủ thuật.
     Không tác động ra ngoài."""
     out = {k: [] for k in ("conditions", "allergies", "baseline_drugs", "planned_drugs",
-                           "procedure_groups", "unknown_role_drugs")}
+                           "procedure_groups", "unknown_role_drugs", "procedure_drugs")}
     out["unmapped"] = []
     by_type = {"condition": "conditions", "allergy": "allergies", "procedure": "procedure_groups"}
     role_of_list = {"baseline_drugs": "baseline_drugs", "planned_drugs": "planned_drugs"}
@@ -177,8 +183,12 @@ def normalize_entities(extracted, raw_text):
             elif not model_ok:
                 _add(out[by_type[entity["entity_type"]]], entity)
 
+    # Thuốc tê / co mạch không rõ vai (thường nằm trong cụm thủ thuật, vd "gây tê bằng lidocain") là thuốc dùng
+    # trong thủ thuật, không phải thuốc BN đang dùng hay thuốc kê (log VM 28/11). Vẫn kiểm ở cả hai phía (DDI-020).
+    out["procedure_drugs"] = [e for e in out["unknown_role_drugs"] if e["drug_class"] in PROCEDURE_DRUG_CLASSES]
+    out["unknown_role_drugs"] = [e for e in out["unknown_role_drugs"] if e not in out["procedure_drugs"]]
     # Thuốc không rõ vai được kiểm ở cả hai phía để không sót tương tác.
-    for entity in out["unknown_role_drugs"]:
+    for entity in out["unknown_role_drugs"] + out["procedure_drugs"]:
         _add(out["baseline_drugs"], entity)
         _add(out["planned_drugs"], entity)
     return out

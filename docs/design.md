@@ -177,6 +177,7 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 4. **Ưu tiên khớp dài nhất, không chồng lấn:** `di ung ibuprofen` (dị ứng) che `ibuprofen` (thuốc), để dị ứng ibuprofen không bị coi là kê ibuprofen.
 5. Gộp: thực thể code tìm thấy mà model không có →
    - thuốc: không rõ vai → thêm vào **cả** `baseline_drugs` và `planned_drugs`, đồng thời ghi vào `unknown_role_drugs` để tin trả lời có ghi chú;
+   - *(28/11, log VM)* thuốc tê / co mạch (`drug_class` ∈ `PROCEDURE_DRUG_CLASSES` = `local_anesthetic`, `vasoconstrictor`) không rõ vai, thường nằm trong cụm thủ thuật ("gây tê bằng lidocain"), ghi vào `procedure_drugs` thay cho `unknown_role_drugs`: vẫn tra ở cả hai phía (`DDI-020` epinephrine × propranolol), nhưng hiện ở mục "Thủ thuật", không vào cặp ℹ️ "chưa có quy tắc", và không tính là thuốc BN đang dùng khi xét Q8. Thuốc tê BS ghi rõ là kê / đang dùng giữ vai đó;
    - bệnh nền, dị ứng, thủ thuật: **chỉ thêm khi model lỗi** (JSON hỏng). Khi model đọc được tin thì tin theo model, vì quét chữ không hiểu câu phủ định — vd "chưa ghi có gây tê hay không" (B22) sẽ bị hiểu thành có gây tê, "nay ghé khám răng" thành một thủ thuật. *(Sửa 27/11 sau khi chạy thử 27 câu với model thật.)*
    - Khi so khớp, bỏ từ đệm "một", "cái", "chiếc"… để "nhổ một răng" vẫn khớp `nho rang` (B01).
 6. Một alias nhiều dòng (§4.3) → lấy tất cả các dòng. Thủ thuật → đưa `drug_class` vào `procedure_groups`.
@@ -267,6 +268,7 @@ Code gửi cho model một khối JSON gồm các rule đã khớp (đã gộp t
 | Q1_DRUGS | *(28/11)* "Em nhận ra {tên, tên}. Thuốc nào BN đang dùng, thuốc nào anh/chị định kê, và định làm thủ thuật gì ạ? Nhắn thêm để em đối chiếu nhé." |
 | Q5 | "BN dị ứng thuốc tê. Thủ thuật này có gây tê không ạ? Có thì nhắn "có gây tê" để em kiểm." |
 | Q6 | "Bệnh nền "{names}" em chưa nhận ra. Anh/chị ghi rõ tên bệnh và tình trạng (ổn định chưa, đang điều trị gì, chỉ số gần nhất nếu có) để em kiểm." *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* Không hỏi Q6 khi tên bệnh đã có trong bảng và BS đã ghi tình trạng (bỏ từ tình trạng "ổn định / kiểm soát / điều trị…" thì trùng gốc tên một alias bệnh nền, vd "tăng huyết áp đang ổn định" ~ "tăng huyết áp chưa kiểm soát"): cụm hiện ở ❔ "chưa có quy tắc… tự đánh giá" (28/11, `tools.known_condition_with_status`). |
+| Q6_STATUS | *(28/11, log VM)* "BN có "{names}": đã kiểm soát ổn định chưa (chỉ số gần nhất nếu có)? Anh/chị nhắn thêm để em kiểm." Thay Q6 khi mọi bệnh cần hỏi đều có tên trong bảng mà chưa ghi tình trạng (vd "cao huyết áp", gốc của alias "cao huyet ap chua kiem soat"; `tools.known_condition_base`): không nói "chưa nhận ra", mục "Đã đối chiếu" in đúng chữ BS viết. |
 | Q7 | "Ca đang chuẩn bị hay đang làm thủ thuật, có chảy máu khó cầm không ạ?" *(thêm 28/11 — cải tiến lượt 2, Trung duyệt 28/11)* |
 | Q8 | "BN có dùng thuốc chống đông hoặc kháng tiểu cầu không? Có thì nhắn tên thuốc để em kiểm." *(thêm 28/11, Trung chốt)*. Hỏi khi có thủ thuật nhóm `invasive_bleeding` mà chưa khai thuốc đang dùng (kể cả thuốc chưa rõ vai), BS không ghi "không dùng/uống thuốc", và không có rule đã hỏi ý này (`ASKS_ANTICOAG_RULES` = `CR-021`). Giữ ca (`needs_more = True`), không in ✅. Thay cho việc thêm luật riêng cho từng bệnh (stent, van tim, đột quỵ…): BS trả lời tên thuốc thì luật sẵn có (`CR-001`, `CR-004`, `CR-005`…) cảnh báo kèm nguồn. "Khoẻ mạnh" chưa tính là "không dùng thuốc". BS trả lời trơn "không" / "ko" / "không có" / "chưa" khi Q8 là câu đang hỏi cũng tính là không dùng thuốc (một câu mỗi lượt, khối 9). |
 | P1 | "⚠️ Tin nhắn có thông tin định danh BN — lần sau anh/chị gửi ca đã ẩn danh giúp em nhé." |
@@ -369,7 +371,7 @@ Mã quy tắc trên lấy từ CSV v1.1 hiện tại; kết quả thật phụ t
 ## 11. Để sau (đã thống nhất, chưa làm ở bản này)
 
 - **3 lớp bảo hiểm thêm bằng code:** regex bắt SĐT/CCCD/mã hồ sơ; danh sách từ khoá vượt quyền gộp với cờ của model; kiểm output không chứa liều (vd `500mg`, `2 viên/ngày`).
-- **Nội dung chuyên môn (Trung):** thủ thuật nào kéo theo gây tê; bổ sung bệnh nền hay gặp mà bảng chưa có (rung nhĩ đã thêm 28/11 kèm `CR-021`, nguồn còn UNVERIFIED); bổ sung alias.
+- **Nội dung chuyên môn (Trung):** thủ thuật nào kéo theo gây tê; bổ sung bệnh nền hay gặp mà bảng chưa có (rung nhĩ đã thêm 28/11 kèm `CR-021`, nguồn SDCEP bản đầy đủ §3.3 + Phụ lục 3, xem `data/DATA_CARD.md`); bổ sung alias.
 
 ---
 
