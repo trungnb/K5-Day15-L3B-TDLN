@@ -325,6 +325,20 @@ class Communication2811(unittest.TestCase):
         self.assertEqual(agent.small_talk_kind("cảm ơn em"), "thanks")
         self.assertIsNone(agent.small_talk_kind("BN uống Sintrom"))
 
+    def test_cr021_is_printed_in_full_in_compact_mode(self):
+        # Trung chốt 28/11: CR-021 (rung nhĩ × thủ thuật chảy máu) có giá trị ở câu "hỏi thuốc chống đông" (guidance),
+        # nên in đủ cả khi 🟡 gọn — dòng gọn chỉ còn câu đầu cơ chế, mất cả nguy cơ chảy máu lẫn hành động.
+        af = _x(conditions=["rung nhĩ"], planned_procedures=["nhổ R18"], planned_drugs=["paracetamol"])
+        sent = []
+        def model2(payload):
+            sent.extend(item["rule_id"] for item in payload)
+            return {"lines": {}}
+        res = run("BN rung nhĩ. Nhổ R18, kê paracetamol", af, model2)
+        self.assertIn("CR-021", sent)
+        self.assertEqual(section_of(res["output"], "CR-021"), "MODERATE")
+        line = next(l for l in res["output"].splitlines() if "[CR-021]" in l)
+        self.assertIn("thuốc chống đông hay kháng tiểu cầu", line)
+
     def test_no_entity_reply_is_detectable(self):
         self.assertTrue(agent.is_no_entity_reply(run("abc xyz", EMPTY_X)["output"]))
         self.assertFalse(agent.is_no_entity_reply(run(EXAMPLE, EXAMPLE_X)["output"]))
@@ -341,11 +355,13 @@ class Communication2811(unittest.TestCase):
         for line in mods:
             self.assertRegex(line, r"^- \[(?:DDI|CR)-\d+\] ")
             self.assertIn("Nguồn:", line)
-            self.assertNotIn("→", line)            # không in hướng xử trí
+            if not any("[%s]" % rid in line for rid in agent.FULL_MODERATE):
+                self.assertNotIn("→", line)        # không in hướng xử trí (trừ CR-021, in đủ)
         self.assertTrue(sent)
         self.assertTrue(all(item["rule_id"] in out for item in sent))
         mod_ids = {re.search(r"\[((?:DDI|CR)-\d+)\]", l).group(1) for l in mods}
-        self.assertFalse(mod_ids & {item["rule_id"] for item in sent})   # model 2 chỉ viết dòng HIGH
+        # model 2 chỉ viết dòng HIGH và dòng 🟡 in đủ (CR-021)
+        self.assertEqual(mod_ids & {item["rule_id"] for item in sent}, mod_ids & agent.FULL_MODERATE)
         self.assertEqual(section_of(out, "CR-001"), "HIGH")
         self.assertIn("INR", out)                  # 🔴 vẫn đủ hướng xử trí
 

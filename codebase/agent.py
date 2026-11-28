@@ -444,15 +444,20 @@ def _compact_line(rule: dict) -> str:
                                              _source(rule).rstrip(" ."))
 
 
+# Rule 🟡 vẫn in đủ (hướng xử trí) khi 🟡 gọn: giá trị nằm ở hành động trong guidance, dòng gọn sẽ mất nó.
+# CR-021 rung nhĩ × thủ thuật chảy máu → "hỏi thuốc chống đông" (Trung chốt 28/11/2026).
+FULL_MODERATE = frozenset({"CR-021"})
+
+
 def _alert_blocks(rules: list, together: bool = False, detail: bool = False) -> list:
     """Bước 4: model 2 viết dòng cảnh báo (đã kiểm), xếp vào khối 🔴 / 🟡. Mặc định 🟡 in dòng gọn bằng code
     (không gọi model 2 cho MODERATE); detail=True in đủ như 🔴."""
     if not rules:
         return []
-    full = rules if detail else [r for r in rules if r["severity"] == "HIGH"]
+    full = rules if detail else [r for r in rules if r["severity"] == "HIGH" or r["rule_id"] in FULL_MODERATE]
     lines = _write_rule_lines(full) if full else {}
     if not detail:
-        lines.update({r["rule_id"]: _compact_line(r) for r in rules if r["severity"] != "HIGH"})
+        lines.update({r["rule_id"]: _compact_line(r) for r in rules if r not in full})
     suffix = "_IF_TOGETHER" if together else ""
     blocks = []
     for severity in ("HIGH", "MODERATE"):
