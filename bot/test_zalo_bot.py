@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.machinery
 import importlib.util
 import json
 import os
@@ -81,16 +82,14 @@ def _ensure_zalo_bot_stub() -> None:
 
 
 def _has_real_zalo_bot_sdk() -> bool:
+    # PathFinder bỏ qua sys.modules: stub của _ensure_zalo_bot_stub() không có __spec__,
+    # importlib.util.find_spec sẽ ném ValueError và không thấy được SDK thật đã cài.
     bot_dir = str(Path(__file__).resolve().parent)
-    saved = list(sys.path)
-    try:
-        sys.path = [p for p in sys.path if p and str(Path(p).resolve()) != bot_dir]
-        spec = importlib.util.find_spec("zalo_bot")
-        return spec is not None and spec.origin is not None and str(Path(spec.origin).resolve()) != str(
-            (Path(__file__).resolve().parent / "zalo_bot.py").resolve()
-        )
-    finally:
-        sys.path = saved
+    search = [p for p in sys.path if p and str(Path(p).resolve()) != bot_dir]
+    spec = importlib.machinery.PathFinder.find_spec("zalo_bot", search)
+    return spec is not None and spec.origin is not None and str(Path(spec.origin).resolve()) != str(
+        (Path(__file__).resolve().parent / "zalo_bot.py").resolve()
+    )
 
 
 def _load_bot_module():
