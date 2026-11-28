@@ -96,6 +96,7 @@ Ghi output theo từng lượt và kiểm bot có báo đã gửi tin hay đưa 
 - Mỗi lượt chat được ghi vào `bot/logs/YYYYMMDD.jsonl` (đã thêm vào `.gitignore` — không đẩy lên GitHub).
 - Danh sách `chat_id` đã nhập đúng mã mời được lưu cục bộ tại `bot/allowed_chats.json` (đã thêm vào `.gitignore`), **chỉ lưu `chat_id`**, không lưu tên hiển thị hay thông tin cá nhân khác.
 - Trong log chỉ lưu hash 10 ký tự đầu của `chat_id`, không lưu token hay mã mời.
+- Trước khi ghi log, bot che SĐT, số CCCD/CMND (9–12 chữ số), email, mã hồ sơ / mã BN và mã thẻ BHYT. Nếu agent đã cảnh báo tin có thông tin định danh (câu ⚠️ P1), bot không lưu tin gốc (`input` = `[đã bỏ: tin có thông tin định danh]`, `pii_dropped` = `true`). Regex không bắt được tên BN viết tự do, nên vẫn cần BS chỉ gửi ca đã ẩn danh. Log ghi trước bản sửa này chưa được che: rà hoặc xoá `bot/logs/` trên VM.
 - Khi tổng hợp vào `validation/log.md` cho phần Bonus, **chỉ chép đoạn đã viết lại và bỏ tên**, không gắn thông tin nhận diện người thử.
 - Sau khi hoàn tất tổng hợp dữ liệu thử nghiệm, xoá thư mục `bot/logs/` (và `bot/allowed_chats.json` nếu muốn thu hồi quyền dùng thử).
 

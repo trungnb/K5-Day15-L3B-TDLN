@@ -439,5 +439,63 @@ class ZaloBotInviteTests(unittest.TestCase):
         self.assertIn("Thiếu ZALO_BOT_TOKEN", proc.stderr)
 
 
+class ZaloBotLogPrivacyTests(unittest.TestCase):
+    """Log bot không được giữ thông tin định danh BN (spec.md dòng nói về log bot · docs/cp4-agent-plan.md mục 2)."""
+
+    CLINICAL = "BN 65t uống Sintrom, ĐTĐ. Dự kiến nhổ R48. Định kê Augmentin 625mg"
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self._orig_log_dir = bot_mod.LOG_DIR
+        bot_mod.LOG_DIR = Path(self.tmp.name) / "logs"
+
+    def tearDown(self) -> None:
+        bot_mod.LOG_DIR = self._orig_log_dir
+        self.tmp.cleanup()
+
+    def _records(self) -> list[dict]:
+        files = sorted(bot_mod.LOG_DIR.glob("*.jsonl"))
+        return [json.loads(line) for f in files for line in f.read_text(encoding="utf-8").splitlines()]
+
+    def test_mask_pii_hides_identifiers_and_keeps_clinical_text(self) -> None:
+        text = (self.CLINICAL + ". SĐT 0912 345 678, +84 912.345.679, CCCD 001203004005, "
+                "email bn.test@example.com, mã hồ sơ: HS-2026-0042, thẻ BHYT DN4797915123456")
+        masked = bot_mod.mask_pii(text)
+        for secret in ("0912 345 678", "912.345.679", "001203004005", "bn.test@example.com",
+                       "HS-2026-0042", "DN4797915123456"):
+            self.assertNotIn(secret, masked)
+        self.assertIn(self.CLINICAL, masked)
+
+    def test_mask_pii_record_code_after_bn_label(self) -> None:
+        # Câu B20 của eval/benchmark.csv: "BN" đứng giữa nhãn và mã, không được coi "BN" là mã.
+        masked = bot_mod.mask_pii("Mã hồ sơ BN: TEST-HS-000. BN đang dùng warfarin")
+        self.assertNotIn("TEST-HS-000", masked)
+        self.assertIn("BN đang dùng warfarin", masked)
+
+    def test_log_turn_masks_input_output_and_error(self) -> None:
+        bot_mod.log_turn(chat_id="c1", user_input="BN SĐT 0912345678 uống Sintrom",
+                         output="Đã đối chiếu — Sintrom (0912345678)", summary={},
+                         error="RuntimeError: echo 0912345678")
+        rec = self._records()[0]
+        blob = json.dumps(rec, ensure_ascii=False)
+        self.assertNotIn("0912345678", blob)
+        self.assertIn("Sintrom", rec["input"])
+        self.assertFalse(rec["pii_dropped"])
+
+    def test_on_text_drops_input_when_agent_flags_pii(self) -> None:
+        flagged = bot_mod.PII_WARNING + "\nĐã đối chiếu — Thuốc đang dùng: Sintrom"
+        bot_mod.ALLOWED_CHAT_IDS.add("chat-pii")
+        try:
+            with patch.object(bot_mod, "run_agent", return_value=(flagged, {})):
+                update = _FakeUpdate("chat-pii", "BN Nguyễn Văn Test 65t uống Sintrom")
+                asyncio.run(bot_mod.on_text(update, _FakeContext()))
+        finally:
+            bot_mod.ALLOWED_CHAT_IDS.discard("chat-pii")
+        rec = self._records()[0]
+        self.assertNotIn("Nguyễn Văn Test", json.dumps(rec, ensure_ascii=False))
+        self.assertTrue(rec["pii_dropped"])
+        self.assertEqual(update.message.replies, [flagged])
+
+
 if __name__ == "__main__":
     unittest.main()

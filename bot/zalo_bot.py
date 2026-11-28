@@ -30,7 +30,7 @@ if str(CODEBASE_DIR) not in sys.path:
     sys.path.insert(0, str(CODEBASE_DIR))
 
 import tracing  # noqa: E402
-from agent import answer  # noqa: E402  (import agent -> ai.py tự nạp .env ở gốc repo)
+from agent import TEXT as AGENT_TEXT, answer  # noqa: E402  (import agent -> ai.py tự nạp .env ở gốc repo)
 
 from zalo_bot import Update  # noqa: E402
 from zalo_bot.constants import ChatAction  # noqa: E402
@@ -146,6 +146,25 @@ def redact(text: str, token: str = TOKEN) -> str:
     return re.sub(r"bot\d{6,}:[A-Za-z0-9_-]{10,}", "bot[REDACTED]", text)
 
 
+# Che định danh trước khi ghi log (không áp vào tin gửi BS). Regex không bắt được tên BN viết tự do,
+# nên khi agent đã gắn cờ định danh (câu P1 trong output) thì bỏ hẳn tin gốc khỏi log.
+PII_WARNING = AGENT_TEXT["P1"]
+PII_DROPPED = "[đã bỏ: tin có thông tin định danh]"
+PII_PATTERNS = (
+    (re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "[email]"),
+    (re.compile(r"(?i)((?:mã|số)\s*(?:hồ\s*sơ|bệnh\s*nhân|bn|bhyt)(?:\s*(?:bn|bệnh\s*nhân))?|mhs|pid)\s*[:#]?\s*[a-z0-9][a-z0-9-]*"),
+     r"\1 [mã]"),
+    (re.compile(r"\b[A-Za-z]{2}\d{13}\b"), "[mã BHYT]"),
+    (re.compile(r"(?<!\d)\+?\d(?:[\s.-]?\d){8,11}(?!\d)"), "[số]"),  # SĐT, CCCD/CMND: 9–12 chữ số
+)
+
+
+def mask_pii(text: str) -> str:
+    for pattern, replacement in PII_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 def _chat_hash(chat_id: str) -> str:
     return hashlib.sha256(chat_id.encode("utf-8")).hexdigest()[:10]
 
@@ -157,6 +176,7 @@ def log_turn(
     output: str,
     summary: dict[str, Any],
     error: str = "",
+    drop_input: bool = False,
 ) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
@@ -165,12 +185,13 @@ def log_turn(
     record = {
         "ts": now.isoformat(),
         "chat": _chat_hash(chat_id),
-        "input": user_input,
-        "output": output,
+        "input": PII_DROPPED if drop_input else mask_pii(user_input),
+        "output": mask_pii(output),
+        "pii_dropped": drop_input,
         "model": ", ".join(models) if models else "",
         "tokens_in": int(summary.get("tokens_in") or 0),
         "tokens_out": int(summary.get("tokens_out") or 0),
-        "error": error,
+        "error": mask_pii(error),
     }
     with log_path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -435,7 +456,8 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await _reply_chunks(update, "Xin lỗi, hệ thống tra cứu đang lỗi, anh/chị thử lại sau ít phút.")
         return
 
-    log_turn(chat_id=chat_id, user_input=text, output=output, summary=summary, error="")
+    log_turn(chat_id=chat_id, user_input=text, output=output, summary=summary, error="",
+             drop_input=PII_WARNING in output)
     await _reply_chunks(update, output)
 
 
